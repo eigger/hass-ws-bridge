@@ -10,6 +10,27 @@
       "already_configured": "Already configured."
     }
   },
+  "config_subentries": {
+    "gateway": {
+      "initiate_flow": {
+        "user": "Add Gateway"
+      },
+      "entry_type": "Gateway",
+      "step": {
+        "user": {
+          "title": "Add Gateway",
+          "description": "Register a gateway (e.g., mobile app) to connect. When a client with this Gateway ID connects, its entities and sub-devices will be grouped under this gateway.",
+          "data": {
+            "gateway_id": "Gateway ID (Android ID, etc.)",
+            "name": "Name (e.g., My Phone)"
+          }
+        }
+      },
+      "abort": {
+        "already_configured": "Gateway is already configured."
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "connected_clients": {
