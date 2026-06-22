@@ -5,6 +5,7 @@
  - ws_bridge/entity       : 엔티티 선언(생성/메타)
  - ws_bridge/state        : 상태 갱신(배치)
  - ws_bridge/availability : sub-device 연결 상태
+ - ws_bridge/remove       : 엔티티·장치·게이트웨이 삭제
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from .const import (
     WS_AVAILABILITY,
     WS_CONNECT,
     WS_ENTITY,
+    WS_REMOVE,
     WS_STATE,
 )
 
@@ -31,6 +33,7 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_entity)
     websocket_api.async_register_command(hass, ws_state)
     websocket_api.async_register_command(hass, ws_availability)
+    websocket_api.async_register_command(hass, ws_remove)
 
 
 def _bridges(hass: HomeAssistant) -> list[WsBridge]:
@@ -122,3 +125,25 @@ def ws_availability(hass: HomeAssistant, connection: websocket_api.ActiveConnect
         if (gid := b.client_for(connection)) is not None:
             b.handle_availability(gid, msg["device_id"], msg["online"])
     connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_REMOVE,
+    vol.Optional("unique_id"): str,
+    vol.Optional("device_id"): str,
+})
+async def ws_remove(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
+                    msg: dict[str, Any]) -> None:
+    """엔티티·sub-device·게이트웨이(전체) 삭제. 대상 미지정 시 연결된 게이트웨이 전체."""
+    for b in _bridges(hass):
+        if (gid := b.client_for(connection)) is None:
+            continue
+        if unique_id := msg.get("unique_id"):
+            await b.async_remove_entity(gid, unique_id)
+        elif device_id := msg.get("device_id"):
+            await b.async_remove_device(gid, device_id)
+        else:
+            await b.async_remove_gateway(gid)
+        connection.send_result(msg["id"])
+        return
+    connection.send_error(msg["id"], "not_connected", "No ws_bridge session for this connection")

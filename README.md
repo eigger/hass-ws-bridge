@@ -102,6 +102,7 @@ For the detailed JSON message formats exchanged between clients and the bridge, 
 * **Entity Declaration**: `{"type": "ws_bridge/entity", "unique_id": "...", "platform": "sensor", ...}`
 * **State Update**: `{"type": "ws_bridge/state", "states": [{"unique_id": "...", "value": 25.4}]}`
 * **Device Availability**: `{"type": "ws_bridge/availability", "device_id": "...", "online": true}`
+* **Remove**: `{"type": "ws_bridge/remove", "unique_id": "..."}` / `{"device_id": "..."}` / `{}` (entire gateway)
 * **Control Event**: HA pushes `{"kind": "command", "unique_id": "...", "action": "turn_on"}` events to the client.
 
 ---

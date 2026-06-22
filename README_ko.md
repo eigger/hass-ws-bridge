@@ -100,6 +100,7 @@ graph TD
 * **엔티티 선언**: `{"type": "ws_bridge/entity", "unique_id": "...", "platform": "sensor", ...}`
 * **상태 갱신**: `{"type": "ws_bridge/state", "states": [{"unique_id": "...", "value": 25.4}]}`
 * **장치 가용성**: `{"type": "ws_bridge/availability", "device_id": "...", "online": true}`
+* **삭제**: `{"type": "ws_bridge/remove", "unique_id": "..."}` / `{"device_id": "..."}` / `{}` (게이트웨이 전체)
 * **제어 이벤트**: HA가 클라이언트에 `{"kind": "command", "unique_id": "...", "action": "turn_on"}` 형태로 push합니다.
 
 > **중요**: `auth_ok`를 받기 전에는 `ws_bridge/*` 메시지를 보내지 마세요. 반드시 `auth` → `ws_bridge/connect` → `ws_bridge/entity` 순서를 지킵니다.

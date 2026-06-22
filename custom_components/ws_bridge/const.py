@@ -19,6 +19,7 @@ WS_CONNECT = f"{DOMAIN}/connect"
 WS_ENTITY = f"{DOMAIN}/entity"
 WS_STATE = f"{DOMAIN}/state"
 WS_AVAILABILITY = f"{DOMAIN}/availability"
+WS_REMOVE = f"{DOMAIN}/remove"
 
 # HA→클라이언트 이벤트 kind
 EVT_COMMAND = "command"
