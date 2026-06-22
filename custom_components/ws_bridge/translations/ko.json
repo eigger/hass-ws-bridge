@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "WebSocket Bridge",
+        "description": "WebSocket으로 접속한 클라이언트(게이트웨이 앱 등)가 선언하는 엔티티를 만들어 주는 범용 브릿지입니다. 추가 설정은 필요 없습니다. 클라이언트에 이 HA의 URL과 장기 액세스 토큰을 입력하세요."
+      }
+    },
+    "abort": {
+      "already_configured": "이미 설정되어 있습니다."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "connected_clients": {
+        "name": "연결된 클라이언트"
+      }
+    }
+  }
+}

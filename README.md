@@ -7,6 +7,8 @@
 
 A generic Home Assistant integration that enables **any authenticated WebSocket client** to dynamically create and update entities. It is fully decoupled from specific hardware or protocols (e.g., BLE, Zigbee); as long as the client conforms to the defined communication protocol, it works out of the box.
 
+> 🇰🇷 [한글 README (README_ko.md)](README_ko.md)
+
 ## 💬 Feedback & Support
 
 🐞 Found a bug? Let us know via an [Issue](https://github.com/eigger/hass-ws-bridge/issues).  
@@ -21,6 +23,7 @@ A generic Home Assistant integration that enables **any authenticated WebSocket 
 - **Client-based Device Grouping**: Each client (identified by `gateway_id`) is registered as a parent device (Gateway) in Home Assistant. All devices/entities declared by that client are grouped as child devices (`via_device`) under it for clean organization.
 - **Bi-directional Command Routing**: Supports control components including `switch`, `number`, `select`, and `button`. Control events (`command`) triggered by the HA UI or automations are routed back exclusively to the originating client.
 - **Connection State Tracking (LWT)**: If the client's WebSocket connection drops, all child devices and entities registered by that client are automatically set to `unavailable` to prevent stale states.
+- **Connected Clients Diagnostic Sensor**: Provides a diagnostic sensor that reports the number of currently connected WebSocket clients (`gateway_id`) in real time.
 
 ---
 

@@ -17,15 +17,30 @@
 
 1. 클라이언트가 `wss://<HA>/api/websocket` 주소로 접속합니다.
 2. 표준 auth 핸드셰이크를 수행합니다:
-   - 전송: `{"type": "auth", "access_token": "<장기_액세스_토큰>"}`
-   - 수신: `{"type": "auth_ok", "ha_version": "..."}`
-3. 구독 세션을 등록합니다:
+   - HA 수신: `{"type": "auth_required", "ha_version": "..."}`
+   - 클라이언트 전송: `{"type": "auth", "access_token": "<장기_액세스_토큰>"}`
+   - HA 수신: `{"type": "auth_ok", "ha_version": "..."}`
+3. **`auth_ok`를 받은 뒤에만** 아래 `ws_bridge/*` 명령을 전송합니다.
+4. 구독 세션을 등록합니다:
    - 전송: `{"id": <n>, "type": "ws_bridge/connect", "gateway_id": "<고유_ID>", "name": "<표시_이름>"}`
    - `gateway_id`: 클라이언트를 고유하게 식별할 ID입니다. HA에 **게이트웨이 디바이스**로 등록되고, 생성되는 장치/엔티티의 네임스페이스 접두어로 사용됩니다.
    - `name`: 게이트웨이 기기의 표시 이름입니다.
    - 컴포넌트가 웹소켓 커넥션과 `gateway_id`를 바인딩하여 제어 명령(`command`)을 이 클라이언트에만 라우팅합니다.
 
 > **재연결**: 클라이언트 재연결 시 엔티티 선언(idempotent) 및 상태 데이터를 다시 한번 일괄 전송해야 하며, HA는 이를 기반으로 엔티티를 복원 및 갱신합니다.
+
+### 메시지 전송 순서 (필수)
+
+```
+연결 → auth_required 수신 → auth 전송 → auth_ok 수신 → ws_bridge/connect → ws_bridge/entity → ws_bridge/state
+```
+
+`auth_ok` 이전에 `ws_bridge/entity` 등을 내면 Home Assistant가 인증 메시지로 잘못 해석하여 거부합니다. (`Auth message incorrectly formatted`)
+
+### 옵션 필드 작성 시 주의
+
+- 사용하지 않는 옵션 필드는 JSON에서 **키 자체를 생략**하세요.
+- `null`을 명시적으로 넣지 않는 것을 권장합니다. (0.1.2 이상에서 `null`도 허용되지만, 생략이 더 안전합니다.)
 
 ### 디바이스 계층 (그룹화)
 엔티티는 게이트웨이 및 하위 장치(sub-device) 아래에 계층적으로 정렬됩니다.
