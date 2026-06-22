@@ -9,5 +9,12 @@
     "abort": {
       "already_configured": "Already configured."
     }
+  },
+  "entity": {
+    "sensor": {
+      "connected_clients": {
+        "name": "Connected clients"
+      }
+    }
   }
 }

@@ -6,6 +6,14 @@
 
 DOMAIN = "ws_bridge"
 
+# 통합 진단 센서 unique_id 접미사
+CONNECTED_CLIENTS_UNIQUE_ID = "connected_clients"
+
+# 아이콘 (MDI)
+ICON_BRIDGE = "mdi:swap-horizontal"
+ICON_CONNECTED_CLIENTS = "mdi:account-multiple"
+ICON_GATEWAY = "mdi:router-wireless"
+
 # WebSocket 명령 타입 (PROTOCOL.md). 도메인 접두어를 따른다.
 WS_CONNECT = f"{DOMAIN}/connect"
 WS_ENTITY = f"{DOMAIN}/entity"
@@ -31,3 +39,12 @@ ALL_PLATFORMS = [
     PLATFORM_SELECT,
     PLATFORM_BUTTON,
 ]
+
+# 클라이언트가 icon을 생략했을 때 플랫폼별 기본값 (device_class·switch는 HA 기본 아이콘 사용)
+DEFAULT_PLATFORM_ICONS: dict[str, str] = {
+    PLATFORM_SENSOR: "mdi:gauge",
+    PLATFORM_BINARY_SENSOR: "mdi:checkbox-blank-circle-outline",
+    PLATFORM_NUMBER: "mdi:numeric",
+    PLATFORM_SELECT: "mdi:format-list-bulleted",
+    PLATFORM_BUTTON: "mdi:gesture-tap-button",
+}
