@@ -46,18 +46,27 @@ def _bridges(hass: HomeAssistant) -> list[WsBridge]:
     vol.Optional("name"): vol.Any(str, None),
     vol.Optional("app_version"): vol.Any(str, None),
 })
-@callback
-def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
-               msg: dict[str, Any]) -> None:
+async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
+                     msg: dict[str, Any]) -> None:
     @callback
     def _send_event(event: dict[str, Any]) -> None:
         connection.send_message(websocket_api.event_message(msg["id"], event))
 
-    unsubs = [
-        b.connect_client(connection, msg["gateway_id"], msg.get("name", ""), _send_event,
-                         msg.get("app_version"))
-        for b in _bridges(hass)
-    ]
+    gateway_id = msg["gateway_id"]
+    name = msg.get("name") or ""
+    unsubs = []
+    for b in _bridges(hass):
+        subentry_id = await b.async_ensure_gateway_subentry(gateway_id, name)
+        unsubs.append(
+            b.connect_client(
+                connection,
+                gateway_id,
+                name,
+                _send_event,
+                msg.get("app_version"),
+                subentry_id,
+            )
+        )
     connection.subscriptions[msg["id"]] = lambda: [u() for u in unsubs]
     connection.send_result(msg["id"])
 

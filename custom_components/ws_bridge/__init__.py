@@ -51,13 +51,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Subentry 추가/삭제 처리. 삭제 시 해당 게이트웨이의 기기·엔티티를 정리."""
+    """Subentry 삭제 시 해당 게이트웨이의 기기·엔티티를 정리."""
     domain_data = hass.data.get(DOMAIN, {})
     snapshots = hass.data.get(SUBENTRY_SNAPSHOTS, {})
     old_gids = snapshots.get(entry.entry_id, set())
     new_gids = _subentry_gateway_ids(entry)
     removed = old_gids - new_gids
-    added = new_gids - old_gids
     snapshots[entry.entry_id] = new_gids
 
     bridge: WsBridge | None = domain_data.get(entry.entry_id)
@@ -65,9 +64,6 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
         for gateway_id in removed:
             _LOGGER.info("Subentry removed — cleaning up gateway: %s", gateway_id)
             await bridge.async_remove_gateway(gateway_id)
-
-    if added:
-        await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
