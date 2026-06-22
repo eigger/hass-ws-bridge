@@ -30,6 +30,10 @@ def signal_avail(entry_id: str, ns_device_id: str) -> str:
     return f"{DOMAIN}_{entry_id}_avail_{ns_device_id}"
 
 
+def signal_clients(entry_id: str) -> str:
+    return f"{DOMAIN}_{entry_id}_clients"
+
+
 @dataclass
 class _Client:
     gateway_id: str
@@ -75,6 +79,7 @@ class WsBridge:
             client.name = name or client.name
             client.send_event = send_event
         self._conn_client[connection] = gateway_id
+        self._notify_clients_changed()
 
         # 클라이언트를 HA 디바이스로 등록 (sub-device들의 부모)
         dr.async_get(self.hass).async_get_or_create(
@@ -93,12 +98,23 @@ class WsBridge:
             if gateway_id not in self._conn_client.values():
                 for ns_dev in client.device_ids:   # 끊김 → 해당 클라이언트 엔티티 unavailable
                     async_dispatcher_send(self.hass, signal_avail(self.entry_id, ns_dev), False)
+            self._notify_clients_changed()
 
         return _disconnect
 
     @callback
     def client_for(self, connection: Any) -> str | None:
         return self._conn_client.get(connection)
+
+    @property
+    def connected_client_count(self) -> int:
+        return len(set(self._conn_client.values()))
+
+    @callback
+    def _notify_clients_changed(self) -> None:
+        async_dispatcher_send(
+            self.hass, signal_clients(self.entry_id), self.connected_client_count
+        )
 
     # ── 클라이언트 → HA ──────────────────────────────────────────────────────
     @callback

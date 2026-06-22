@@ -11,7 +11,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, Entity
 
 from .bridge import WsBridge, signal_avail, signal_value
-from .const import DOMAIN
+from .const import DEFAULT_PLATFORM_ICONS, DOMAIN
 
 
 class WsBridgeEntity(Entity):
@@ -23,7 +23,11 @@ class WsBridgeEntity(Entity):
         self._defn = defn
         self._attr_unique_id = defn["unique_id"]      # 이미 클라이언트 네임스페이스됨
         self._attr_name = defn.get("name")
-        self._attr_icon = defn.get("icon")
+        if icon := defn.get("icon"):
+            self._attr_icon = icon
+        elif not defn.get("device_class"):
+            if platform_icon := DEFAULT_PLATFORM_ICONS.get(defn.get("platform", "")):
+                self._attr_icon = platform_icon
         if (cat := defn.get("entity_category")) in (EntityCategory.CONFIG, EntityCategory.DIAGNOSTIC):
             self._attr_entity_category = EntityCategory(cat)
 
