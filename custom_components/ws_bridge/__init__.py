@@ -16,7 +16,7 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-SNAPSHOT_KEY = "_subentry_gids"
+SUBENTRY_SNAPSHOTS = f"{DOMAIN}_subentry_snapshots"
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -43,7 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not domain_data:
         websocket_api.async_register(hass)   # WS 커스텀 명령 1회 등록
     domain_data[entry.entry_id] = bridge
-    domain_data.setdefault(SNAPSHOT_KEY, {})[entry.entry_id] = _subentry_gateway_ids(entry)
+    hass.data.setdefault(SUBENTRY_SNAPSHOTS, {})[entry.entry_id] = _subentry_gateway_ids(entry)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -53,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Subentry 추가/삭제 처리. 삭제 시 해당 게이트웨이의 기기·엔티티를 정리."""
     domain_data = hass.data.get(DOMAIN, {})
-    snapshots = domain_data.get(SNAPSHOT_KEY, {})
+    snapshots = hass.data.get(SUBENTRY_SNAPSHOTS, {})
     old_gids = snapshots.get(entry.entry_id, set())
     new_gids = _subentry_gateway_ids(entry)
     removed = old_gids - new_gids
@@ -75,8 +75,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unloaded:
         domain_data = hass.data.get(DOMAIN, {})
         bridge = domain_data.pop(entry.entry_id, None)
-        if snapshots := domain_data.get(SNAPSHOT_KEY):
+        if snapshots := hass.data.get(SUBENTRY_SNAPSHOTS):
             snapshots.pop(entry.entry_id, None)
+            if not snapshots:
+                hass.data.pop(SUBENTRY_SNAPSHOTS, None)
         if bridge:
             bridge.unload()
     return unloaded
