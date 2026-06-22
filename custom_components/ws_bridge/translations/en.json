@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "WebSocket Bridge",
+        "description": "A generic bridge that creates entities declared by any WebSocket client (such as a gateway app). No extra config needed here. Enter this HA's URL and a long-lived access token in the client."
+      }
+    },
+    "abort": {
+      "already_configured": "Already configured."
+    }
+  }
+}

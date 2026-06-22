@@ -1,0 +1,33 @@
+"""ws_bridge 상수.
+
+범용 WebSocket 엔티티 브릿지 — BLE 등 특정 형식과 무관하게, 인증된 어떤 클라이언트든
+프로토콜대로 엔티티를 선언/갱신하면 HA 엔티티를 만들어 준다.
+"""
+
+DOMAIN = "ws_bridge"
+
+# WebSocket 명령 타입 (PROTOCOL.md). 도메인 접두어를 따른다.
+WS_CONNECT = f"{DOMAIN}/connect"
+WS_ENTITY = f"{DOMAIN}/entity"
+WS_STATE = f"{DOMAIN}/state"
+WS_AVAILABILITY = f"{DOMAIN}/availability"
+
+# HA→클라이언트 이벤트 kind
+EVT_COMMAND = "command"
+
+# 기본 지원 플랫폼 (읽기: sensor/binary_sensor, 제어: switch/number/select/button)
+PLATFORM_SENSOR = "sensor"
+PLATFORM_BINARY_SENSOR = "binary_sensor"
+PLATFORM_SWITCH = "switch"
+PLATFORM_NUMBER = "number"
+PLATFORM_SELECT = "select"
+PLATFORM_BUTTON = "button"
+
+ALL_PLATFORMS = [
+    PLATFORM_SENSOR,
+    PLATFORM_BINARY_SENSOR,
+    PLATFORM_SWITCH,
+    PLATFORM_NUMBER,
+    PLATFORM_SELECT,
+    PLATFORM_BUTTON,
+]

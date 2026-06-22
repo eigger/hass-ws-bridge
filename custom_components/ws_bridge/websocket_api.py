@@ -1,0 +1,119 @@
+"""HA WebSocket API 위의 커스텀 명령 (PROTOCOL.md). 클라이언트 인식, 범용.
+
+인증된 어떤 클라이언트든 표준 HA auth(토큰) 후 사용.
+ - ws_bridge/connect      : gateway_id로 구독 등록. command를 이 connection으로 push
+ - ws_bridge/entity       : 엔티티 선언(생성/메타)
+ - ws_bridge/state        : 상태 갱신(배치)
+ - ws_bridge/availability : sub-device 연결 상태
+"""
+from __future__ import annotations
+
+from typing import Any
+
+import voluptuous as vol
+from homeassistant.components import websocket_api
+from homeassistant.core import HomeAssistant, callback
+
+from .bridge import WsBridge
+from .const import (
+    ALL_PLATFORMS,
+    DOMAIN,
+    WS_AVAILABILITY,
+    WS_CONNECT,
+    WS_ENTITY,
+    WS_STATE,
+)
+
+
+@callback
+def async_register(hass: HomeAssistant) -> None:
+    websocket_api.async_register_command(hass, ws_connect)
+    websocket_api.async_register_command(hass, ws_entity)
+    websocket_api.async_register_command(hass, ws_state)
+    websocket_api.async_register_command(hass, ws_availability)
+
+
+def _bridges(hass: HomeAssistant) -> list[WsBridge]:
+    return list(hass.data.get(DOMAIN, {}).values())
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_CONNECT,
+    vol.Required("gateway_id"): str,
+    vol.Optional("name"): str,
+})
+@callback
+def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
+               msg: dict[str, Any]) -> None:
+    @callback
+    def _send_event(event: dict[str, Any]) -> None:
+        connection.send_message(websocket_api.event_message(msg["id"], event))
+
+    unsubs = [
+        b.connect_client(connection, msg["gateway_id"], msg.get("name", ""), _send_event)
+        for b in _bridges(hass)
+    ]
+    connection.subscriptions[msg["id"]] = lambda: [u() for u in unsubs]
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_ENTITY,
+    vol.Required("unique_id"): str,
+    vol.Required("platform"): vol.In(ALL_PLATFORMS),
+    vol.Required("name"): str,
+    vol.Optional("device"): vol.Schema({
+        vol.Required("id"): str,
+        vol.Optional("name"): str,
+    }),
+    vol.Optional("device_class"): str,
+    vol.Optional("unit_of_measurement"): str,
+    vol.Optional("state_class"): str,
+    vol.Optional("icon"): str,
+    vol.Optional("entity_category"): vol.In(["config", "diagnostic"]),
+    vol.Optional("options"): [str],          # select
+    vol.Optional("min"): vol.Coerce(float),  # number
+    vol.Optional("max"): vol.Coerce(float),
+    vol.Optional("step"): vol.Coerce(float),
+})
+@callback
+def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
+              msg: dict[str, Any]) -> None:
+    defn = {k: v for k, v in msg.items() if k != "id"}
+    for b in _bridges(hass):
+        if (gid := b.client_for(connection)) is not None:
+            b.handle_entity(gid, defn)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_STATE,
+    vol.Required("states"): [{
+        vol.Required("unique_id"): str,
+        vol.Required("value"): vol.Any(int, float, str, bool, None),
+    }],
+    vol.Optional("ts"): vol.Any(int, float),
+})
+@callback
+def ws_state(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
+             msg: dict[str, Any]) -> None:
+    for b in _bridges(hass):
+        if (gid := b.client_for(connection)) is None:
+            continue
+        for item in msg["states"]:
+            b.handle_state(gid, item["unique_id"], item["value"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_AVAILABILITY,
+    vol.Required("device_id"): str,
+    vol.Required("online"): bool,
+})
+@callback
+def ws_availability(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
+                    msg: dict[str, Any]) -> None:
+    for b in _bridges(hass):
+        if (gid := b.client_for(connection)) is not None:
+            b.handle_availability(gid, msg["device_id"], msg["online"])
+    connection.send_result(msg["id"])
