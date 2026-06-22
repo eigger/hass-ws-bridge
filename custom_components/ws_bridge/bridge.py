@@ -87,6 +87,31 @@ class WsBridge:
 
         # 게이트웨이를 독립 디바이스로 등록 — WebSocket Bridge 서비스 디바이스와 병렬
         dev_reg = dr.async_get(self.hass)
+
+        # 중복 기기 정리 (같은 name을 가졌지만 다른 gateway_id인 디바이스가 있는 경우 삭제)
+        existing_devices = dr.async_entries_for_config_entry(dev_reg, self.entry_id)
+        gids_to_remove = set()
+        for d_entry in existing_devices:
+            if d_entry.name == (name or gateway_id):
+                for identifier in d_entry.identifiers:
+                    if identifier[0] == DOMAIN:
+                        gid = identifier[1]
+                        if ":" not in gid and gid != gateway_id and gid not in self._conn_client.values():
+                            gids_to_remove.add(gid)
+
+        if gids_to_remove:
+            for d_entry in list(existing_devices):
+                should_remove = False
+                for identifier in d_entry.identifiers:
+                    if identifier[0] == DOMAIN:
+                        val = identifier[1]
+                        if val in gids_to_remove or any(val.startswith(f"{rgid}:") for rgid in gids_to_remove):
+                            should_remove = True
+                            break
+                if should_remove:
+                    _LOGGER.info("Removing duplicate/offline device: %s (%s)", d_entry.name, d_entry.identifiers)
+                    dev_reg.async_remove_device(d_entry.id)
+
         gw_entry = dev_reg.async_get_or_create(
             config_entry_id=self.entry_id,
             identifiers={(DOMAIN, gateway_id)},
