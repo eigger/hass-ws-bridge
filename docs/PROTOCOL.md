@@ -17,15 +17,29 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
 
 1. The client establishes a connection to `wss://<HA_URL>/api/websocket`.
 2. The client performs the standard Home Assistant authentication handshake:
+   - Receive: `{"type": "auth_required", "ha_version": "..."}`
    - Send: `{"type": "auth", "access_token": "<LONG_LIVED_ACCESS_TOKEN>"}`
    - Receive: `{"type": "auth_ok", "ha_version": "..."}`
-3. The client registers its gateway session:
+3. **Only after `auth_ok`** may the client send `ws_bridge/*` commands below.
+4. The client registers its gateway session:
    - Send: `{"id": <n>, "type": "ws_bridge/connect", "gateway_id": "<unique_id>", "name": "<display_name>"}`
    - `gateway_id`: A unique identifier for the client. Used to create a gateway device in HA and namespace all associated devices and entities to avoid collision.
    - `name`: Human-readable gateway display name.
    - The integration binds this WebSocket connection with the `gateway_id` to route commands specifically to this client.
 
 > **Reconnection**: When a client reconnects, it should re-send all entity declarations (idempotent) and states. The integration will automatically restore or update them.
+
+### Required Message Order
+
+```
+connect → receive auth_required → send auth → receive auth_ok → ws_bridge/connect → ws_bridge/entity → ws_bridge/state
+```
+
+Sending `ws_bridge/entity` (or any other command) before `auth_ok` causes Home Assistant to reject it as a malformed auth message (`Auth message incorrectly formatted`).
+
+### Optional Fields
+
+- Omit unused optional keys from JSON rather than sending explicit `null` values. (`null` is tolerated in 0.1.2+, but omission is recommended.)
 
 ### Device Hierarchy (Grouping)
 Entities are organized hierarchically under their respective gateway and sub-devices:
