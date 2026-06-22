@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .bridge import WsBridge
 from .const import DOMAIN, PLATFORM_BINARY_SENSOR
-from .entity import WsBridgeEntity
+from .entity import WsBridgeEntity, safe_write_ha_state
 
 
 async def async_setup_entry(
@@ -40,4 +40,4 @@ class WsBridgeBinarySensor(WsBridgeEntity, BinarySensorEntity):
     @callback
     def _on_value(self, value: Any) -> None:
         self._attr_is_on = _truthy(value)
-        self.async_write_ha_state()
+        safe_write_ha_state(self)

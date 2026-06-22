@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .bridge import WsBridge
 from .const import DOMAIN, PLATFORM_SELECT
-from .entity import WsBridgeEntity
+from .entity import WsBridgeEntity, safe_write_ha_state
 
 
 async def async_setup_entry(
@@ -34,7 +34,7 @@ class WsBridgeSelect(WsBridgeEntity, SelectEntity):
     @callback
     def _on_value(self, value: Any) -> None:
         self._attr_current_option = str(value)
-        self.async_write_ha_state()
+        safe_write_ha_state(self)
 
     async def async_select_option(self, option: str) -> None:
         self._bridge.send_command(self._attr_unique_id, "select_option", option)

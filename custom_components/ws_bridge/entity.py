@@ -7,11 +7,17 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.const import EntityCategory
+from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, Entity
 
 from .bridge import WsBridge, signal_avail, signal_value
 from .const import DEFAULT_PLATFORM_ICONS, DOMAIN
+
+
+def safe_write_ha_state(entity: Entity) -> None:
+    """dispatcher 리스너 등 이벤트 루프 밖에서도 안전하게 상태 반영."""
+    entity.hass.loop.call_soon_threadsafe(entity.async_write_ha_state)
 
 
 class WsBridgeEntity(Entity):
@@ -57,9 +63,10 @@ class WsBridgeEntity(Entity):
             )
         )
 
+    @callback
     def _on_availability(self, online: bool) -> None:
         self._attr_available = online
-        self.async_write_ha_state()
+        safe_write_ha_state(self)
 
     def _subscribe_state(self, cb) -> None:
         """상태 갱신(signal_value) 구독 헬퍼. 상태가 있는 플랫폼에서 호출."""

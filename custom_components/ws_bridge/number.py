@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .bridge import WsBridge
 from .const import DOMAIN, PLATFORM_NUMBER
-from .entity import WsBridgeEntity
+from .entity import WsBridgeEntity, safe_write_ha_state
 
 
 async def async_setup_entry(
@@ -39,7 +39,7 @@ class WsBridgeNumber(WsBridgeEntity, NumberEntity):
     @callback
     def _on_value(self, value: Any) -> None:
         self._attr_native_value = value
-        self.async_write_ha_state()
+        safe_write_ha_state(self)
 
     async def async_set_native_value(self, value: float) -> None:
         self._bridge.send_command(self._attr_unique_id, "set_value", value)
