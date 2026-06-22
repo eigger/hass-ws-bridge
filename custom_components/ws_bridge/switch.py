@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .bridge import WsBridge
 from .const import DOMAIN, PLATFORM_SWITCH
-from .entity import WsBridgeEntity
+from .entity import WsBridgeEntity, safe_write_ha_state
 
 
 async def async_setup_entry(
@@ -33,7 +33,7 @@ class WsBridgeSwitch(WsBridgeEntity, SwitchEntity):
     @callback
     def _on_value(self, value: Any) -> None:
         self._attr_is_on = bool(value)
-        self.async_write_ha_state()
+        safe_write_ha_state(self)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         self._bridge.send_command(self._attr_unique_id, "turn_on")

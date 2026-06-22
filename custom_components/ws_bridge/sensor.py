@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .bridge import WsBridge, signal_clients
 from .const import CONNECTED_CLIENTS_UNIQUE_ID, DOMAIN, ICON_CONNECTED_CLIENTS, PLATFORM_SENSOR
-from .entity import WsBridgeEntity
+from .entity import WsBridgeEntity, safe_write_ha_state
 
 
 async def async_setup_entry(
@@ -40,7 +40,7 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
     @callback
     def _on_value(self, value: Any) -> None:
         self._attr_native_value = value
-        self.async_write_ha_state()
+        safe_write_ha_state(self)
 
 
 class WsBridgeConnectedClientsSensor(SensorEntity):
@@ -77,4 +77,4 @@ class WsBridgeConnectedClientsSensor(SensorEntity):
     @callback
     def _on_count_changed(self, count: int) -> None:
         self._attr_native_value = count
-        self.async_write_ha_state()
+        safe_write_ha_state(self)
