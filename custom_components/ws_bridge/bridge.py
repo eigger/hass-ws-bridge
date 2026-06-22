@@ -81,14 +81,18 @@ class WsBridge:
         self._conn_client[connection] = gateway_id
         self._notify_clients_changed()
 
-        # 클라이언트를 HA 디바이스로 등록 (sub-device들의 부모)
-        dr.async_get(self.hass).async_get_or_create(
+        # 게이트웨이를 독립 디바이스로 등록 — WebSocket Bridge 서비스 디바이스와 병렬
+        dev_reg = dr.async_get(self.hass)
+        gw_entry = dev_reg.async_get_or_create(
             config_entry_id=self.entry_id,
             identifiers={(DOMAIN, gateway_id)},
             name=client.name,
             manufacturer="ws_bridge",
             model="Gateway",
         )
+        # via_device가 남아 있으면 제거해 서비스 디바이스 하위에서 벗어나도록 강제 업데이트
+        if gw_entry.via_device_id is not None:
+            dev_reg.async_update_device(gw_entry.id, via_device_id=None)
         for ns_dev in client.device_ids:   # 재연결 → 온라인 복귀
             async_dispatcher_send(self.hass, signal_avail(self.entry_id, ns_dev), True)
 
