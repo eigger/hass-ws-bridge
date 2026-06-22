@@ -40,7 +40,7 @@ def _bridges(hass: HomeAssistant) -> list[WsBridge]:
 @websocket_api.websocket_command({
     vol.Required("type"): WS_CONNECT,
     vol.Required("gateway_id"): str,
-    vol.Optional("name"): str,
+    vol.Optional("name"): vol.Any(str, None),
 })
 @callback
 def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
@@ -62,19 +62,22 @@ def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
     vol.Required("unique_id"): str,
     vol.Required("platform"): vol.In(ALL_PLATFORMS),
     vol.Required("name"): str,
-    vol.Optional("device"): vol.Schema({
-        vol.Required("id"): str,
-        vol.Optional("name"): str,
-    }),
-    vol.Optional("device_class"): str,
-    vol.Optional("unit_of_measurement"): str,
-    vol.Optional("state_class"): str,
-    vol.Optional("icon"): str,
-    vol.Optional("entity_category"): vol.In(["config", "diagnostic"]),
-    vol.Optional("options"): [str],          # select
-    vol.Optional("min"): vol.Coerce(float),  # number
-    vol.Optional("max"): vol.Coerce(float),
-    vol.Optional("step"): vol.Coerce(float),
+    vol.Optional("device"): vol.Any(
+        vol.Schema({
+            vol.Required("id"): str,
+            vol.Optional("name"): vol.Any(str, None),
+        }),
+        None,
+    ),
+    vol.Optional("device_class"): vol.Any(str, None),
+    vol.Optional("unit_of_measurement"): vol.Any(str, None),
+    vol.Optional("state_class"): vol.Any(str, None),
+    vol.Optional("icon"): vol.Any(str, None),
+    vol.Optional("entity_category"): vol.Any(vol.In(["config", "diagnostic"]), None),
+    vol.Optional("options"): vol.Any([str], None),          # select
+    vol.Optional("min"): vol.Any(vol.Coerce(float), None),  # number
+    vol.Optional("max"): vol.Any(vol.Coerce(float), None),
+    vol.Optional("step"): vol.Any(vol.Coerce(float), None),
 })
 @callback
 def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
