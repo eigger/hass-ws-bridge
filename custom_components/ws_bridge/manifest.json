@@ -1,7 +1,7 @@
 {
   "domain": "ws_bridge",
   "name": "WebSocket Bridge",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "documentation": "https://github.com/eigger/hass-ws-bridge",
   "issue_tracker": "https://github.com/eigger/hass-ws-bridge/issues",
   "codeowners": [
