@@ -31,7 +31,8 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
         self._attr_native_unit_of_measurement = defn.get("unit_of_measurement")
         self._attr_device_class = defn.get("device_class")
         self._attr_state_class = defn.get("state_class")
-        self._attr_native_value = bridge.last_state(self._attr_unique_id)
+        last = bridge.last_state(self._attr_unique_id)
+        self._attr_native_value = last if not (isinstance(last, str) and last.lower() == "unknown") else None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -39,7 +40,7 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
 
     @callback
     def _on_value(self, value: Any) -> None:
-        self._attr_native_value = value
+        self._attr_native_value = value if not (isinstance(value, str) and value.lower() == "unknown") else None
         safe_write_ha_state(self)
 
 
