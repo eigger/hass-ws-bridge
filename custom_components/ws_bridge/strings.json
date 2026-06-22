@@ -10,6 +10,27 @@
       "already_configured": "이미 설정되어 있습니다."
     }
   },
+  "config_subentries": {
+    "gateway": {
+      "initiate_flow": {
+        "user": "게이트웨이 추가"
+      },
+      "entry_type": "게이트웨이",
+      "step": {
+        "user": {
+          "title": "게이트웨이 추가",
+          "description": "연결할 모바일 앱 등의 게이트웨이를 등록합니다. 입력한 게이트웨이 ID를 가진 클라이언트가 접속하면 이 게이트웨이 아래로 센서 및 하위 장치들이 묶이게 됩니다.",
+          "data": {
+            "gateway_id": "게이트웨이 ID (Android ID 등)",
+            "name": "이름 (예: 내 핸드폰)"
+          }
+        }
+      },
+      "abort": {
+        "already_configured": "이미 추가된 게이트웨이입니다."
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "connected_clients": {

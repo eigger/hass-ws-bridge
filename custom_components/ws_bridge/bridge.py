@@ -88,6 +88,15 @@ class WsBridge:
         # 게이트웨이를 독립 디바이스로 등록 — WebSocket Bridge 서비스 디바이스와 병렬
         dev_reg = dr.async_get(self.hass)
 
+        # 게이트웨이 ID에 매칭되는 Config Subentry가 있는지 찾아 subentry_id를 가져온다
+        subentry_id = None
+        config_entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        if config_entry:
+            for subentry in config_entry.subentries.values():
+                if subentry.data.get("gateway_id") == gateway_id:
+                    subentry_id = subentry.subentry_id
+                    break
+
         # 중복 기기 정리 (같은 name을 가졌지만 다른 gateway_id인 디바이스가 있는 경우 삭제)
         existing_devices = dr.async_entries_for_config_entry(dev_reg, self.entry_id)
         gids_to_remove = set()
@@ -114,6 +123,7 @@ class WsBridge:
 
         gw_entry = dev_reg.async_get_or_create(
             config_entry_id=self.entry_id,
+            config_subentry_id=subentry_id,
             identifiers={(DOMAIN, gateway_id)},
             name=client.name,
             manufacturer="ws_bridge",
@@ -184,6 +194,16 @@ class WsBridge:
         client.device_ids.add(ns_device_id)
         self._entity_client[ns["unique_id"]] = gateway_id
 
+        # 게이트웨이에 매칭되는 Config Subentry가 있는지 찾아 저장한다
+        subentry_id = None
+        config_entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        if config_entry:
+            for subentry in config_entry.subentries.values():
+                if subentry.data.get("gateway_id") == gateway_id:
+                    subentry_id = subentry.subentry_id
+                    break
+        ns["_subentry_id"] = subentry_id
+
         platform = ns.get("platform")
         if platform not in self._platforms:
             self._pending.setdefault(platform, []).append(ns)
@@ -197,7 +217,12 @@ class WsBridge:
             return
         self._created.add(uid)
         reg = self._platforms[defn["platform"]]
-        reg.add_entities([reg.factory(self, defn)])
+        
+        kwargs = {}
+        if subentry_id := defn.get("_subentry_id"):
+            kwargs["config_subentry_id"] = subentry_id
+            
+        reg.add_entities([reg.factory(self, defn)], **kwargs)
 
     @callback
     def handle_state(self, gateway_id: str, unique_id: str, value: Any) -> None:
