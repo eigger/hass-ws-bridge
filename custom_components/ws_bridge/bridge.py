@@ -60,6 +60,7 @@ class WsBridge:
         self._clients: dict[str, _Client] = {}          # gateway_id → ctx
         self._conn_client: dict[Any, str] = {}          # connection → gateway_id
         self._entity_client: dict[str, str] = {}        # ns unique_id → gateway_id
+        self._connections: set[Any] = set()            # active connections
 
     # ── 플랫폼 등록 ──────────────────────────────────────────────────────────
     @callback
@@ -82,6 +83,7 @@ class WsBridge:
             client.send_event = send_event
             if sw_version:
                 client.sw_version = sw_version
+        self._connections.add(connection)
         self._conn_client[connection] = gateway_id
         self._notify_clients_changed()
 
@@ -144,6 +146,7 @@ class WsBridge:
 
         @callback
         def _disconnect() -> None:
+            self._connections.discard(connection)
             self._conn_client.pop(connection, None)
             if gateway_id not in self._conn_client.values():
                 for ns_dev in client.device_ids:   # 끊김 → 해당 클라이언트 엔티티 unavailable
@@ -151,6 +154,15 @@ class WsBridge:
             self._notify_clients_changed()
 
         return _disconnect
+
+    @callback
+    def unload(self) -> None:
+        """Close all client connections when integration unloads."""
+        for conn in list(self._connections):
+            try:
+                conn.close()
+            except Exception as e:
+                _LOGGER.warning("Error closing client connection: %s", e)
 
     @callback
     def client_for(self, connection: Any) -> str | None:
