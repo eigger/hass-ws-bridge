@@ -39,6 +39,7 @@ class _Client:
     gateway_id: str
     name: str
     send_event: Callable[[dict[str, Any]], None]
+    sw_version: str | None = None
     device_ids: set[str] = field(default_factory=set)   # 네임스페이스된 sub-device id
 
 
@@ -71,13 +72,16 @@ class WsBridge:
     # ── 클라이언트 연결 ──────────────────────────────────────────────────────
     @callback
     def connect_client(self, connection: Any, gateway_id: str, name: str,
-                       send_event: Callable[[dict[str, Any]], None]) -> Callable[[], None]:
+                       send_event: Callable[[dict[str, Any]], None],
+                       sw_version: str | None = None) -> Callable[[], None]:
         client = self._clients.get(gateway_id)
         if client is None:
-            client = self._clients[gateway_id] = _Client(gateway_id, name or gateway_id, send_event)
+            client = self._clients[gateway_id] = _Client(gateway_id, name or gateway_id, send_event, sw_version)
         else:
             client.name = name or client.name
             client.send_event = send_event
+            if sw_version:
+                client.sw_version = sw_version
         self._conn_client[connection] = gateway_id
         self._notify_clients_changed()
 
@@ -89,10 +93,17 @@ class WsBridge:
             name=client.name,
             manufacturer="ws_bridge",
             model="Gateway",
+            sw_version=client.sw_version,
         )
-        # via_device가 남아 있으면 제거해 서비스 디바이스 하위에서 벗어나도록 강제 업데이트
-        if gw_entry.via_device_id is not None:
-            dev_reg.async_update_device(gw_entry.id, via_device_id=None)
+        # via_device가 남아 있으면 제거, sw_version도 갱신
+        if gw_entry.via_device_id is not None or (
+            client.sw_version and gw_entry.sw_version != client.sw_version
+        ):
+            dev_reg.async_update_device(
+                gw_entry.id,
+                via_device_id=None,
+                sw_version=client.sw_version,
+            )
         for ns_dev in client.device_ids:   # 재연결 → 온라인 복귀
             async_dispatcher_send(self.hass, signal_avail(self.entry_id, ns_dev), True)
 
