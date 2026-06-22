@@ -108,10 +108,24 @@ class WsBridge:
             return
         ns = dict(defn)
         ns["unique_id"] = self._ns_uid(gateway_id, defn["unique_id"])
-        device = defn.get("device") or {"id": defn["unique_id"], "name": defn.get("name")}
-        ns_device_id = self._ns_dev(gateway_id, device["id"])
+        device = defn.get("device")
+        if device is None or device["id"] == gateway_id:
+            ns_device_id = gateway_id
+            ns["_device"] = {
+                "ns_id": ns_device_id,
+                "name": client.name,
+                "gateway_id": gateway_id,
+                "is_gateway": True,
+            }
+        else:
+            ns_device_id = self._ns_dev(gateway_id, device["id"])
+            ns["_device"] = {
+                "ns_id": ns_device_id,
+                "name": device.get("name"),
+                "gateway_id": gateway_id,
+                "is_gateway": False,
+            }
         client.device_ids.add(ns_device_id)
-        ns["_device"] = {"ns_id": ns_device_id, "name": device.get("name"), "gateway_id": gateway_id}
         self._entity_client[ns["unique_id"]] = gateway_id
 
         platform = ns.get("platform")
@@ -137,8 +151,9 @@ class WsBridge:
 
     @callback
     def handle_availability(self, gateway_id: str, device_id: str, online: bool) -> None:
+        ns_dev = gateway_id if device_id == gateway_id else self._ns_dev(gateway_id, device_id)
         async_dispatcher_send(
-            self.hass, signal_avail(self.entry_id, self._ns_dev(gateway_id, device_id)), online
+            self.hass, signal_avail(self.entry_id, ns_dev), online
         )
 
     @callback

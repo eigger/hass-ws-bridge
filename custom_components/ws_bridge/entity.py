@@ -29,11 +29,19 @@ class WsBridgeEntity(Entity):
 
         dev = defn["_device"]                          # bridge가 주입
         self._ns_device_id = dev["ns_id"]
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, dev["ns_id"])},
-            name=dev.get("name"),
-            via_device=(DOMAIN, dev["gateway_id"]),    # 클라이언트(게이트웨이) 아래로 묶임
-        )
+        if dev.get("is_gateway"):
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, dev["ns_id"])},
+                name=dev.get("name"),
+                manufacturer="ws_bridge",
+                model="Gateway",
+            )
+        else:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, dev["ns_id"])},
+                name=dev.get("name"),
+                via_device=(DOMAIN, dev["gateway_id"]),    # 클라이언트(게이트웨이) 아래로 묶임
+            )
         self._attr_available = True
 
     async def async_added_to_hass(self) -> None:
