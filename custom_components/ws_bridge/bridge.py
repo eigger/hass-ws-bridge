@@ -15,9 +15,11 @@ from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN
+from .const import CONNECTED_CLIENTS_UNIQUE_ID, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +62,7 @@ class WsBridge:
         self._clients: dict[str, _Client] = {}          # gateway_id → ctx
         self._conn_client: dict[Any, str] = {}          # connection → gateway_id
         self._entity_client: dict[str, str] = {}        # ns unique_id → gateway_id
+        self._entities: dict[str, Entity] = {}          # ns unique_id → live entity
         self._connections: set[Any] = set()            # active connections
 
     # ── 플랫폼 등록 ──────────────────────────────────────────────────────────
@@ -229,12 +232,94 @@ class WsBridge:
             return
         self._created.add(uid)
         reg = self._platforms[defn["platform"]]
-        
+
         kwargs = {}
         if subentry_id := defn.get("_subentry_id"):
             kwargs["config_subentry_id"] = subentry_id
-            
-        reg.add_entities([reg.factory(self, defn)], **kwargs)
+
+        entity = reg.factory(self, defn)
+        self._entities[uid] = entity
+        reg.add_entities([entity], **kwargs)
+
+    # ── 삭제 (subentry / ws_bridge/remove) ───────────────────────────────────
+    async def async_remove_entity(self, gateway_id: str, unique_id: str) -> None:
+        await self._remove_entity_ns(self._ns_uid(gateway_id, unique_id))
+
+    async def async_remove_device(self, gateway_id: str, device_id: str) -> None:
+        ns_dev = gateway_id if device_id == gateway_id else self._ns_dev(gateway_id, device_id)
+        dev_reg = dr.async_get(self.hass)
+        device = dev_reg.async_get_device({(DOMAIN, ns_dev)})
+        if device is None:
+            return
+
+        entity_reg = er.async_get(self.hass)
+        for entity_entry in list(er.async_entries_for_device(entity_reg, device.id)):
+            if entity_entry.config_entry_id == self.entry_id and entity_entry.unique_id:
+                await self._remove_entity_ns(entity_entry.unique_id)
+
+        dev_reg.async_remove_device(device.id)
+        if client := self._clients.get(gateway_id):
+            client.device_ids.discard(ns_dev)
+
+    async def async_remove_gateway(self, gateway_id: str) -> None:
+        """게이트웨이·하위 장치·엔티티를 HA 레지스트리와 내부 상태에서 제거."""
+        prefix = f"{gateway_id}__"
+        entity_reg = er.async_get(self.hass)
+
+        for entity_entry in list(er.async_entries_for_config_entry(entity_reg, self.entry_id)):
+            uid = entity_entry.unique_id
+            if not uid or uid.endswith(f"_{CONNECTED_CLIENTS_UNIQUE_ID}"):
+                continue
+            if uid.startswith(prefix):
+                await self._remove_entity_ns(uid)
+
+        dev_reg = dr.async_get(self.hass)
+        for device in list(dr.async_entries_for_config_entry(dev_reg, self.entry_id)):
+            for identifier in device.identifiers:
+                if identifier[0] != DOMAIN:
+                    continue
+                val = identifier[1]
+                if val == gateway_id or val.startswith(f"{gateway_id}:"):
+                    dev_reg.async_remove_device(device.id)
+                    break
+
+        self._purge_gateway_state(gateway_id)
+        _LOGGER.info("Removed gateway and associated devices/entities: %s", gateway_id)
+
+    async def _remove_entity_ns(self, ns_uid: str) -> None:
+        entity = self._entities.pop(ns_uid, None)
+        if entity is not None:
+            await entity.async_remove()
+        else:
+            entity_reg = er.async_get(self.hass)
+            for entity_entry in er.async_entries_for_config_entry(entity_reg, self.entry_id):
+                if entity_entry.unique_id == ns_uid:
+                    entity_reg.async_remove(entity_entry.entity_id)
+                    break
+
+        self._created.discard(ns_uid)
+        self._states.pop(ns_uid, None)
+        self._entity_client.pop(ns_uid, None)
+
+    def _purge_gateway_state(self, gateway_id: str) -> None:
+        prefix = f"{gateway_id}__"
+        self._clients.pop(gateway_id, None)
+        for uid in list(self._created):
+            if uid.startswith(prefix):
+                self._created.discard(uid)
+        for uid in list(self._states):
+            if uid.startswith(prefix):
+                self._states.pop(uid, None)
+        for uid in list(self._entity_client):
+            if uid.startswith(prefix):
+                self._entity_client.pop(uid, None)
+        for uid in list(self._entities):
+            if uid.startswith(prefix):
+                self._entities.pop(uid, None)
+        for platform, pending in self._pending.items():
+            self._pending[platform] = [
+                d for d in pending if not d.get("unique_id", "").startswith(prefix)
+            ]
 
     @callback
     def handle_state(self, gateway_id: str, unique_id: str, value: Any) -> None:

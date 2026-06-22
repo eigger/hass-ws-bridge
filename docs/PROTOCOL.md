@@ -179,6 +179,53 @@ Updates the online/offline availability status of a sub-device and all of its as
 
 ---
 
+### 3.4 Removal (`ws_bridge/remove`)
+Permanently **removes** entities, sub-devices, or an entire gateway from Home Assistant. Works even when items are disconnected and `unavailable`.
+
+When a **gateway Config Subentry** is deleted in **Settings → WebSocket Bridge**, devices and entities for that `gateway_id` are cleaned up automatically.
+
+* **Request (single entity)**
+  ```json
+  {
+    "id": 5,
+    "type": "ws_bridge/remove",
+    "unique_id": "multisensor_lux"
+  }
+  ```
+
+* **Request (sub-device and its entities)**
+  ```json
+  {
+    "id": 5,
+    "type": "ws_bridge/remove",
+    "device_id": "multisensor_01"
+  }
+  ```
+
+* **Request (entire gateway — omit both fields)**
+  ```json
+  {
+    "id": 5,
+    "type": "ws_bridge/remove"
+  }
+  ```
+
+  - `unique_id` (String, Optional): Original entity `unique_id`. Takes precedence over `device_id`.
+  - `device_id` (String, Optional): Sub-device ID. Removes the device and all entities bound to it.
+  - Omit both: Removes **all** entities, sub-devices, and the gateway device for the currently connected client.
+
+* **Response**
+  ```json
+  {
+    "id": 5,
+    "type": "result",
+    "success": true,
+    "result": null
+  }
+  ```
+
+---
+
 ## 4. Control Commands (Home Assistant → Client)
 
 When a controllable entity (`switch`, `number`, `select`, `button`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
