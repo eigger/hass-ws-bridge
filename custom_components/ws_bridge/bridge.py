@@ -13,13 +13,14 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.config_entries import ConfigSubentry
+from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity import Entity
 
-from .const import CONNECTED_CLIENTS_UNIQUE_ID, DOMAIN
+from .const import CONNECTED_CLIENTS_UNIQUE_ID, DOMAIN, SUBENTRY_TYPE_GATEWAY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,11 +74,63 @@ class WsBridge:
         for defn in self._pending.pop(platform, []):
             self._create(defn)
 
+    def _subentry_id_for_gateway(self, gateway_id: str) -> str | None:
+        config_entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        if config_entry is None:
+            return None
+        for subentry in config_entry.subentries.values():
+            if subentry.data.get("gateway_id") == gateway_id:
+                return subentry.subentry_id
+        return None
+
+    async def async_ensure_gateway_subentry(
+        self, gateway_id: str, name: str
+    ) -> str | None:
+        """connect 시 게이트웨이 Subentry가 없으면 자동 생성한다."""
+        config_entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        if config_entry is None:
+            return None
+
+        display_name = (name or gateway_id).strip() or gateway_id
+
+        for subentry in config_entry.subentries.values():
+            if subentry.data.get("gateway_id") != gateway_id:
+                continue
+            if (
+                subentry.title != display_name
+                or subentry.data.get("name") != display_name
+            ):
+                self.hass.config_entries.async_update_subentry(
+                    config_entry,
+                    subentry,
+                    data={"gateway_id": gateway_id, "name": display_name},
+                    title=display_name,
+                )
+            return subentry.subentry_id
+
+        subentry = ConfigSubentry(
+            data={"gateway_id": gateway_id, "name": display_name},
+            subentry_type=SUBENTRY_TYPE_GATEWAY,
+            unique_id=gateway_id,
+            title=display_name,
+        )
+        self.hass.config_entries.async_add_subentry(config_entry, subentry)
+        _LOGGER.info(
+            "Auto-created gateway subentry: %s (%s)", display_name, gateway_id
+        )
+        return subentry.subentry_id
+
     # ── 클라이언트 연결 ──────────────────────────────────────────────────────
     @callback
-    def connect_client(self, connection: Any, gateway_id: str, name: str,
-                       send_event: Callable[[dict[str, Any]], None],
-                       sw_version: str | None = None) -> Callable[[], None]:
+    def connect_client(
+        self,
+        connection: Any,
+        gateway_id: str,
+        name: str,
+        send_event: Callable[[dict[str, Any]], None],
+        sw_version: str | None = None,
+        subentry_id: str | None = None,
+    ) -> Callable[[], None]:
         client = self._clients.get(gateway_id)
         if client is None:
             client = self._clients[gateway_id] = _Client(gateway_id, name or gateway_id, send_event, sw_version)
@@ -93,14 +146,8 @@ class WsBridge:
         # 게이트웨이를 독립 디바이스로 등록 — WebSocket Bridge 서비스 디바이스와 병렬
         dev_reg = dr.async_get(self.hass)
 
-        # 게이트웨이 ID에 매칭되는 Config Subentry가 있는지 찾아 subentry_id를 가져온다
-        subentry_id = None
-        config_entry = self.hass.config_entries.async_get_entry(self.entry_id)
-        if config_entry:
-            for subentry in config_entry.subentries.values():
-                if subentry.data.get("gateway_id") == gateway_id:
-                    subentry_id = subentry.subentry_id
-                    break
+        if subentry_id is None:
+            subentry_id = self._subentry_id_for_gateway(gateway_id)
 
         # 중복 기기 정리 (같은 name을 가졌지만 다른 gateway_id인 디바이스가 있는 경우 삭제)
         existing_devices = dr.async_entries_for_config_entry(dev_reg, self.entry_id)
@@ -209,15 +256,7 @@ class WsBridge:
         client.device_ids.add(ns_device_id)
         self._entity_client[ns["unique_id"]] = gateway_id
 
-        # 게이트웨이에 매칭되는 Config Subentry가 있는지 찾아 저장한다
-        subentry_id = None
-        config_entry = self.hass.config_entries.async_get_entry(self.entry_id)
-        if config_entry:
-            for subentry in config_entry.subentries.values():
-                if subentry.data.get("gateway_id") == gateway_id:
-                    subentry_id = subentry.subentry_id
-                    break
-        ns["_subentry_id"] = subentry_id
+        ns["_subentry_id"] = self._subentry_id_for_gateway(gateway_id)
 
         platform = ns.get("platform")
         if platform not in self._platforms:
@@ -284,6 +323,16 @@ class WsBridge:
                     break
 
         self._purge_gateway_state(gateway_id)
+
+        config_entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        if config_entry:
+            for subentry in list(config_entry.subentries.values()):
+                if subentry.data.get("gateway_id") == gateway_id:
+                    self.hass.config_entries.async_remove_subentry(
+                        config_entry, subentry.subentry_id
+                    )
+                    break
+
         _LOGGER.info("Removed gateway and associated devices/entities: %s", gateway_id)
 
     async def _remove_entity_ns(self, ns_uid: str) -> None:

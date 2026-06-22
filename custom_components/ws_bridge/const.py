@@ -6,6 +6,8 @@
 
 DOMAIN = "ws_bridge"
 
+SUBENTRY_TYPE_GATEWAY = "gateway"
+
 # 통합 진단 센서 unique_id 접미사
 CONNECTED_CLIENTS_UNIQUE_ID = "connected_clients"
 
