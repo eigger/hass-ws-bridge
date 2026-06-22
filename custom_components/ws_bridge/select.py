@@ -25,7 +25,7 @@ class WsBridgeSelect(WsBridgeEntity, SelectEntity):
         super().__init__(bridge, defn)
         self._attr_options = list(defn.get("options") or [])
         last = bridge.last_state(self._attr_unique_id)
-        self._attr_current_option = str(last) if last is not None else None
+        self._attr_current_option = str(last) if last is not None and not (isinstance(last, str) and last.lower() == "unknown") else None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -33,7 +33,7 @@ class WsBridgeSelect(WsBridgeEntity, SelectEntity):
 
     @callback
     def _on_value(self, value: Any) -> None:
-        self._attr_current_option = str(value)
+        self._attr_current_option = str(value) if value is not None and not (isinstance(value, str) and value.lower() == "unknown") else None
         safe_write_ha_state(self)
 
     async def async_select_option(self, option: str) -> None:

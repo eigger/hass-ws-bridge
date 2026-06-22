@@ -20,11 +20,19 @@ async def async_setup_entry(
     bridge.register_platform(PLATFORM_SWITCH, async_add_entities, WsBridgeSwitch)
 
 
+def _truthy(value: Any) -> bool | None:
+    if value is None or (isinstance(value, str) and value.lower() == "unknown"):
+        return None
+    if isinstance(value, str):
+        return value.lower() in ("1", "true", "on", "yes")
+    return bool(value)
+
+
 class WsBridgeSwitch(WsBridgeEntity, SwitchEntity):
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
         last = bridge.last_state(self._attr_unique_id)
-        self._attr_is_on = bool(last) if last is not None else None
+        self._attr_is_on = _truthy(last)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -32,7 +40,7 @@ class WsBridgeSwitch(WsBridgeEntity, SwitchEntity):
 
     @callback
     def _on_value(self, value: Any) -> None:
-        self._attr_is_on = bool(value)
+        self._attr_is_on = _truthy(value)
         safe_write_ha_state(self)
 
     async def async_turn_on(self, **kwargs: Any) -> None:

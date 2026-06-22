@@ -20,7 +20,9 @@ async def async_setup_entry(
     bridge.register_platform(PLATFORM_BINARY_SENSOR, async_add_entities, WsBridgeBinarySensor)
 
 
-def _truthy(value: Any) -> bool:
+def _truthy(value: Any) -> bool | None:
+    if value is None or (isinstance(value, str) and value.lower() == "unknown"):
+        return None
     if isinstance(value, str):
         return value.lower() in ("1", "true", "on", "yes")
     return bool(value)
@@ -31,7 +33,7 @@ class WsBridgeBinarySensor(WsBridgeEntity, BinarySensorEntity):
         super().__init__(bridge, defn)
         self._attr_device_class = defn.get("device_class")
         last = bridge.last_state(self._attr_unique_id)
-        self._attr_is_on = _truthy(last) if last is not None else None
+        self._attr_is_on = _truthy(last)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
