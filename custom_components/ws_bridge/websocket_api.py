@@ -37,7 +37,7 @@ def async_register(hass: HomeAssistant) -> None:
 
 
 def _bridges(hass: HomeAssistant) -> list[WsBridge]:
-    return list(hass.data.get(DOMAIN, {}).values())
+    return [b for b in hass.data.get(DOMAIN, {}).values() if isinstance(b, WsBridge)]
 
 
 @websocket_api.websocket_command({
