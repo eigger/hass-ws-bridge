@@ -46,6 +46,7 @@ def _bridges(hass: HomeAssistant) -> list[WsBridge]:
     vol.Optional("name"): vol.Any(str, None),
     vol.Optional("app_version"): vol.Any(str, None),
 })
+@websocket_api.async_response
 async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
                      msg: dict[str, Any]) -> None:
     @callback
@@ -141,6 +142,7 @@ def ws_availability(hass: HomeAssistant, connection: websocket_api.ActiveConnect
     vol.Optional("unique_id"): str,
     vol.Optional("device_id"): str,
 })
+@websocket_api.async_response
 async def ws_remove(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
                     msg: dict[str, Any]) -> None:
     """엔티티·sub-device·게이트웨이(전체) 삭제. 대상 미지정 시 연결된 게이트웨이 전체."""
