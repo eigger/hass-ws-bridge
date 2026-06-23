@@ -11,6 +11,7 @@ from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .bridge import WsBridge, signal_clients
 from .const import CONNECTED_CLIENTS_UNIQUE_ID, DOMAIN, ICON_CONNECTED_CLIENTS, PLATFORM_SENSOR
@@ -32,7 +33,7 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
         self._attr_device_class = defn.get("device_class")
         self._attr_state_class = defn.get("state_class")
         last = bridge.last_state(self._attr_unique_id)
-        self._attr_native_value = last if not (isinstance(last, str) and last.lower() == "unknown") else None
+        self._attr_native_value = self._parse_value(last)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -40,8 +41,19 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
 
     @callback
     def _on_value(self, value: Any) -> None:
-        self._attr_native_value = value if not (isinstance(value, str) and value.lower() == "unknown") else None
+        self._attr_native_value = self._parse_value(value)
         safe_write_ha_state(self)
+
+    def _parse_value(self, value: Any) -> Any:
+        if value is None or (isinstance(value, str) and value.lower() == "unknown"):
+            return None
+        if self._attr_device_class == "timestamp" and isinstance(value, str):
+            if (dt := dt_util.parse_datetime(value)) is not None:
+                return dt_util.as_local(dt) if dt.tzinfo is None else dt
+        if self._attr_device_class == "date" and isinstance(value, str):
+            if (d := dt_util.parse_date(value)) is not None:
+                return d
+        return value
 
 
 class WsBridgeConnectedClientsSensor(SensorEntity):
