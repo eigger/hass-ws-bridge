@@ -247,9 +247,25 @@ class WsBridge:
             }
         else:
             ns_device_id = self._ns_dev(gateway_id, device["id"])
+            dev_name = device.get("name") or device["id"]
+            gw_prefix = client.name
+
+            # Avoid double-prefixing
+            dev_name_lower = dev_name.lower()
+            gw_prefix_lower = gw_prefix.lower()
+            gateway_id_lower = gateway_id.lower()
+
+            if (
+                not dev_name_lower.startswith(gw_prefix_lower)
+                and not dev_name_lower.startswith(gateway_id_lower)
+            ):
+                full_device_name = f"{gw_prefix} {dev_name}"
+            else:
+                full_device_name = dev_name
+
             ns["_device"] = {
                 "ns_id": ns_device_id,
-                "name": device.get("name"),
+                "name": full_device_name,
                 "gateway_id": gateway_id,
                 "is_gateway": False,
             }
