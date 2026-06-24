@@ -87,6 +87,7 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     vol.Optional("device_class"): vol.Any(str, None),
     vol.Optional("unit_of_measurement"): vol.Any(str, None),
     vol.Optional("state_class"): vol.Any(str, None),
+    vol.Optional("suggested_display_precision"): vol.Any(vol.Coerce(int), None),
     vol.Optional("icon"): vol.Any(str, None),
     vol.Optional("entity_category"): vol.Any(vol.In(["config", "diagnostic"]), None),
     vol.Optional("options"): vol.Any([str], None),          # select
