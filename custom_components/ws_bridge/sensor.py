@@ -32,6 +32,7 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
         self._attr_native_unit_of_measurement = defn.get("unit_of_measurement")
         self._attr_device_class = defn.get("device_class")
         self._attr_state_class = defn.get("state_class")
+        self._attr_suggested_display_precision = defn.get("suggested_display_precision")
         last = bridge.last_state(self._attr_unique_id)
         self._attr_native_value = self._parse_value(last)
 
