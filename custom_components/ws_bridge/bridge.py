@@ -278,7 +278,13 @@ class WsBridge:
         if platform not in self._platforms:
             self._pending.setdefault(platform, []).append(ns)
             return
+
+        if ns["unique_id"] in self._entities:
+            self._entities[ns["unique_id"]].async_update_defn(ns)
+            return
+
         self._create(ns)
+
 
     @callback
     def _create(self, defn: dict[str, Any]) -> None:
