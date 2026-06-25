@@ -20,7 +20,12 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity import Entity
 
-from .const import CONNECTED_CLIENTS_UNIQUE_ID, DOMAIN, SUBENTRY_TYPE_GATEWAY
+from .const import (
+    CONNECTED_CLIENTS_UNIQUE_ID,
+    DOMAIN,
+    REMOVE_MODE_PREFIX,
+    SUBENTRY_TYPE_GATEWAY,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -303,24 +308,65 @@ class WsBridge:
         reg.add_entities([entity], **kwargs)
 
     # ── 삭제 (subentry / ws_bridge/remove) ───────────────────────────────────
-    async def async_remove_entity(self, gateway_id: str, unique_id: str) -> None:
-        await self._remove_entity_ns(self._ns_uid(gateway_id, unique_id))
-
-    async def async_remove_device(self, gateway_id: str, device_id: str) -> None:
-        ns_dev = gateway_id if device_id == gateway_id else self._ns_dev(gateway_id, device_id)
-        dev_reg = dr.async_get(self.hass)
-        device = dev_reg.async_get_device({(DOMAIN, ns_dev)})
-        if device is None:
+    async def async_remove_entity(
+        self, gateway_id: str, unique_id: str, mode: str = "exact"
+    ) -> None:
+        use_prefix = mode == REMOVE_MODE_PREFIX
+        if not use_prefix:
+            await self._remove_entity_ns(self._ns_uid(gateway_id, unique_id))
             return
 
         entity_reg = er.async_get(self.hass)
-        for entity_entry in list(er.async_entries_for_device(entity_reg, device.id)):
-            if entity_entry.config_entry_id == self.entry_id and entity_entry.unique_id:
-                await self._remove_entity_ns(entity_entry.unique_id)
+        to_remove: set[str] = set()
+        for entity_entry in er.async_entries_for_config_entry(entity_reg, self.entry_id):
+            uid = entity_entry.unique_id
+            if not uid:
+                continue
+            stripped = self._strip(gateway_id, uid)
+            if self._client_id_matches(stripped, unique_id, prefix=True):
+                to_remove.add(uid)
 
-        dev_reg.async_remove_device(device.id)
+        ns_prefix = self._ns_uid(gateway_id, unique_id)
+        for uid in list(self._created):
+            if uid == ns_prefix or uid.startswith(f"{ns_prefix}_"):
+                to_remove.add(uid)
+
+        for uid in to_remove:
+            await self._remove_entity_ns(uid)
+
+    async def async_remove_device(
+        self, gateway_id: str, device_id: str, mode: str = "exact"
+    ) -> None:
+        use_prefix = mode == REMOVE_MODE_PREFIX
+        dev_reg = dr.async_get(self.hass)
+        entity_reg = er.async_get(self.hass)
+        devices_to_remove: list[str] = []
+
+        for device in dr.async_entries_for_config_entry(dev_reg, self.entry_id):
+            for identifier in device.identifiers:
+                if identifier[0] != DOMAIN:
+                    continue
+                client_id = self._client_device_id_from_ns(gateway_id, identifier[1])
+                if client_id is None:
+                    continue
+                if self._client_id_matches(client_id, device_id, prefix=use_prefix):
+                    devices_to_remove.append(device.id)
+                    break
+
+        for device_registry_id in devices_to_remove:
+            for entity_entry in list(er.async_entries_for_device(entity_reg, device_registry_id)):
+                if entity_entry.config_entry_id == self.entry_id and entity_entry.unique_id:
+                    await self._remove_entity_ns(entity_entry.unique_id)
+            dev_reg.async_remove_device(device_registry_id)
+
         if client := self._clients.get(gateway_id):
-            client.device_ids.discard(ns_dev)
+            to_discard = {
+                ns
+                for ns in client.device_ids
+                if (cid := self._client_device_id_from_ns(gateway_id, ns)) is not None
+                and self._client_id_matches(cid, device_id, prefix=use_prefix)
+            }
+            client.device_ids -= to_discard
 
     async def async_remove_gateway(self, gateway_id: str) -> None:
         """게이트웨이·하위 장치·엔티티를 HA 레지스트리와 내부 상태에서 제거."""
@@ -426,6 +472,21 @@ class WsBridge:
         client.send_event(event)
 
     # ── helpers ──────────────────────────────────────────────────────────────
+    @staticmethod
+    def _client_id_matches(candidate: str, target: str, *, prefix: bool) -> bool:
+        if prefix:
+            return candidate == target or candidate.startswith(f"{target}_")
+        return candidate == target
+
+    @staticmethod
+    def _client_device_id_from_ns(gateway_id: str, ns_dev: str) -> str | None:
+        if ns_dev == gateway_id:
+            return gateway_id
+        gw_prefix = f"{gateway_id}:"
+        if not ns_dev.startswith(gw_prefix):
+            return None
+        return ns_dev[len(gw_prefix) :]
+
     @staticmethod
     def _ns_uid(gateway_id: str, unique_id: str) -> str:
         return f"{gateway_id}__{unique_id}"
