@@ -195,7 +195,7 @@ HA에 등록된 엔티티·하위 장치·게이트웨이를 **완전히 삭제*
   }
   ```
 
-* **요청 (하위 장치 + 소속 엔티티)**
+* **요청 (하위 장치 + 소속 엔티티 — 정확 일치, 기본값)**
   ```json
   {
     "id": 5,
@@ -203,6 +203,17 @@ HA에 등록된 엔티티·하위 장치·게이트웨이를 **완전히 삭제*
     "device_id": "multisensor_01"
   }
   ```
+
+* **요청 (하위 장치 트리 — prefix 일치, 예: BLE MAC 인스턴스)**
+  ```json
+  {
+    "id": 6,
+    "type": "ws_bridge/remove",
+    "device_id": "jaalee_jht",
+    "mode": "prefix"
+  }
+  ```
+  클라이언트 `device.id`가 `jaalee_jht`이거나 `jaalee_jht_`로 시작하는 하위 장치(예: `jaalee_jht_AABBCCDDEEFF`)와 그 엔티티를 모두 제거합니다.
 
 * **요청 (게이트웨이 전체 — `unique_id`·`device_id` 생략)**
   ```json
@@ -214,6 +225,9 @@ HA에 등록된 엔티티·하위 장치·게이트웨이를 **완전히 삭제*
 
   - `unique_id` (String, 옵션): 삭제할 엔티티의 원본 `unique_id`. `device_id`보다 우선합니다.
   - `device_id` (String, 옵션): 삭제할 하위 장치 ID. 해당 장치와 소속 엔티티를 제거합니다.
+  - `mode` (String, 옵션): `unique_id` 또는 `device_id` 지정 시 삭제 범위. 기본값 `"exact"`.
+    - `"exact"`: 클라이언트 id가 **완전 일치**하는 대상만 삭제 (기존 동작).
+    - `"prefix"`: 대상 id와 **일치하거나** `대상id_`로 시작하는 모든 하위 id 삭제 (예: 프로필 `jaalee_jht` + MAC 인스턴스 `jaalee_jht_AABBCCDDEEFF`). MAC별 `device.id`를 쓰는 advertisement 센서에 사용.
   - 둘 다 생략: 현재 연결된 게이트웨이의 **모든** 엔티티·하위 장치·게이트웨이 디바이스를 삭제합니다.
 
 * **응답**

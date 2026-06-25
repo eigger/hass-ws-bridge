@@ -23,6 +23,11 @@ WS_STATE = f"{DOMAIN}/state"
 WS_AVAILABILITY = f"{DOMAIN}/availability"
 WS_REMOVE = f"{DOMAIN}/remove"
 
+# ws_bridge/remove mode (PROTOCOL.md §3.4)
+REMOVE_MODE_EXACT = "exact"
+REMOVE_MODE_PREFIX = "prefix"
+REMOVE_MODES = (REMOVE_MODE_EXACT, REMOVE_MODE_PREFIX)
+
 # HA→클라이언트 이벤트 kind
 EVT_COMMAND = "command"
 

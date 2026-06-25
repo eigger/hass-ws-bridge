@@ -194,7 +194,7 @@ When a **gateway subentry** is deleted in **Settings → WebSocket Bridge**, or 
   }
   ```
 
-* **Request (sub-device and its entities)**
+* **Request (sub-device and its entities — exact match, default)**
   ```json
   {
     "id": 5,
@@ -202,6 +202,17 @@ When a **gateway subentry** is deleted in **Settings → WebSocket Bridge**, or 
     "device_id": "multisensor_01"
   }
   ```
+
+* **Request (sub-device tree — prefix match, e.g. BLE MAC instances)**
+  ```json
+  {
+    "id": 6,
+    "type": "ws_bridge/remove",
+    "device_id": "jaalee_jht",
+    "mode": "prefix"
+  }
+  ```
+  Removes the sub-device whose client `device.id` equals `jaalee_jht` **or** starts with `jaalee_jht_` (e.g. `jaalee_jht_AABBCCDDEEFF`), and all entities bound to those devices.
 
 * **Request (entire gateway — omit both fields)**
   ```json
@@ -213,7 +224,10 @@ When a **gateway subentry** is deleted in **Settings → WebSocket Bridge**, or 
 
   - `unique_id` (String, Optional): Original entity `unique_id`. Takes precedence over `device_id`.
   - `device_id` (String, Optional): Sub-device ID. Removes the device and all entities bound to it.
-  - Omit both: Removes **all** entities, sub-devices, and the gateway device for the currently connected client.
+  - `mode` (String, Optional): Removal scope when `unique_id` or `device_id` is set. Default: `"exact"`.
+    - `"exact"`: Only the target whose client id **equals** `device_id` / `unique_id` (legacy behaviour).
+    - `"prefix"`: The target **and** any client id that equals `target` or starts with `target_` (e.g. profile `jaalee_jht` plus MAC instances `jaalee_jht_AABBCCDDEEFF`). Use for advertisement sensors with per-MAC `device.id`.
+  - Omit `unique_id` and `device_id`: Removes **all** entities, sub-devices, and the gateway device for the currently connected client.
 
 * **Response**
   ```json

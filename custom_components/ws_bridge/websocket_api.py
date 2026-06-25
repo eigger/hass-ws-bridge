@@ -19,6 +19,7 @@ from .bridge import WsBridge
 from .const import (
     ALL_PLATFORMS,
     DOMAIN,
+    REMOVE_MODES,
     WS_AVAILABILITY,
     WS_CONNECT,
     WS_ENTITY,
@@ -142,18 +143,20 @@ def ws_availability(hass: HomeAssistant, connection: websocket_api.ActiveConnect
     vol.Required("type"): WS_REMOVE,
     vol.Optional("unique_id"): str,
     vol.Optional("device_id"): str,
+    vol.Optional("mode"): vol.In(REMOVE_MODES),
 })
 @websocket_api.async_response
 async def ws_remove(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
                     msg: dict[str, Any]) -> None:
     """엔티티·sub-device·게이트웨이(전체) 삭제. 대상 미지정 시 연결된 게이트웨이 전체."""
+    mode = msg.get("mode", "exact")
     for b in _bridges(hass):
         if (gid := b.client_for(connection)) is None:
             continue
         if unique_id := msg.get("unique_id"):
-            await b.async_remove_entity(gid, unique_id)
+            await b.async_remove_entity(gid, unique_id, mode)
         elif device_id := msg.get("device_id"):
-            await b.async_remove_device(gid, device_id)
+            await b.async_remove_device(gid, device_id, mode)
         else:
             await b.async_remove_gateway(gid)
         connection.send_result(msg["id"])
