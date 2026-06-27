@@ -38,6 +38,7 @@ def _subentry_gateway_ids(entry: ConfigEntry) -> set[str]:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     bridge = WsBridge(hass, entry.entry_id)
+    await bridge.async_load()
 
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data:
@@ -77,5 +78,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if not snapshots:
                 hass.data.pop(SUBENTRY_SNAPSHOTS, None)
         if bridge:
+            await bridge.async_flush_save()
             bridge.unload()
     return unloaded
