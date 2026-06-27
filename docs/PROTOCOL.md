@@ -28,7 +28,7 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
    - On `ws_bridge/connect`, a matching subentry is **created automatically** if one does not exist (no manual registration).
    - The integration binds this WebSocket connection with the `gateway_id` to route commands specifically to this client.
 
-> **Reconnection**: When a client reconnects, it should re-send all entity declarations (idempotent) and states. The integration will automatically restore or update them.
+> **Reconnection**: When a client reconnects, it should re-send all entity declarations (idempotent) and states. The integration will automatically restore or update them. After an HA restart, the integration persists the last state to disk, so previous values may appear before the client re-sends states. Re-sending states on reconnect is still recommended for up-to-date values.
 
 ### Required Message Order
 

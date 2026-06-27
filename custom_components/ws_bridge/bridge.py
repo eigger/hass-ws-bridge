@@ -14,11 +14,13 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from homeassistant.config_entries import ConfigSubentry
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.storage import Store
 
 from .const import (
     CONNECTED_CLIENTS_UNIQUE_ID,
@@ -28,6 +30,9 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+STORAGE_VERSION = 1
+SAVE_DELAY = 10
 
 
 def signal_value(entry_id: str, unique_id: str) -> str:
@@ -70,6 +75,51 @@ class WsBridge:
         self._entity_client: dict[str, str] = {}        # ns unique_id → gateway_id
         self._entities: dict[str, Entity] = {}          # ns unique_id → live entity
         self._connections: set[Any] = set()            # active connections
+        self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}.states")
+        self._save_unsub: Callable[[], None] | None = None
+
+    async def async_load(self) -> None:
+        """디스크에서 마지막 state를 복원하고 entity registry에 없는 고아 항목을 정리."""
+        data = await self._store.async_load() or {}
+        self._states = data.get("states", {})
+        if self._prune_orphan_states():
+            await self.async_save()
+
+    async def async_save(self) -> None:
+        await self._store.async_save({"states": self._states})
+
+    async def async_flush_save(self) -> None:
+        """대기 중인 debounce를 취소하고 즉시 저장."""
+        if self._save_unsub is not None:
+            self._save_unsub()
+            self._save_unsub = None
+        await self.async_save()
+
+    def _prune_orphan_states(self) -> bool:
+        entity_reg = er.async_get(self.hass)
+        known_uids = {
+            entry.unique_id
+            for entry in er.async_entries_for_config_entry(entity_reg, self.entry_id)
+            if entry.unique_id
+            and not entry.unique_id.endswith(f"_{CONNECTED_CLIENTS_UNIQUE_ID}")
+        }
+        orphans = [uid for uid in self._states if uid not in known_uids]
+        for uid in orphans:
+            self._states.pop(uid, None)
+        if orphans:
+            _LOGGER.debug("Pruned %d orphaned state(s) from store", len(orphans))
+        return bool(orphans)
+
+    @callback
+    def _schedule_save(self) -> None:
+        if self._save_unsub is not None:
+            self._save_unsub()
+        self._save_unsub = async_call_later(self.hass, SAVE_DELAY, self._debounced_save)
+
+    @callback
+    def _debounced_save(self, _now) -> None:
+        self._save_unsub = None
+        self.hass.async_create_task(self.async_save())
 
     # ── 플랫폼 등록 ──────────────────────────────────────────────────────────
     @callback
@@ -378,7 +428,7 @@ class WsBridge:
             if not uid or uid.endswith(f"_{CONNECTED_CLIENTS_UNIQUE_ID}"):
                 continue
             if uid.startswith(prefix):
-                await self._remove_entity_ns(uid)
+                await self._remove_entity_ns(uid, persist=False)
 
         dev_reg = dr.async_get(self.hass)
         for device in list(dr.async_entries_for_config_entry(dev_reg, self.entry_id)):
@@ -391,6 +441,7 @@ class WsBridge:
                     break
 
         self._purge_gateway_state(gateway_id)
+        await self.async_save()
 
         config_entry = self.hass.config_entries.async_get_entry(self.entry_id)
         if config_entry:
@@ -403,7 +454,7 @@ class WsBridge:
 
         _LOGGER.info("Removed gateway and associated devices/entities: %s", gateway_id)
 
-    async def _remove_entity_ns(self, ns_uid: str) -> None:
+    async def _remove_entity_ns(self, ns_uid: str, *, persist: bool = True) -> None:
         entity = self._entities.pop(ns_uid, None)
         if entity is not None:
             await entity.async_remove()
@@ -417,6 +468,8 @@ class WsBridge:
         self._created.discard(ns_uid)
         self._states.pop(ns_uid, None)
         self._entity_client.pop(ns_uid, None)
+        if persist:
+            await self.async_save()
 
     def _purge_gateway_state(self, gateway_id: str) -> None:
         prefix = f"{gateway_id}__"
@@ -442,6 +495,7 @@ class WsBridge:
     def handle_state(self, gateway_id: str, unique_id: str, value: Any) -> None:
         ns_uid = self._ns_uid(gateway_id, unique_id)
         self._states[ns_uid] = value
+        self._schedule_save()
         async_dispatcher_send(self.hass, signal_value(self.entry_id, ns_uid), value)
 
     @callback
