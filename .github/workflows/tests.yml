@@ -1,0 +1,40 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v6
+      
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pytest voluptuous
+          if [ -f custom_components/ws_bridge/manifest.json ]; then
+            python -c "import json; reqs = json.load(open('custom_components/ws_bridge/manifest.json')).get('requirements', []); print('\n'.join(reqs))" > requirements.txt
+            if [ -s requirements.txt ]; then
+              pip install -r requirements.txt
+            fi
+          fi
+          
+      - name: Run tests
+        run: |
+          python -m pytest tests/
