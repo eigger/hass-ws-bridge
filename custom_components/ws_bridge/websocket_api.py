@@ -18,6 +18,8 @@ from homeassistant.core import HomeAssistant, callback
 from .bridge import WsBridge
 from .const import (
     ALL_PLATFORMS,
+    CONF_KEEP_LAST_STATE_ON_DISCONNECT,
+    DEFAULT_KEEP_LAST_STATE_ON_DISCONNECT,
     DOMAIN,
     REMOVE_MODES,
     WS_AVAILABILITY,
@@ -46,6 +48,9 @@ def _bridges(hass: HomeAssistant) -> list[WsBridge]:
     vol.Required("gateway_id"): str,
     vol.Optional("name"): vol.Any(str, None),
     vol.Optional("app_version"): vol.Any(str, None),
+    vol.Optional(
+        CONF_KEEP_LAST_STATE_ON_DISCONNECT, default=DEFAULT_KEEP_LAST_STATE_ON_DISCONNECT
+    ): bool,
 })
 @websocket_api.async_response
 async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
@@ -67,6 +72,7 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
                 _send_event,
                 msg.get("app_version"),
                 subentry_id,
+                keep_last_state_on_disconnect=msg[CONF_KEEP_LAST_STATE_ON_DISCONNECT],
             )
         )
     connection.subscriptions[msg["id"]] = lambda: [u() for u in unsubs]

@@ -31,6 +31,12 @@ REMOVE_MODES = (REMOVE_MODE_EXACT, REMOVE_MODE_PREFIX)
 # HA→클라이언트 이벤트 kind
 EVT_COMMAND = "command"
 
+# ws_bridge/connect 선택 필드 — 켜두면 이 게이트웨이는 연결이 끊겨도(비정상 종료 포함)
+# 엔티티를 unavailable로 만들지 않고 마지막 상태를 유지한다(MQTT retain과 유사).
+# 클라이언트가 접속 시 선언하며, 서버는 다음 접속까지 그 값을 기억한다.
+CONF_KEEP_LAST_STATE_ON_DISCONNECT = "keep_last_state_on_disconnect"
+DEFAULT_KEEP_LAST_STATE_ON_DISCONNECT = False
+
 # 기본 지원 플랫폼 (읽기: sensor/binary_sensor, 제어: switch/number/select/button)
 PLATFORM_SENSOR = "sensor"
 PLATFORM_BINARY_SENSOR = "binary_sensor"

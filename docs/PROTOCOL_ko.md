@@ -25,6 +25,7 @@
    - 전송: `{"id": <n>, "type": "ws_bridge/connect", "gateway_id": "<고유_ID>", "name": "<표시_이름>"}`
    - `gateway_id`: 클라이언트를 고유하게 식별할 ID입니다. HA에 **게이트웨이 디바이스**로 등록되고, 생성되는 장치/엔티티의 네임스페이스 접두어로 사용됩니다.
    - `name`: 게이트웨이 기기의 표시 이름입니다. 통합 설정 화면의 게이트웨이 Subentry 제목으로도 사용됩니다.
+   - `keep_last_state_on_disconnect` (Boolean, 선택, 기본값 `false`): `true`로 설정하면 이 게이트웨이의 엔티티는 웹소켓 연결이 끊겨도(전원/와이파이 단절 등 비정상 종료 포함) `unavailable`로 표시되지 않고 마지막 상태를 그대로 유지합니다(Last Will/Testament 없는 MQTT retain과 유사). 통합은 다음 `ws_bridge/connect`가 값을 바꿀 때까지 게이트웨이별로 이 값을 기억합니다. 기본값(`false`)은 기존 동작(연결 끊김 시 unavailable)과 동일합니다.
    - `ws_bridge/connect` 시 `gateway_id`에 맞는 Subentry가 없으면 **자동 생성**됩니다. (수동 등록 불필요)
    - 컴포넌트가 웹소켓 커넥션과 `gateway_id`를 바인딩하여 제어 명령(`command`)을 이 클라이언트에만 라우팅합니다.
 

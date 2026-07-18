@@ -53,6 +53,7 @@ class _Client:
     name: str
     send_event: Callable[[dict[str, Any]], None]
     sw_version: str | None = None
+    keep_last_state_on_disconnect: bool = False  # 클라이언트가 connect 시 선언
     device_ids: set[str] = field(default_factory=set)   # 네임스페이스된 sub-device id
 
 
@@ -185,15 +186,20 @@ class WsBridge:
         send_event: Callable[[dict[str, Any]], None],
         sw_version: str | None = None,
         subentry_id: str | None = None,
+        keep_last_state_on_disconnect: bool = False,
     ) -> Callable[[], None]:
         client = self._clients.get(gateway_id)
         if client is None:
-            client = self._clients[gateway_id] = _Client(gateway_id, name or gateway_id, send_event, sw_version)
+            client = self._clients[gateway_id] = _Client(
+                gateway_id, name or gateway_id, send_event, sw_version,
+                keep_last_state_on_disconnect,
+            )
         else:
             client.name = name or client.name
             client.send_event = send_event
             if sw_version:
                 client.sw_version = sw_version
+            client.keep_last_state_on_disconnect = keep_last_state_on_disconnect
         self._connections.add(connection)
         self._conn_client[connection] = gateway_id
         self._notify_clients_changed()
@@ -253,7 +259,7 @@ class WsBridge:
         def _disconnect() -> None:
             self._connections.discard(connection)
             self._conn_client.pop(connection, None)
-            if gateway_id not in self._conn_client.values():
+            if gateway_id not in self._conn_client.values() and not client.keep_last_state_on_disconnect:
                 for ns_dev in client.device_ids:   # 끊김 → 해당 클라이언트 엔티티 unavailable
                     async_dispatcher_send(self.hass, signal_avail(self.entry_id, ns_dev), False)
             self._notify_clients_changed()
