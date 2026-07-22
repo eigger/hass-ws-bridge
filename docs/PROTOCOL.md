@@ -86,9 +86,10 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   - `device` (Object, Optional): The sub-device this entity belongs to.
     - `id` (String, Required): Unique sub-device ID.
     - `name` (String, Optional): Sub-device display name.
-  - `device_class` (String, Optional): Home Assistant standard device class.
+  - `device_class` (String, Optional): Home Assistant standard device class. Applies to every platform (e.g. `outlet`/`switch` for `switch`, `humidity`/`temperature` for `number`, `restart`/`identify`/`update` for `button`), not just `sensor`/`binary_sensor`.
   - `unit_of_measurement` (String, Optional): Unit of measurement.
   - `state_class` (String, Optional): HA state class for statistics.
+  - `suggested_display_precision` (Integer, Optional, `sensor` platform): Number of decimal places to round the displayed value to (mirrors the client's own rounding config, e.g. ESPHome's `accuracy_decimals`). Without it, Home Assistant shows the raw float exactly as received, which for many sensors means long, noisy decimals (e.g. `48.85864` instead of `48.9`).
   - `icon` (String, Optional): Icon name (e.g., `mdi:thermometer`).
   - `entity_category` (String, Optional): Entity category, either `"config"` or `"diagnostic"`.
   - **Platform-Specific Fields**:

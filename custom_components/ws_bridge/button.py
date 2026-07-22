@@ -23,6 +23,10 @@ async def async_setup_entry(
 class WsBridgeButton(WsBridgeEntity, ButtonEntity):
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
+        self._attr_device_class = defn.get("device_class")
+
+    def _update_platform_defn(self, defn: dict[str, Any]) -> None:
+        self._attr_device_class = defn.get("device_class")
 
     async def async_press(self) -> None:
         self._bridge.send_command(self._attr_unique_id, "press")

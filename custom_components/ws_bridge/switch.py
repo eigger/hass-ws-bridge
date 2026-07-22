@@ -31,8 +31,12 @@ def _truthy(value: Any) -> bool | None:
 class WsBridgeSwitch(WsBridgeEntity, SwitchEntity):
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
+        self._attr_device_class = defn.get("device_class")
         last = bridge.last_state(self._attr_unique_id)
         self._attr_is_on = _truthy(last)
+
+    def _update_platform_defn(self, defn: dict[str, Any]) -> None:
+        self._attr_device_class = defn.get("device_class")
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
