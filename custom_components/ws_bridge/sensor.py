@@ -14,7 +14,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .bridge import WsBridge, signal_clients
-from .const import CONNECTED_CLIENTS_UNIQUE_ID, DOMAIN, ICON_CONNECTED_CLIENTS, PLATFORM_SENSOR
+from .const import (
+    CONNECTED_CLIENTS_UNIQUE_ID,
+    DOMAIN,
+    ICON_CONNECTED_CLIENTS,
+    PLATFORM_SENSOR,
+    PLATFORM_TEXT_SENSOR,
+)
 from .entity import WsBridgeEntity, safe_write_ha_state
 
 
@@ -23,6 +29,9 @@ async def async_setup_entry(
 ) -> None:
     bridge: WsBridge = hass.data[DOMAIN][entry.entry_id]
     bridge.register_platform(PLATFORM_SENSOR, async_add_entities, WsBridgeSensor)
+    # HA has no separate "text_sensor" domain — string-state entities are just
+    # sensor entities too, so route them through the same sensor platform setup.
+    bridge.register_platform(PLATFORM_TEXT_SENSOR, async_add_entities, WsBridgeTextSensor)
     async_add_entities([WsBridgeConnectedClientsSensor(bridge, entry)])
 
 
@@ -61,6 +70,32 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
         if self._attr_device_class == "date" and isinstance(value, str):
             if (d := dt_util.parse_date(value)) is not None:
                 return d
+        return value
+
+
+class WsBridgeTextSensor(WsBridgeEntity, SensorEntity):
+    def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
+        super().__init__(bridge, defn)
+        self._attr_device_class = defn.get("device_class")
+        last = bridge.last_state(self._attr_unique_id)
+        self._attr_native_value = self._parse_value(last)
+
+    def _update_platform_defn(self, defn: dict[str, Any]) -> None:
+        self._attr_device_class = defn.get("device_class")
+
+    async def async_added_to_hass(self) -> None:
+
+        await super().async_added_to_hass()
+        self._subscribe_state(self._on_value)
+
+    @callback
+    def _on_value(self, value: Any) -> None:
+        self._attr_native_value = self._parse_value(value)
+        safe_write_ha_state(self)
+
+    def _parse_value(self, value: Any) -> Any:
+        if value is None or (isinstance(value, str) and value.lower() == "unknown"):
+            return None
         return value
 
 
