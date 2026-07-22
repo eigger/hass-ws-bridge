@@ -81,7 +81,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   }
   ```
   - `unique_id` (String, Required): Unique identifier within the client namespace.
-  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `switch`, `number`, `select`, `button`.
+  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `switch`, `number`, `select`, `button`.
   - `name` (String, Required): Name of the entity.
   - `device` (Object, Optional): The sub-device this entity belongs to.
     - `id` (String, Required): Unique sub-device ID.
@@ -110,6 +110,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
 |:---|:---:|:---|:---|
 | `sensor` | Read | Number/String | — |
 | `binary_sensor` | Read | Boolean | — |
+| `text_sensor` | Read | String | — (created as an HA `sensor` entity — HA has no separate text-sensor domain) |
 | `switch` | Control | Boolean | `turn_on` / `turn_off` |
 | `number` | Control | Number | `set_value` (requires `value`) |
 | `select` | Control | String (current option) | `select_option` (requires `value` as option) |
