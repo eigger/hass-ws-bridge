@@ -23,11 +23,13 @@ async def async_setup_entry(
 class WsBridgeSelect(WsBridgeEntity, SelectEntity):
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
+        self._attr_device_class = defn.get("device_class")
         self._attr_options = list(defn.get("options") or [])
         last = bridge.last_state(self._attr_unique_id)
         self._attr_current_option = str(last) if last is not None and not (isinstance(last, str) and last.lower() == "unknown") else None
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
+        self._attr_device_class = defn.get("device_class")
         self._attr_options = list(defn.get("options") or [])
 
     async def async_added_to_hass(self) -> None:

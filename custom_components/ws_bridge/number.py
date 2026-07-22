@@ -23,6 +23,7 @@ async def async_setup_entry(
 class WsBridgeNumber(WsBridgeEntity, NumberEntity):
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
+        self._attr_device_class = defn.get("device_class")
         if (v := defn.get("min")) is not None:
             self._attr_native_min_value = v
         if (v := defn.get("max")) is not None:
@@ -34,6 +35,7 @@ class WsBridgeNumber(WsBridgeEntity, NumberEntity):
         self._attr_native_value = last if not (isinstance(last, str) and last.lower() == "unknown") else None
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
+        self._attr_device_class = defn.get("device_class")
         if (v := defn.get("min")) is not None:
             self._attr_native_min_value = v
         if (v := defn.get("max")) is not None:
