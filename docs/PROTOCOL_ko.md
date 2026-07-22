@@ -25,11 +25,11 @@
    - 전송: `{"id": <n>, "type": "ws_bridge/connect", "gateway_id": "<고유_ID>", "name": "<표시_이름>"}`
    - `gateway_id`: 클라이언트를 고유하게 식별할 ID입니다. HA에 **게이트웨이 디바이스**로 등록되고, 생성되는 장치/엔티티의 네임스페이스 접두어로 사용됩니다.
    - `name`: 게이트웨이 기기의 표시 이름입니다. 통합 설정 화면의 게이트웨이 Subentry 제목으로도 사용됩니다.
-   - `keep_last_state_on_disconnect` (Boolean, 선택, 기본값 `false`): `true`로 설정하면 이 게이트웨이의 엔티티는 웹소켓 연결이 끊겨도(전원/와이파이 단절 등 비정상 종료 포함) `unavailable`로 표시되지 않고 마지막 상태를 그대로 유지합니다(Last Will/Testament 없는 MQTT retain과 유사). 통합은 다음 `ws_bridge/connect`가 값을 바꿀 때까지 게이트웨이별로 이 값을 기억합니다. 기본값(`false`)은 기존 동작(연결 끊김 시 unavailable)과 동일합니다.
+   - `keep_last_state_on_disconnect` (Boolean, 선택, 기본값 `false`): `true`로 설정하면 이 게이트웨이의 엔티티는 웹소켓 연결이 끊겨도(전원/와이파이 단절 등 비정상 종료 포함) `unavailable`로 표시되지 않고 마지막 상태를 그대로 유지합니다(Last Will/Testament 없는 MQTT retain과 유사). 통합은 다음 `ws_bridge/connect`가 값을 바꿀 때까지 게이트웨이별로 이 값을 (디스크에 저장해서) 기억합니다. 기본값(`false`)은 기존 동작(연결 끊김 시 unavailable)과 동일합니다. 이 옵션은 **HA 재시작**에도 적용됩니다 — `keep_last_state_on_disconnect` 게이트웨이의 엔티티는 클라이언트 재연결을 기다리지 않고, HA가 뜨는 즉시 저장된 정의·마지막 상태값으로 (available 상태로) 바로 복원됩니다.
    - `ws_bridge/connect` 시 `gateway_id`에 맞는 Subentry가 없으면 **자동 생성**됩니다. (수동 등록 불필요)
    - 컴포넌트가 웹소켓 커넥션과 `gateway_id`를 바인딩하여 제어 명령(`command`)을 이 클라이언트에만 라우팅합니다.
 
-> **재연결**: 클라이언트 재연결 시 엔티티 선언(idempotent) 및 상태 데이터를 다시 한번 일괄 전송해야 하며, HA는 이를 기반으로 엔티티를 복원 및 갱신합니다. HA 재시작 후에도 통합이 마지막 state를 디스크에 저장하므로, 클라이언트가 state를 재전송하기 전에도 이전 값이 표시될 수 있습니다. 최신 값 동기화를 위해 재연결 시 state 재전송은 여전히 권장됩니다.
+> **재연결**: 클라이언트 재연결 시 엔티티 선언(idempotent) 및 상태 데이터를 다시 한번 일괄 전송해야 하며, HA는 이를 기반으로 엔티티를 복원 및 갱신합니다. HA 재시작 후에도 통합이 마지막 state를 디스크에 저장하므로, 클라이언트가 state를 재전송하기 전에도 이전 값이 표시될 수 있습니다(`keep_last_state_on_disconnect` 게이트웨이는 즉시 — 위 항목 참고). 최신 값 동기화를 위해 재연결 시 state 재전송은 여전히 권장됩니다.
 
 ### 메시지 전송 순서 (필수)
 

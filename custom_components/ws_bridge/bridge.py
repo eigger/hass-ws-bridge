@@ -71,6 +71,8 @@ class WsBridge:
         self._pending: dict[str, list[dict[str, Any]]] = {}
         self._created: set[str] = set()                 # 네임스페이스된 unique_id
         self._states: dict[str, Any] = {}
+        self._defns: dict[str, dict[str, Any]] = {}      # ns unique_id → 마지막 엔티티 정의
+        self._keep_last: dict[str, bool] = {}            # gateway_id → keep_last_state_on_disconnect
         self._clients: dict[str, _Client] = {}          # gateway_id → ctx
         self._conn_client: dict[Any, str] = {}          # connection → gateway_id
         self._entity_client: dict[str, str] = {}        # ns unique_id → gateway_id
@@ -80,14 +82,21 @@ class WsBridge:
         self._save_unsub: Callable[[], None] | None = None
 
     async def async_load(self) -> None:
-        """디스크에서 마지막 state를 복원하고 entity registry에 없는 고아 항목을 정리."""
+        """디스크에서 마지막 state/엔티티 정의를 복원하고 entity registry에 없는 고아 항목을 정리."""
         data = await self._store.async_load() or {}
         self._states = data.get("states", {})
+        self._defns = data.get("entities", {})
+        self._keep_last = data.get("keep_last", {})
         if self._prune_orphan_states():
             await self.async_save()
+        self._seed_restorable_entities()
 
     async def async_save(self) -> None:
-        await self._store.async_save({"states": self._states})
+        await self._store.async_save({
+            "states": self._states,
+            "entities": self._defns,
+            "keep_last": self._keep_last,
+        })
 
     async def async_flush_save(self) -> None:
         """대기 중인 debounce를 취소하고 즉시 저장."""
@@ -104,12 +113,33 @@ class WsBridge:
             if entry.unique_id
             and not entry.unique_id.endswith(f"_{CONNECTED_CLIENTS_UNIQUE_ID}")
         }
-        orphans = [uid for uid in self._states if uid not in known_uids]
-        for uid in orphans:
+        orphan_states = [uid for uid in self._states if uid not in known_uids]
+        for uid in orphan_states:
             self._states.pop(uid, None)
-        if orphans:
-            _LOGGER.debug("Pruned %d orphaned state(s) from store", len(orphans))
-        return bool(orphans)
+        orphan_defns = [uid for uid in self._defns if uid not in known_uids]
+        for uid in orphan_defns:
+            self._defns.pop(uid, None)
+        if orphan_states or orphan_defns:
+            _LOGGER.debug(
+                "Pruned %d orphaned state(s), %d orphaned entity defn(s) from store",
+                len(orphan_states), len(orphan_defns),
+            )
+        return bool(orphan_states) or bool(orphan_defns)
+
+    @callback
+    def _seed_restorable_entities(self) -> None:
+        """HA 재시작 직후, keep_last_state_on_disconnect였던 게이트웨이의 엔티티를
+        클라이언트 재연결 없이도 마지막 정의·상태로 즉시 복원되도록 pending 큐에 예약한다.
+        register_platform()의 기존 flush 로직이 각 플랫폼 준비 시점에 실제로 생성한다."""
+        for uid, defn in self._defns.items():
+            gateway_id = defn.get("_device", {}).get("gateway_id")
+            if gateway_id is None or not self._keep_last.get(gateway_id):
+                continue
+            platform = defn.get("platform")
+            if platform is None:
+                continue
+            self._entity_client[uid] = gateway_id
+            self._pending.setdefault(platform, []).append(defn)
 
     @callback
     def _schedule_save(self) -> None:
@@ -200,6 +230,16 @@ class WsBridge:
             if sw_version:
                 client.sw_version = sw_version
             client.keep_last_state_on_disconnect = keep_last_state_on_disconnect
+        if self._keep_last.get(gateway_id) != keep_last_state_on_disconnect:
+            self._keep_last[gateway_id] = keep_last_state_on_disconnect
+            if not keep_last_state_on_disconnect:
+                # 옵션을 껐다면 더 이상 필요 없는 저장된 엔티티 정의를 즉시 비워
+                # 스토리지가 계속 불어나지 않게 한다 (state는 그대로 유지).
+                ns_prefix = f"{gateway_id}__"
+                for uid in list(self._defns):
+                    if uid.startswith(ns_prefix):
+                        self._defns.pop(uid, None)
+            self._schedule_save()
         self._connections.add(connection)
         self._conn_client[connection] = gateway_id
         self._notify_clients_changed()
@@ -334,6 +374,14 @@ class WsBridge:
         self._entity_client[ns["unique_id"]] = gateway_id
 
         ns["_subentry_id"] = self._subentry_id_for_gateway(gateway_id)
+
+        # 엔티티 정의는 keep_last_state_on_disconnect 게이트웨이만 저장한다 — 그래야
+        # 이 옵션을 안 쓰는(기본값) 대다수 사용자의 스토리지 크기가 이전과 동일하게 유지된다.
+        if self._keep_last.get(gateway_id):
+            self._defns[ns["unique_id"]] = ns
+            self._schedule_save()
+        elif self._defns.pop(ns["unique_id"], None) is not None:
+            self._schedule_save()
 
         platform = ns.get("platform")
         if platform not in self._platforms:
@@ -473,6 +521,7 @@ class WsBridge:
 
         self._created.discard(ns_uid)
         self._states.pop(ns_uid, None)
+        self._defns.pop(ns_uid, None)
         self._entity_client.pop(ns_uid, None)
         if persist:
             await self.async_save()
@@ -492,6 +541,10 @@ class WsBridge:
         for uid in list(self._entities):
             if uid.startswith(prefix):
                 self._entities.pop(uid, None)
+        for uid in list(self._defns):
+            if uid.startswith(prefix):
+                self._defns.pop(uid, None)
+        self._keep_last.pop(gateway_id, None)
         for platform, pending in self._pending.items():
             self._pending[platform] = [
                 d for d in pending if not d.get("unique_id", "").startswith(prefix)
