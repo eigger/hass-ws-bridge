@@ -7,7 +7,7 @@
 
 A generic Home Assistant integration that enables **any authenticated WebSocket client** to dynamically create and update entities. It is fully decoupled from specific hardware or protocols (e.g., BLE, Zigbee); as long as the client conforms to the defined communication protocol, it works out of the box.
 
-> 🇰🇷 [한글 README (README_ko.md)](README_ko.md)
+> [한글 README (README_ko.md)](README_ko.md)
 
 ## 💬 Feedback & Support
 
@@ -94,8 +94,8 @@ graph TD
 ## 📄 Protocol Specification
 
 For the detailed JSON message formats exchanged between clients and the bridge, see:
-- 🇺🇸 **[English Protocol Specification (docs/PROTOCOL.md)](docs/PROTOCOL.md)**
-- 🇰🇷 **[Korean Protocol Specification (docs/PROTOCOL_ko.md)](docs/PROTOCOL_ko.md)**
+- **[English Protocol Specification (docs/PROTOCOL.md)](docs/PROTOCOL.md)**
+- **[Korean Protocol Specification (docs/PROTOCOL_ko.md)](docs/PROTOCOL_ko.md)**
 
 ### Message Summary:
 * **Session Registration**: `{"type": "ws_bridge/connect", "gateway_id": "..."}`

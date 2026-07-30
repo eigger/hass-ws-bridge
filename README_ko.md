@@ -7,6 +7,8 @@
 
 인증된 **WebSocket 클라이언트**가 엔티티를 동적으로 생성·갱신할 수 있게 해 주는 범용 Home Assistant 통합구성요소입니다. BLE, Zigbee 등 특정 하드웨어나 프로토콜에 묶이지 않으며, 정의된 통신 규약만 따르면 바로 사용할 수 있습니다.
 
+> [English README (README.md)](README.md)
+
 ## 💬 피드백 및 지원
 
 🐞 버그를 발견하셨나요? [Issue](https://github.com/eigger/hass-ws-bridge/issues)로 알려 주세요.  
@@ -92,8 +94,8 @@ graph TD
 ## 📄 프로토콜 규격
 
 클라이언트와 브릿지 간 JSON 메시지 형식은 아래 문서를 참고하세요.
-- 🇺🇸 **[영문 프로토콜 규격 (docs/PROTOCOL.md)](docs/PROTOCOL.md)**
-- 🇰🇷 **[한글 프로토콜 규격 (docs/PROTOCOL_ko.md)](docs/PROTOCOL_ko.md)**
+- **[영문 프로토콜 규격 (docs/PROTOCOL.md)](docs/PROTOCOL.md)**
+- **[한글 프로토콜 규격 (docs/PROTOCOL_ko.md)](docs/PROTOCOL_ko.md)**
 
 ### 메시지 요약
 * **세션 등록**: `{"type": "ws_bridge/connect", "gateway_id": "..."}`
