@@ -23,8 +23,9 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
 3. **Only after `auth_ok`** may the client send `ws_bridge/*` commands below.
 4. The client registers its gateway session:
    - Send: `{"id": <n>, "type": "ws_bridge/connect", "gateway_id": "<unique_id>", "name": "<display_name>"}`
-   - `gateway_id`: A unique identifier for the client. Used to create a gateway device in HA and namespace all associated devices and entities to avoid collision.
-   - `name`: Human-readable gateway display name. Also used as the gateway subentry title in integration settings.
+   - `gateway_id` (String, Required): A unique identifier for the client. Used to create a gateway device in HA and namespace all associated devices and entities to avoid collision.
+   - `name` (String, Optional): Human-readable gateway display name. Also used as the gateway subentry title in integration settings.
+   - `app_version` (String, Optional): The firmware or application version of the client. Updates the gateway device's `sw_version` in Home Assistant.
    - `keep_last_state_on_disconnect` (Boolean, Optional, default `false`): When `true`, this gateway's entities are **not** marked `unavailable` when the WebSocket connection drops (including an ungraceful disconnect, e.g. power/Wi-Fi loss) — they keep showing their last reported state, similar to MQTT retained state without a Last Will/Testament. The integration remembers this value for the gateway (persisted to disk) until the next `ws_bridge/connect` changes it; the default (`false`) matches the previous behavior (mark unavailable on disconnect). This also covers an **HA restart**: entities for a `keep_last_state_on_disconnect` gateway are recreated immediately at HA startup from their persisted declaration and last state — available, with the last known value — without waiting for the client to reconnect.
    - On `ws_bridge/connect`, a matching subentry is **created automatically** if one does not exist (no manual registration).
    - The integration binds this WebSocket connection with the `gateway_id` to route commands specifically to this client.
@@ -142,7 +143,10 @@ Updates states for one or more entities in batch. If a state update arrives befo
   - `states` (List, Required): List of entity state updates.
     - `unique_id` (String, Required): The original entity `unique_id` (without the gateway namespace prefix).
     - `value` (Any, Required): New state. Type depends on the platform.
+      - Sending the string `"unknown"` (case-insensitive) for any platform will map to Home Assistant's `unavailable` (None) state.
       - For `binary_sensor`, values of `"1"`, `"true"`, `"on"`, `"yes"` (case-insensitive) or boolean `true` are mapped to the On state.
+      - For `sensor` with `device_class` of `"timestamp"` or `"date"`, string values are automatically parsed into datetime/date objects.
+  - `ts` (Number, Optional): Timestamp of the state update (currently accepted by the schema but ignored by the backend).
 
 * **Response**
   ```json

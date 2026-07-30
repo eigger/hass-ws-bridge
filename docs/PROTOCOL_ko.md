@@ -23,8 +23,9 @@
 3. **`auth_ok`를 받은 뒤에만** 아래 `ws_bridge/*` 명령을 전송합니다.
 4. 구독 세션을 등록합니다:
    - 전송: `{"id": <n>, "type": "ws_bridge/connect", "gateway_id": "<고유_ID>", "name": "<표시_이름>"}`
-   - `gateway_id`: 클라이언트를 고유하게 식별할 ID입니다. HA에 **게이트웨이 디바이스**로 등록되고, 생성되는 장치/엔티티의 네임스페이스 접두어로 사용됩니다.
-   - `name`: 게이트웨이 기기의 표시 이름입니다. 통합 설정 화면의 게이트웨이 Subentry 제목으로도 사용됩니다.
+   - `gateway_id` (String, 필수): 클라이언트를 고유하게 식별할 ID입니다. HA에 **게이트웨이 디바이스**로 등록되고, 생성되는 장치/엔티티의 네임스페이스 접두어로 사용됩니다.
+   - `name` (String, 선택): 게이트웨이 기기의 표시 이름입니다. 통합 설정 화면의 게이트웨이 Subentry 제목으로도 사용됩니다.
+   - `app_version` (String, 선택): 클라이언트의 펌웨어 또는 앱 버전입니다. 등록된 게이트웨이 기기의 `sw_version` 속성에 반영됩니다.
    - `keep_last_state_on_disconnect` (Boolean, 선택, 기본값 `false`): `true`로 설정하면 이 게이트웨이의 엔티티는 웹소켓 연결이 끊겨도(전원/와이파이 단절 등 비정상 종료 포함) `unavailable`로 표시되지 않고 마지막 상태를 그대로 유지합니다(Last Will/Testament 없는 MQTT retain과 유사). 통합은 다음 `ws_bridge/connect`가 값을 바꿀 때까지 게이트웨이별로 이 값을 (디스크에 저장해서) 기억합니다. 기본값(`false`)은 기존 동작(연결 끊김 시 unavailable)과 동일합니다. 이 옵션은 **HA 재시작**에도 적용됩니다 — `keep_last_state_on_disconnect` 게이트웨이의 엔티티는 클라이언트 재연결을 기다리지 않고, HA가 뜨는 즉시 저장된 정의·마지막 상태값으로 (available 상태로) 바로 복원됩니다.
    - `ws_bridge/connect` 시 `gateway_id`에 맞는 Subentry가 없으면 **자동 생성**됩니다. (수동 등록 불필요)
    - 컴포넌트가 웹소켓 커넥션과 `gateway_id`를 바인딩하여 제어 명령(`command`)을 이 클라이언트에만 라우팅합니다.
@@ -143,7 +144,10 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   - `states` (List, 필수): 업데이트할 엔티티 정보 목록.
     - `unique_id` (String, 필수): 등록 시 사용했던 원본 `unique_id` (게이트웨이 네임스페이스 제외).
     - `value` (Any, 필수): 새로운 상태 값.
+      - 모든 플랫폼에 대해 문자열 `"unknown"`(대소문자 구분 없음)을 보내면 HA의 사용 불가(`None`) 상태로 매핑됩니다.
       - `binary_sensor` 플랫폼은 `"1"`, `"true"`, `"on"`, `"yes"` (대소문자 구분 없음) 또는 진위값 `true`를 On 상태로 매핑합니다.
+      - `sensor` 플랫폼 중 `device_class`가 `"timestamp"`이거나 `"date"`인 경우, 문자열 값을 자동으로 날짜/시간 객체로 변환합니다.
+  - `ts` (Number, 선택): 상태 업데이트 타임스탬프 (현재 스키마에서는 허용되나 백엔드 로직에서는 무시됩니다).
 
 * **응답**
   ```json
