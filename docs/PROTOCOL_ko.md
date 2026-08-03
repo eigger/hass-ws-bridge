@@ -83,7 +83,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   }
   ```
   - `unique_id` (String, 필수): 게이트웨이 내에서 고유한 엔티티 식별자입니다. (HA 내부적으로는 `{gateway_id}__{unique_id}` 형태로 자동 변환됩니다.)
-  - `platform` (String, 필수): 엔티티 플랫폼 타입. 지원 목록: `sensor`, `binary_sensor`, `text_sensor`, `switch`, `number`, `select`, `button`
+  - `platform` (String, 필수): 엔티티 플랫폼 타입. 지원 목록: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`
   - `name` (String, 필수): 엔티티 이름.
   - `device` (Object, 옵션): 엔티티가 속한 하위 장치 정보.
     - `id` (String, 필수): 하위 장치 고유 ID.
@@ -97,6 +97,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   - **플랫폼 전용 필드**:
     - **`select` 플랫폼**: `options` (List of String, 필수) - 선택 가능한 옵션 목록.
     - **`number` 플랫폼**: `min`, `max`, `step` (Float, 옵션) - 입력 범위 및 단계값.
+    - **`device_tracker` 플랫폼**: 선언 전용 필드 없음 — 위치는 상태(`value`) 객체로 전달합니다 (§3.2 참고).
 
 * **응답**
   ```json
@@ -114,6 +115,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 | `sensor` | 읽기 | 숫자/문자열 | — |
 | `binary_sensor` | 읽기 | 불리언 | — |
 | `text_sensor` | 읽기 | 문자열 | — (HA `sensor` 엔티티로 생성됨 — HA에는 별도의 text-sensor 도메인이 없음) |
+| `device_tracker` | 읽기 | 객체 (`latitude`/`longitude`, §3.2 참고) | — |
 | `switch` | 제어 | 불리언 | `turn_on` / `turn_off` |
 | `number` | 제어 | 숫자 | `set_value` (값 포함) |
 | `select` | 제어 | 문자열 (옵션값) | `select_option` (옵션값 포함) |
@@ -143,11 +145,35 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   ```
   - `states` (List, 필수): 업데이트할 엔티티 정보 목록.
     - `unique_id` (String, 필수): 등록 시 사용했던 원본 `unique_id` (게이트웨이 네임스페이스 제외).
-    - `value` (Any, 필수): 새로운 상태 값.
+    - `value` (Any, 필수): 새로운 상태 값. 대부분의 플랫폼은 스칼라이고, 상태가 단일 값이 아닌 플랫폼(현재 `device_tracker`)은 **객체**를 사용합니다.
       - 모든 플랫폼에 대해 문자열 `"unknown"`(대소문자 구분 없음)을 보내면 HA의 사용 불가(`None`) 상태로 매핑됩니다.
       - `binary_sensor` 플랫폼은 `"1"`, `"true"`, `"on"`, `"yes"` (대소문자 구분 없음) 또는 진위값 `true`를 On 상태로 매핑합니다.
       - `sensor` 플랫폼 중 `device_class`가 `"timestamp"`이거나 `"date"`인 경우, 문자열 값을 자동으로 날짜/시간 객체로 변환합니다.
+      - `device_tracker` 플랫폼은 아래 객체 형식을 사용합니다.
   - `ts` (Number, 선택): 상태 업데이트 타임스탬프 (현재 스키마에서는 허용되나 백엔드 로직에서는 무시됩니다).
+
+#### `device_tracker` 상태 (객체 `value`)
+
+```json
+{
+  "id": 4,
+  "type": "ws_bridge/state",
+  "states": [
+    {
+      "unique_id": "car_location",
+      "value": {"latitude": 37.5665, "longitude": 126.9780, "gps_accuracy": 8}
+    }
+  ]
+}
+```
+
+- `latitude`, `longitude` (Float, 둘 다 필수): 좌표입니다. **둘 다 있고 숫자로 해석돼야** 하며, 하나라도 없거나 파싱되지 않으면 반쪽만 반영하지 않고 '위치 모름'으로 처리합니다. 좌표 한쪽만으로는 엉뚱한 위치에 찍히기 때문입니다.
+- `gps_accuracy` (Integer, 옵션, 기본값 `0`): 정확도 반경(미터). HA가 존(zone) 진입 여부를 판단할 때 사용합니다.
+- `location_name` (String, 옵션): HA가 좌표로 존을 계산하는 대신 상태 문자열을 직접 지정합니다 (예: `"home"`).
+
+엔티티 상태(`home` / `not_home` / 존 이름)는 HA가 좌표로부터 계산하므로 별도의 상태 문자열을 보낼 필요가 없습니다.
+
+> **배터리**: 여기에 `battery_level`을 넣지 마세요. HA가 `device_tracker`의 `battery_level`을 폐기(deprecate)하고 별도 배터리 엔티티를 권장합니다 — 일반 `sensor`를 `"device_class": "battery"`로 선언하세요.
 
 * **응답**
   ```json

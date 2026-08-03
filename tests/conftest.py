@@ -47,10 +47,12 @@ for mod in [
     "homeassistant.helpers.entity_registry",
     "homeassistant.helpers.dispatcher",
     "homeassistant.helpers.event",
+    "homeassistant.helpers.entity_platform",
     "homeassistant.components",
     "homeassistant.components.websocket_api",
     "homeassistant.components.sensor",
     "homeassistant.components.binary_sensor",
+    "homeassistant.components.device_tracker",
     "homeassistant.components.switch",
     "homeassistant.components.number",
     "homeassistant.components.select",
@@ -59,3 +61,9 @@ for mod in [
     "homeassistant.util.dt",
 ]:
     sys.modules[mod] = MagicMock()
+
+# device_tracker.config_entry.TrackerEntity is subclassed, so it must be a real
+# class rather than a MagicMock attribute.
+mock_tracker_config_entry = MagicMock()
+mock_tracker_config_entry.TrackerEntity = MockBase
+sys.modules["homeassistant.components.device_tracker.config_entry"] = mock_tracker_config_entry

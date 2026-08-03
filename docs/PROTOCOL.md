@@ -82,7 +82,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   }
   ```
   - `unique_id` (String, Required): Unique identifier within the client namespace.
-  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `switch`, `number`, `select`, `button`.
+  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`.
   - `name` (String, Required): Name of the entity.
   - `device` (Object, Optional): The sub-device this entity belongs to.
     - `id` (String, Required): Unique sub-device ID.
@@ -96,6 +96,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   - **Platform-Specific Fields**:
     - **`select` platform**: `options` (List of String, Required) - List of selectable options.
     - **`number` platform**: `min`, `max`, `step` (Float, Optional) - Range and step configuration.
+    - **`device_tracker` platform**: no extra declare fields — the location travels in the state `value` object (see §3.2).
 
 * **Response**
   ```json
@@ -113,6 +114,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
 | `sensor` | Read | Number/String | — |
 | `binary_sensor` | Read | Boolean | — |
 | `text_sensor` | Read | String | — (created as an HA `sensor` entity — HA has no separate text-sensor domain) |
+| `device_tracker` | Read | Object (`latitude`/`longitude`, see §3.2) | — |
 | `switch` | Control | Boolean | `turn_on` / `turn_off` |
 | `number` | Control | Number | `set_value` (requires `value`) |
 | `select` | Control | String (current option) | `select_option` (requires `value` as option) |
@@ -142,11 +144,35 @@ Updates states for one or more entities in batch. If a state update arrives befo
   ```
   - `states` (List, Required): List of entity state updates.
     - `unique_id` (String, Required): The original entity `unique_id` (without the gateway namespace prefix).
-    - `value` (Any, Required): New state. Type depends on the platform.
+    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (currently `device_tracker`).
       - Sending the string `"unknown"` (case-insensitive) for any platform will map to Home Assistant's `unavailable` (None) state.
       - For `binary_sensor`, values of `"1"`, `"true"`, `"on"`, `"yes"` (case-insensitive) or boolean `true` are mapped to the On state.
       - For `sensor` with `device_class` of `"timestamp"` or `"date"`, string values are automatically parsed into datetime/date objects.
+      - For `device_tracker`, see the object form below.
   - `ts` (Number, Optional): Timestamp of the state update (currently accepted by the schema but ignored by the backend).
+
+#### `device_tracker` state (object `value`)
+
+```json
+{
+  "id": 4,
+  "type": "ws_bridge/state",
+  "states": [
+    {
+      "unique_id": "car_location",
+      "value": {"latitude": 37.5665, "longitude": 126.9780, "gps_accuracy": 8}
+    }
+  ]
+}
+```
+
+- `latitude`, `longitude` (Float, Required together): The position. **Both must be present and numeric** — if either is missing or unparseable, the position is treated as unknown rather than half-applied, since a lone coordinate would place the device somewhere meaningless.
+- `gps_accuracy` (Integer, Optional, default `0`): Accuracy radius in meters. Home Assistant uses it when deciding whether the device is inside a zone.
+- `location_name` (String, Optional): Overrides the state string directly (e.g. `"home"`) instead of letting Home Assistant derive the zone from the coordinates.
+
+Home Assistant derives the entity state (`home` / `not_home` / a zone name) from the coordinates, so no separate state string is needed.
+
+> **Battery**: don't put `battery_level` here. Home Assistant has deprecated `battery_level` on `device_tracker` in favour of a separate battery entity — declare a normal `sensor` with `"device_class": "battery"` instead.
 
 * **Response**
   ```json
