@@ -41,6 +41,7 @@ DEFAULT_KEEP_LAST_STATE_ON_DISCONNECT = False
 PLATFORM_SENSOR = "sensor"
 PLATFORM_BINARY_SENSOR = "binary_sensor"
 PLATFORM_TEXT_SENSOR = "text_sensor"
+PLATFORM_DEVICE_TRACKER = "device_tracker"
 PLATFORM_SWITCH = "switch"
 PLATFORM_NUMBER = "number"
 PLATFORM_SELECT = "select"
@@ -52,13 +53,16 @@ ALL_PLATFORMS = [
     PLATFORM_SENSOR,
     PLATFORM_BINARY_SENSOR,
     PLATFORM_TEXT_SENSOR,
+    PLATFORM_DEVICE_TRACKER,
     PLATFORM_SWITCH,
     PLATFORM_NUMBER,
     PLATFORM_SELECT,
     PLATFORM_BUTTON,
 ]
 
-# 클라이언트가 icon을 생략했을 때 플랫폼별 기본값 (device_class·switch는 HA 기본 아이콘 사용)
+# 클라이언트가 icon을 생략했을 때 플랫폼별 기본값 (device_class·switch는 HA 기본 아이콘 사용).
+# device_tracker는 일부러 제외 — HA가 home/not_home 상태에 따라 아이콘을 바꿔주는데,
+# 여기서 고정 아이콘을 넣으면 그 동작을 덮어써 버린다.
 DEFAULT_PLATFORM_ICONS: dict[str, str] = {
     PLATFORM_SENSOR: "mdi:gauge",
     PLATFORM_BINARY_SENSOR: "mdi:checkbox-blank-circle-outline",

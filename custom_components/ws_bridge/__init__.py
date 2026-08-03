@@ -21,6 +21,7 @@ SUBENTRY_SNAPSHOTS = f"{DOMAIN}_subentry_snapshots"
 PLATFORMS = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
+    Platform.DEVICE_TRACKER,
     Platform.SWITCH,
     Platform.NUMBER,
     Platform.SELECT,

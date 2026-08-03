@@ -14,6 +14,7 @@ from custom_components.ws_bridge.bridge import (
     signal_clients,
 )
 from custom_components.ws_bridge import _subentry_gateway_ids
+from custom_components.ws_bridge.device_tracker import _parse_location
 
 
 def test_signals():
@@ -165,3 +166,30 @@ def test_connect_client_purges_stale_defns_when_flag_turns_off():
 
     assert "gw1__a" not in bridge._defns
     assert "gw2__b" in bridge._defns
+
+
+def test_parse_location_full_payload():
+    assert _parse_location(
+        {"latitude": 37.5665, "longitude": 126.9780, "gps_accuracy": 8}
+    ) == (37.5665, 126.9780, 8, None)
+
+
+def test_parse_location_accepts_numeric_strings_and_names_zone():
+    """클라이언트가 숫자를 문자열로 보내도 좌표로 받아들이고, location_name도 통과시킨다."""
+    assert _parse_location(
+        {"latitude": "37.5", "longitude": "127.0", "location_name": "home"}
+    ) == (37.5, 127.0, 0, "home")
+
+
+def test_parse_location_rejects_partial_or_non_dict():
+    """반쪽짜리 좌표는 엉뚱한 위치로 잡히므로 '위치 모름'으로 떨어뜨려야 한다."""
+    # 경도 누락 → 위도도 버림
+    assert _parse_location({"latitude": 37.5}) == (None, None, 0, None)
+    # 숫자가 아닌 좌표
+    assert _parse_location({"latitude": "N/A", "longitude": 127.0}) == (None, None, 0, None)
+    # bool은 float()이 되지만 좌표로는 무의미
+    assert _parse_location({"latitude": True, "longitude": 127.0}) == (None, None, 0, None)
+    # dict가 아닌 값 (스칼라 오발신 / "unknown" / None)
+    assert _parse_location("unknown") == (None, None, 0, None)
+    assert _parse_location(None) == (None, None, 0, None)
+    assert _parse_location(37.5) == (None, None, 0, None)

@@ -112,11 +112,14 @@ def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
     connection.send_result(msg["id"])
 
 
+# `value` accepts an object as well as a scalar: platforms whose state is not a
+# single number/string (device_tracker needs latitude+longitude together) carry
+# it as a dict. Scalar senders are unaffected.
 @websocket_api.websocket_command({
     vol.Required("type"): WS_STATE,
     vol.Required("states"): [{
         vol.Required("unique_id"): str,
-        vol.Required("value"): vol.Any(int, float, str, bool, None),
+        vol.Required("value"): vol.Any(int, float, str, bool, dict, None),
     }],
     vol.Optional("ts"): vol.Any(int, float),
 })
