@@ -7,13 +7,16 @@
 
 배터리는 여기에 넣지 않는다. HA가 device_tracker의 battery_level을 폐기(deprecate)
 했고, 별도 `sensor` + `device_class: battery` 엔티티로 선언하는 쪽을 권장한다.
+
+상태 문자열(home/not_home/존 이름)을 직접 지정하는 것도 지원하지 않는다 —
+TrackerEntity.location_name이 HA 2027.7에서 제거 예정인 deprecated 프로퍼티라서,
+좌표로부터 자동 계산되는 상태만 쓴다.
 """
 from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.device_tracker import SourceType
-from homeassistant.components.device_tracker.config_entry import TrackerEntity
+from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -41,15 +44,15 @@ def _coerce_float(value: Any) -> float | None:
         return None
 
 
-def _parse_location(value: Any) -> tuple[float | None, float | None, int, str | None]:
-    """상태 값 → (latitude, longitude, gps_accuracy, location_name).
+def _parse_location(value: Any) -> tuple[float | None, float | None, int]:
+    """상태 값 → (latitude, longitude, gps_accuracy).
 
     위도/경도 중 하나라도 없거나 숫자가 아니면 둘 다 None으로 돌린다 — 반쪽짜리
     좌표는 HA에서 엉뚱한 위치로 잡히므로 '위치 모름'이 맞다. dict가 아닌 값
     (None, "unknown", 잘못 보낸 스칼라)도 마찬가지.
     """
     if not isinstance(value, dict):
-        return None, None, 0, None
+        return None, None, 0
 
     latitude = _coerce_float(value.get("latitude"))
     longitude = _coerce_float(value.get("longitude"))
@@ -57,11 +60,8 @@ def _parse_location(value: Any) -> tuple[float | None, float | None, int, str | 
         latitude = longitude = None
 
     accuracy = _coerce_float(value.get("gps_accuracy"))
-    location_name = value.get("location_name")
-    if not isinstance(location_name, str) or not location_name:
-        location_name = None
 
-    return latitude, longitude, int(accuracy) if accuracy is not None else 0, location_name
+    return latitude, longitude, int(accuracy) if accuracy is not None else 0
 
 
 class WsBridgeDeviceTracker(WsBridgeEntity, TrackerEntity):
@@ -89,10 +89,6 @@ class WsBridgeDeviceTracker(WsBridgeEntity, TrackerEntity):
     def location_accuracy(self) -> int:
         return self._location_accuracy
 
-    @property
-    def location_name(self) -> str | None:
-        return self._location_name
-
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self._subscribe_state(self._on_value)
@@ -104,9 +100,4 @@ class WsBridgeDeviceTracker(WsBridgeEntity, TrackerEntity):
 
     @callback
     def _apply(self, value: Any) -> None:
-        (
-            self._latitude,
-            self._longitude,
-            self._location_accuracy,
-            self._location_name,
-        ) = _parse_location(value)
+        self._latitude, self._longitude, self._location_accuracy = _parse_location(value)

@@ -168,9 +168,7 @@ Updates states for one or more entities in batch. If a state update arrives befo
 
 - `latitude`, `longitude` (Float, Required together): The position. **Both must be present and numeric** — if either is missing or unparseable, the position is treated as unknown rather than half-applied, since a lone coordinate would place the device somewhere meaningless.
 - `gps_accuracy` (Integer, Optional, default `0`): Accuracy radius in meters. Home Assistant uses it when deciding whether the device is inside a zone.
-- `location_name` (String, Optional): Overrides the state string directly (e.g. `"home"`) instead of letting Home Assistant derive the zone from the coordinates.
-
-Home Assistant derives the entity state (`home` / `not_home` / a zone name) from the coordinates, so no separate state string is needed.
+Home Assistant derives the entity state (`home` / `not_home` / a zone name) from the coordinates, so no separate state string is needed. (There is deliberately no field to override this directly — `TrackerEntity.location_name` is deprecated in Home Assistant and scheduled for removal in 2027.7.)
 
 > **Battery**: don't put `battery_level` here. Home Assistant has deprecated `battery_level` on `device_tracker` in favour of a separate battery entity — declare a normal `sensor` with `"device_class": "battery"` instead.
 

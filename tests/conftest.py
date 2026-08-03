@@ -62,8 +62,8 @@ for mod in [
 ]:
     sys.modules[mod] = MagicMock()
 
-# device_tracker.config_entry.TrackerEntity is subclassed, so it must be a real
-# class rather than a MagicMock attribute.
-mock_tracker_config_entry = MagicMock()
-mock_tracker_config_entry.TrackerEntity = MockBase
-sys.modules["homeassistant.components.device_tracker.config_entry"] = mock_tracker_config_entry
+# device_tracker.TrackerEntity is subclassed, so it must be a real class
+# rather than a MagicMock attribute. (Imported from the top-level
+# device_tracker module, not .config_entry — that alias is deprecated.)
+mock_device_tracker = sys.modules["homeassistant.components.device_tracker"]
+mock_device_tracker.TrackerEntity = MockBase

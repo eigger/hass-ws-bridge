@@ -169,9 +169,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 
 - `latitude`, `longitude` (Float, 둘 다 필수): 좌표입니다. **둘 다 있고 숫자로 해석돼야** 하며, 하나라도 없거나 파싱되지 않으면 반쪽만 반영하지 않고 '위치 모름'으로 처리합니다. 좌표 한쪽만으로는 엉뚱한 위치에 찍히기 때문입니다.
 - `gps_accuracy` (Integer, 옵션, 기본값 `0`): 정확도 반경(미터). HA가 존(zone) 진입 여부를 판단할 때 사용합니다.
-- `location_name` (String, 옵션): HA가 좌표로 존을 계산하는 대신 상태 문자열을 직접 지정합니다 (예: `"home"`).
-
-엔티티 상태(`home` / `not_home` / 존 이름)는 HA가 좌표로부터 계산하므로 별도의 상태 문자열을 보낼 필요가 없습니다.
+엔티티 상태(`home` / `not_home` / 존 이름)는 HA가 좌표로부터 계산하므로 별도의 상태 문자열을 보낼 필요가 없습니다. (이걸 직접 지정하는 필드는 일부러 안 뒀습니다 — `TrackerEntity.location_name`이 HA에서 deprecated고 2027.7에 제거될 예정입니다.)
 
 > **배터리**: 여기에 `battery_level`을 넣지 마세요. HA가 `device_tracker`의 `battery_level`을 폐기(deprecate)하고 별도 배터리 엔티티를 권장합니다 — 일반 `sensor`를 `"device_class": "battery"`로 선언하세요.
 
