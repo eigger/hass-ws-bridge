@@ -16,7 +16,7 @@ from custom_components.ws_bridge.bridge import (
 from custom_components.ws_bridge import _subentry_gateway_ids
 from custom_components.ws_bridge.const import ALL_PLATFORMS, PLATFORM_UPDATE
 from custom_components.ws_bridge.device_tracker import _parse_location
-from custom_components.ws_bridge.update import _parse_update_state
+from custom_components.ws_bridge.update import _parse_update_state, _strip_build_suffix
 
 
 def test_signals():
@@ -238,4 +238,28 @@ def test_parse_update_state_rejects_non_dict():
     assert empty["latest_version"] is None
     assert empty["in_progress"] is False
     assert _parse_update_state(None)["installed_version"] is None
+
+
+def test_strip_build_suffix():
+    """HA only calls version_is_newer when the raw strings differ — the
+    interesting case is a build suffix on an otherwise equal version."""
+    assert _strip_build_suffix("1.0.0") == "1.0.0"
+    assert _strip_build_suffix("2025.11.5_c51f7548") == "2025.11.5"
+    assert _strip_build_suffix("1.0.0_foo_bar") == "1.0.0"
+    assert _strip_build_suffix("_only") == ""
+
+
+def test_send_command_returns_false_when_disconnected():
+    hass = MagicMock()
+    hass.config_entries.async_get_entry.return_value = None
+    bridge = WsBridge(hass, "entry1")
+    assert bridge.send_command("gw1__firmware", "install") is False
+
+    send_event = MagicMock()
+    bridge._clients["gw1"] = _Client("gw1", "GW1", send_event)
+    bridge._entity_client["gw1__firmware"] = "gw1"
+    assert bridge.send_command("gw1__firmware", "install") is True
+    send_event.assert_called_once_with(
+        {"kind": "command", "unique_id": "firmware", "action": "install"}
+    )
 

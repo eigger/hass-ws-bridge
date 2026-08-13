@@ -58,6 +58,7 @@ for mod in [
     "homeassistant.components.select",
     "homeassistant.components.button",
     "homeassistant.components.update",
+    "homeassistant.exceptions",
     "homeassistant.util",
     "homeassistant.util.dt",
     "homeassistant.util.enum",
@@ -74,3 +75,5 @@ mock_update = sys.modules["homeassistant.components.update"]
 mock_update.UpdateEntity = MockBase
 mock_update.UpdateEntityFeature = MagicMock()
 mock_update.UpdateDeviceClass = MagicMock()
+
+sys.modules["homeassistant.exceptions"].HomeAssistantError = Exception

@@ -25,6 +25,7 @@ from homeassistant.components.update import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.enum import try_parse_enum
 
@@ -50,7 +51,7 @@ def _as_str(value: Any) -> str | None:
 def _as_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
+    if isinstance(value, (int, float)):
         return value != 0
     if isinstance(value, str):
         return value.strip().lower() in ("1", "true", "on", "yes")
@@ -65,6 +66,15 @@ def _as_progress(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
     return max(0, min(100, progress))
+
+
+def _strip_build_suffix(version: str) -> str:
+    """Drop an ESPHome project build suffix (`2025.11.5_c51f7548` → `2025.11.5`).
+
+    AwesomeVersion cannot parse the suffix; HA only calls version_is_newer when
+    the raw strings differ, so this matters exactly when they differ only by it.
+    """
+    return version.partition("_")[0]
 
 
 def _parse_update_state(value: Any) -> dict[str, Any]:
@@ -100,9 +110,7 @@ def _parse_update_state(value: Any) -> dict[str, Any]:
 
 class WsBridgeUpdate(WsBridgeEntity, UpdateEntity):
     _attr_supported_features = (
-        UpdateEntityFeature.INSTALL
-        | UpdateEntityFeature.PROGRESS
-        | UpdateEntityFeature.RELEASE_NOTES
+        UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
     )
 
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
@@ -120,9 +128,9 @@ class WsBridgeUpdate(WsBridgeEntity, UpdateEntity):
         )
 
     def version_is_newer(self, latest_version: str, installed_version: str) -> bool:
-        """ESPHome project 버전은 `2025.11.5_c51f7548`처럼 빌드 접미사가 붙을 수 있다."""
         return super().version_is_newer(
-            latest_version.partition("_")[0], installed_version.partition("_")[0]
+            _strip_build_suffix(latest_version),
+            _strip_build_suffix(installed_version),
         )
 
     async def async_added_to_hass(self) -> None:
@@ -145,13 +153,11 @@ class WsBridgeUpdate(WsBridgeEntity, UpdateEntity):
         self._attr_release_summary = parsed["summary"]
         self._attr_release_url = parsed["release_url"]
 
-    async def async_release_notes(self) -> str | None:
-        return self._attr_release_summary
-
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
     ) -> None:
-        self._bridge.send_command(self._attr_unique_id, "install")
+        if not self._bridge.send_command(self._attr_unique_id, "install"):
+            raise HomeAssistantError("Gateway is not connected")
         self._attr_in_progress = True
         self.async_write_ha_state()
 

@@ -570,11 +570,11 @@ class WsBridge:
 
     # ── HA → 클라이언트 (해당 클라이언트로만 라우팅) ─────────────────────────
     @callback
-    def send_command(self, unique_id: str, action: str, value: Any = None) -> None:
+    def send_command(self, unique_id: str, action: str, value: Any = None) -> bool:
         gateway_id = self._entity_client.get(unique_id)
         client = self._clients.get(gateway_id) if gateway_id else None
         if client is None:
-            return
+            return False
         event: dict[str, Any] = {
             "kind": "command",
             "unique_id": self._strip(gateway_id, unique_id),   # 원래 unique_id로 복원
@@ -583,6 +583,7 @@ class WsBridge:
         if value is not None:
             event["value"] = value
         client.send_event(event)
+        return True
 
     # ── helpers ──────────────────────────────────────────────────────────────
     @staticmethod
