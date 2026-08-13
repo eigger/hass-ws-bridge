@@ -83,7 +83,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   }
   ```
   - `unique_id` (String, 필수): 게이트웨이 내에서 고유한 엔티티 식별자입니다. (HA 내부적으로는 `{gateway_id}__{unique_id}` 형태로 자동 변환됩니다.)
-  - `platform` (String, 필수): 엔티티 플랫폼 타입. 지원 목록: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`
+  - `platform` (String, 필수): 엔티티 플랫폼 타입. 지원 목록: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`
   - `name` (String, 필수): 엔티티 이름.
   - `device` (Object, 옵션): 엔티티가 속한 하위 장치 정보.
     - `id` (String, 필수): 하위 장치 고유 ID.
@@ -94,7 +94,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   - `suggested_display_precision` (Integer, 옵션, `sensor` 플랫폼): 표시할 소수점 자리수 (클라이언트 쪽 반올림 설정과 맞추는 용도, 예: ESPHome의 `accuracy_decimals`). 안 보내면 HA는 받은 float를 그대로 표시해서, 센서에 따라 `48.85864`처럼 지저분한 값이 뜰 수 있습니다.
   - `icon` (String, 옵션): 표시 아이콘 (예: `mdi:thermometer`).
   - `entity_category` (String, 옵션): 엔티티 카테고리. `"config"` 또는 `"diagnostic"`.
-  - `features` (List of String, 옵션): 여러 동작을 노출하는 플랫폼의 기능 플래그(예: cover의 open/close/stop). 알 수 없는 이름은 무시됩니다. 생략 시 플랫폼별 기본값을 사용합니다. 현재 플랫폼들은 이 필드가 필수가 아닙니다.
+  - `features` (List of String, 옵션): 기능 플래그(`cover`, `light`, `fan` 등). 알 수 없는 이름은 무시됩니다. 생략 시 플랫폼별 기본값(예: cover는 OPEN|CLOSE|STOP).
   - **플랫폼 전용 필드**:
     - **`select` 플랫폼**: `options` (List of String, 필수) - 선택 가능한 옵션 목록.
     - **`number` 플랫폼**: `min`, `max`, `step` (Float, 옵션) - 입력 범위 및 단계값.
@@ -123,6 +123,9 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 | `select` | 제어 | 문자열 (옵션값) | `select_option` (옵션값 포함) |
 | `button` | 제어 | — | `press` |
 | `update` | 제어 | 객체 (`installed_version`/`latest_version`, §3.2 참고) | `install` / `check` |
+| `light` | 제어 | 객체 (`state`/`brightness`/…, §3.2 참고) | `turn_on` / `turn_off` (`params`) |
+| `cover` | 제어 | 객체 (`state`/`position`/…, §3.2 참고) | `open_cover` / `close_cover` / `stop_cover` / `set_cover_position` / 틸트 계열 |
+| `fan` | 제어 | 객체 (`state`/`percentage`/…, §3.2 참고) | `turn_on` / `turn_off` / `set_percentage` / `set_preset_mode` / `oscillate` / `set_direction` |
 
 ---
 
@@ -148,12 +151,13 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   ```
   - `states` (List, 필수): 업데이트할 엔티티 정보 목록.
     - `unique_id` (String, 필수): 등록 시 사용했던 원본 `unique_id` (게이트웨이 네임스페이스 제외).
-    - `value` (Any, 필수): 새로운 상태 값. 대부분의 플랫폼은 스칼라이고, 상태가 단일 값이 아닌 플랫폼(현재 `device_tracker`와 `update`; 이후 light/cover/climate 등도 동일)은 **객체**를 사용합니다.
+    - `value` (Any, 필수): 새로운 상태 값. 대부분의 플랫폼은 스칼라이고, 상태가 단일 값이 아닌 플랫폼(`device_tracker`, `update`, `light`, `cover`, `fan` 등)은 **객체**를 사용합니다.
       - 모든 플랫폼에 대해 문자열 `"unknown"`(대소문자 구분 없음)을 보내면 HA의 사용 불가(`None`) 상태로 매핑됩니다.
       - `binary_sensor` 플랫폼은 `"1"`, `"true"`, `"on"`, `"yes"` (대소문자 구분 없음) 또는 진위값 `true`를 On 상태로 매핑합니다.
       - `sensor` 플랫폼 중 `device_class`가 `"timestamp"`이거나 `"date"`인 경우, 문자열 값을 자동으로 날짜/시간 객체로 변환합니다.
       - `device_tracker` 플랫폼은 아래 객체 형식을 사용합니다.
       - `update` 플랫폼은 아래 객체 형식을 사용합니다.
+      - `light` / `cover` / `fan` 플랫폼은 아래 객체 형식을 사용합니다.
       - **객체(dict) 값 — 얕은 병합**: 이전에 저장된 상태와 새 `value`가 **둘 다 객체**이면 통합이 **얕은 병합**합니다(`{...prev, ...value}`). `{"progress": 50}` 또는 `{"brightness": 200}`만 보내도 다른 키가 보존됩니다. 이전에 보고한 키를 **지우려면** 해당 키에 JSON `null`을 보냅니다(키를 생략하는 것으로는 지워지지 않음). 그 외 타입 변경(스칼라→객체, 객체→스칼라, 또는 객체의 최초 기록)은 **교체**합니다. 엔티티는 항상 병합된 전체 결과를 받습니다.
       - 값은 JSON으로 직렬화 가능해야 합니다(`bytes`/tuple 금지). 색상은 반드시 리스트로 보냅니다.
   - `ts` (Number, 선택): 상태 업데이트 타임스탬프 (현재 스키마에서는 허용되나 백엔드 로직에서는 무시됩니다).
@@ -219,6 +223,40 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 - 설치 후 릴리스 노트 제거: 이전에 보냈던 키에 `"summary": null` / `"release_url": null`을 포함합니다.
 
 문자열 `"unknown"`(또는 객체가 아닌 값)을 보내면 버전 필드 전체를 비웁니다(병합이 아니라 교체).
+
+#### `light` 상태 (객체 `value`)
+
+```json
+{
+  "unique_id": "living_led",
+  "value": {
+    "state": "on",
+    "brightness": 180,
+    "color_mode": "rgb",
+    "rgb_color": [255, 64, 0]
+  }
+}
+```
+
+- `state`(`"on"`/`"off"` 또는 bool), `brightness`(0–255), `color_mode`, `color_temp_kelvin`, `hs_color`(`[h, s]`), `rgb_color` / `rgbw_color` / `rgbww_color`(리스트), `effect`.
+- 색상은 JSON을 위해 **반드시 리스트**로 보냅니다.
+
+#### `cover` 상태 (객체 `value`)
+
+```json
+{"unique_id": "blind", "value": {"state": "open", "position": 70}}
+```
+
+- `state`(`"open"`/`"closed"`/`"opening"`/`"closing"`), `position`(0–100, **0=완전 닫힘, 100=완전 열림**), `tilt_position`(0–100).
+- HA `is_closed`는 `position`이 있으면 `position == 0`, 없으면 `state == "closed"`. **둘 다 없으면 unknown**(열린 것으로 표시하지 않음).
+
+#### `fan` 상태 (객체 `value`)
+
+```json
+{"unique_id": "ceiling_fan", "value": {"state": "on", "percentage": 40, "oscillating": true, "direction": "forward"}}
+```
+
+- `state`, `percentage`(0–100), `preset_mode`, `oscillating`(bool), `direction`(`"forward"`/`"reverse"`).
 
 * **응답**
   ```json
@@ -368,7 +406,7 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 
 ## 4. 제어 명령 수신 (HA → 클라이언트)
 
-제어형 엔티티가 HA 상에서 조작되면, 해당 엔티티를 등록한 클라이언트 세션 채널을 통해 명령 이벤트가 실시간으로 전달됩니다.
+제어형 엔티티(`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`)가 HA 상에서 조작되면, 해당 엔티티를 등록한 클라이언트 세션 채널을 통해 명령 이벤트가 실시간으로 전달됩니다.
 
 클라이언트는 이 이벤트를 구독하여 실제 장치를 동작시키고, 성공 후 `ws_bridge/state` 메시지를 보내 새로운 상태를 반영해야 합니다.
 
@@ -440,13 +478,13 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 
 ## 6. 예정 플랫폼
 
-아래 `platform` 값은 **지금 받지 않습니다**. `ws_bridge/entity`는 §3.1 목록 밖이면 거절합니다. **도메인은 한 번에 하나만** 넣습니다. 클라이언트(ESPHome 래핑 포함)보다 **PROTOCOL + HA 플랫폼**(`ALL_PLATFORMS`, `Platform.*`)을 먼저 올립니다. 기존 플랫폼 래핑은 HA를 건드리지 않아도 되지만, 새 도메인은 그렇지 않습니다.
+아래 `platform` 값은 **아직 받지 않습니다** — `ws_bridge/entity`가 §3.1 목록 밖이면 거절합니다. 도메인별로 추가하세요.
 
-| 순서 | 플랫폼 | 메모 |
+| 순서 | 플랫폼 | 비고 |
 |:---:|:---|:---|
-| 1 | `text` | 다음. 쓰기 가능 문자열 + `set_value` (`min`/`max`/`pattern`/`mode`). `text_sensor`(읽기 전용, HA `sensor`로 생성)와 다름. |
-| 2 | `lock` | `lock` / `unlock`. `open`과 PIN `code`는 해당 PR에서 범위를 정함. |
-| 3 | `cover`, `fan` | 도메인별 PR. position / %, feature 비트, 객체에 가까운 state. |
-| 4 | `light`, `climate` | 각자 단독, 마지막. `update`보다 큰 객체 state. |
+| 1 | `text` | 다음. 쓰기 가능 문자열 + `set_value`. `text_sensor`(읽기 전용 HA sensor)와 다름. |
+| 2 | `lock` | `lock` / `unlock`. `open`·PIN `code`는 해당 PR에서 결정. |
+| 3 | `date` / `time` / `datetime` / `event` / `valve` | text급 단순 제어. |
+| 4 | `climate` (+ humidifier / water_heater / …) | light보다 큰 객체 상태. |
 
-`date` / `time`은 `text`와 난이도가 비슷하지만 이 대기열에는 넣지 않습니다.
+`light` / `cover` / `fan`은 Phase 1에서 추가됨.

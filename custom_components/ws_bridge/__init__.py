@@ -27,6 +27,9 @@ PLATFORMS = [
     Platform.SELECT,
     Platform.BUTTON,
     Platform.UPDATE,
+    Platform.LIGHT,
+    Platform.COVER,
+    Platform.FAN,
 ]
 
 

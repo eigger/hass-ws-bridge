@@ -103,10 +103,16 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     vol.Optional("icon"): vol.Any(str, None),
     vol.Optional("entity_category"): vol.Any(vol.In(["config", "diagnostic"]), None),
     vol.Optional("options"): vol.Any([str], None),          # select
-    vol.Optional("min"): vol.Any(vol.Coerce(float), None),  # number
+    vol.Optional("min"): vol.Any(vol.Coerce(float), None),  # number / text(length)
     vol.Optional("max"): vol.Any(vol.Coerce(float), None),
     vol.Optional("step"): vol.Any(vol.Coerce(float), None),
     vol.Optional("features"): vol.Any([str], None),
+    vol.Optional("supported_color_modes"): vol.Any([str], None),  # light
+    vol.Optional("effect_list"): vol.Any([str], None),            # light
+    vol.Optional("min_color_temp_kelvin"): vol.Any(vol.Coerce(int), None),  # light
+    vol.Optional("max_color_temp_kelvin"): vol.Any(vol.Coerce(int), None),  # light
+    vol.Optional("speed_count"): vol.Any(vol.Coerce(int), None),  # fan
+    vol.Optional("preset_modes"): vol.Any([str], None),           # fan
 })
 @callback
 def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
