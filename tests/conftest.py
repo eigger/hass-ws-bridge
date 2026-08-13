@@ -57,8 +57,10 @@ for mod in [
     "homeassistant.components.number",
     "homeassistant.components.select",
     "homeassistant.components.button",
+    "homeassistant.components.update",
     "homeassistant.util",
     "homeassistant.util.dt",
+    "homeassistant.util.enum",
 ]:
     sys.modules[mod] = MagicMock()
 
@@ -67,3 +69,8 @@ for mod in [
 # device_tracker module, not .config_entry — that alias is deprecated.)
 mock_device_tracker = sys.modules["homeassistant.components.device_tracker"]
 mock_device_tracker.TrackerEntity = MockBase
+
+mock_update = sys.modules["homeassistant.components.update"]
+mock_update.UpdateEntity = MockBase
+mock_update.UpdateEntityFeature = MagicMock()
+mock_update.UpdateDeviceClass = MagicMock()

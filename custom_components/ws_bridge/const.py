@@ -37,7 +37,7 @@ EVT_COMMAND = "command"
 CONF_KEEP_LAST_STATE_ON_DISCONNECT = "keep_last_state_on_disconnect"
 DEFAULT_KEEP_LAST_STATE_ON_DISCONNECT = False
 
-# 기본 지원 플랫폼 (읽기: sensor/binary_sensor/text_sensor, 제어: switch/number/select/button)
+# 기본 지원 플랫폼 (읽기: sensor/binary_sensor/text_sensor, 제어: switch/number/select/button/update)
 PLATFORM_SENSOR = "sensor"
 PLATFORM_BINARY_SENSOR = "binary_sensor"
 PLATFORM_TEXT_SENSOR = "text_sensor"
@@ -46,6 +46,7 @@ PLATFORM_SWITCH = "switch"
 PLATFORM_NUMBER = "number"
 PLATFORM_SELECT = "select"
 PLATFORM_BUTTON = "button"
+PLATFORM_UPDATE = "update"
 
 # text_sensor는 HA에 별도 도메인이 없다 — sensor 도메인 엔티티로 등록되지만(문자열
 # native_value), 클라이언트가 보내는 platform 값과 내부 등록 키는 구분해서 유지한다.
@@ -58,6 +59,7 @@ ALL_PLATFORMS = [
     PLATFORM_NUMBER,
     PLATFORM_SELECT,
     PLATFORM_BUTTON,
+    PLATFORM_UPDATE,
 ]
 
 # 클라이언트가 icon을 생략했을 때 플랫폼별 기본값 (device_class·switch는 HA 기본 아이콘 사용).

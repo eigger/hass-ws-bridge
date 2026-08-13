@@ -14,7 +14,9 @@ from custom_components.ws_bridge.bridge import (
     signal_clients,
 )
 from custom_components.ws_bridge import _subentry_gateway_ids
+from custom_components.ws_bridge.const import ALL_PLATFORMS, PLATFORM_UPDATE
 from custom_components.ws_bridge.device_tracker import _parse_location
+from custom_components.ws_bridge.update import _parse_update_state
 
 
 def test_signals():
@@ -193,3 +195,47 @@ def test_parse_location_rejects_partial_or_non_dict():
     assert _parse_location("unknown") == (None, None, 0)
     assert _parse_location(None) == (None, None, 0)
     assert _parse_location(37.5) == (None, None, 0)
+
+
+def test_all_platforms_includes_update():
+    assert PLATFORM_UPDATE in ALL_PLATFORMS
+    assert PLATFORM_UPDATE == "update"
+
+
+def test_parse_update_state_full_payload():
+    parsed = _parse_update_state(
+        {
+            "installed_version": "1.0.0",
+            "latest_version": "1.0.1",
+            "in_progress": True,
+            "progress": 45,
+            "title": "Living Room",
+            "summary": "Bug fixes",
+            "release_url": "https://example.com",
+        }
+    )
+    assert parsed["installed_version"] == "1.0.0"
+    assert parsed["latest_version"] == "1.0.1"
+    assert parsed["in_progress"] is True
+    assert parsed["progress"] == 45
+    assert parsed["title"] == "Living Room"
+    assert parsed["summary"] == "Bug fixes"
+    assert parsed["release_url"] == "https://example.com"
+
+
+def test_parse_update_state_clamps_progress_and_ignores_when_idle():
+    idle = _parse_update_state({"in_progress": False, "progress": 80})
+    assert idle["in_progress"] is False
+    assert idle["progress"] is None
+
+    installing = _parse_update_state({"in_progress": True, "progress": 150})
+    assert installing["progress"] == 100
+
+
+def test_parse_update_state_rejects_non_dict():
+    empty = _parse_update_state("unknown")
+    assert empty["installed_version"] is None
+    assert empty["latest_version"] is None
+    assert empty["in_progress"] is False
+    assert _parse_update_state(None)["installed_version"] is None
+

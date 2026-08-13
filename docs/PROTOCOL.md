@@ -9,7 +9,7 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
 ## 1. Role Definitions
 
 - **Client**: Responsible for **declaring** entities, **pushing** state updates, and executing control commands sent from Home Assistant.
-- **Integration**: Responsible for **creating** entities based on client declarations and **updating** their states. For control platforms (`switch`, `number`, `select`, `button`), it **relays** command requests from HA back to the originating client. It has no hardware-specific decoding logic.
+- **Integration**: Responsible for **creating** entities based on client declarations and **updating** their states. For control platforms (`switch`, `number`, `select`, `button`, `update`), it **relays** command requests from HA back to the originating client. It has no hardware-specific decoding logic.
 
 ---
 
@@ -82,7 +82,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   }
   ```
   - `unique_id` (String, Required): Unique identifier within the client namespace.
-  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`.
+  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`.
   - `name` (String, Required): Name of the entity.
   - `device` (Object, Optional): The sub-device this entity belongs to.
     - `id` (String, Required): Unique sub-device ID.
@@ -97,6 +97,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
     - **`select` platform**: `options` (List of String, Required) - List of selectable options.
     - **`number` platform**: `min`, `max`, `step` (Float, Optional) - Range and step configuration.
     - **`device_tracker` platform**: no extra declare fields — the location travels in the state `value` object (see §3.2).
+    - **`update` platform**: no extra declare fields — versions travel in the state `value` object (see §3.2). `device_class` defaults to `firmware` on the HA side if omitted.
 
 * **Response**
   ```json
@@ -119,6 +120,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
 | `number` | Control | Number | `set_value` (requires `value`) |
 | `select` | Control | String (current option) | `select_option` (requires `value` as option) |
 | `button` | Control | — | `press` |
+| `update` | Control | Object (`installed_version`/`latest_version`, see §3.2) | `install` / `check` |
 
 ---
 
@@ -144,11 +146,12 @@ Updates states for one or more entities in batch. If a state update arrives befo
   ```
   - `states` (List, Required): List of entity state updates.
     - `unique_id` (String, Required): The original entity `unique_id` (without the gateway namespace prefix).
-    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (currently `device_tracker`).
+    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (currently `device_tracker` and `update`).
       - Sending the string `"unknown"` (case-insensitive) for any platform will map to Home Assistant's `unavailable` (None) state.
       - For `binary_sensor`, values of `"1"`, `"true"`, `"on"`, `"yes"` (case-insensitive) or boolean `true` are mapped to the On state.
       - For `sensor` with `device_class` of `"timestamp"` or `"date"`, string values are automatically parsed into datetime/date objects.
       - For `device_tracker`, see the object form below.
+      - For `update`, see the object form below.
   - `ts` (Number, Optional): Timestamp of the state update (currently accepted by the schema but ignored by the backend).
 
 #### `device_tracker` state (object `value`)
@@ -171,6 +174,35 @@ Updates states for one or more entities in batch. If a state update arrives befo
 Home Assistant derives the entity state (`home` / `not_home` / a zone name) from the coordinates, so no separate state string is needed. (There is deliberately no field to override this directly — `TrackerEntity.location_name` is deprecated in Home Assistant and scheduled for removal in 2027.7.)
 
 > **Battery**: don't put `battery_level` here. Home Assistant has deprecated `battery_level` on `device_tracker` in favour of a separate battery entity — declare a normal `sensor` with `"device_class": "battery"` instead.
+
+#### `update` state (object `value`)
+
+```json
+{
+  "id": 5,
+  "type": "ws_bridge/state",
+  "states": [
+    {
+      "unique_id": "firmware",
+      "value": {
+        "installed_version": "1.0.0",
+        "latest_version": "1.0.1",
+        "in_progress": false,
+        "title": "Living Room",
+        "summary": "Bug fixes"
+      }
+    }
+  ]
+}
+```
+
+- `installed_version` (String, Optional): Currently running firmware/app version.
+- `latest_version` (String, Optional): Version offered by the manifest. Home Assistant shows an update as available when this differs from `installed_version`.
+- `in_progress` (Boolean, Optional, default `false`): `true` while a flash is running.
+- `progress` (Number, Optional, 0–100): Percent complete; only meaningful while `in_progress` is `true`.
+- `title`, `summary`, `release_url` (String, Optional): Shown on the update card / release-notes dialog.
+
+Omit empty optional keys rather than sending `""`. Sending the string `"unknown"` (or a non-object) clears the version fields.
 
 * **Response**
   ```json
@@ -274,7 +306,7 @@ When a **gateway subentry** is deleted in **Settings → WebSocket Bridge**, or 
 
 ## 4. Control Commands (Home Assistant → Client)
 
-When a controllable entity (`switch`, `number`, `select`, `button`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
+When a controllable entity (`switch`, `number`, `select`, `button`, `update`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
 
 The client should listen for these events, perform the physical action, and then push the updated state back using a `ws_bridge/state` message.
 
@@ -294,7 +326,7 @@ The client should listen for these events, perform the physical action, and then
   - `event` (Object): Command details.
     - `kind`: Always `"command"`.
     - `unique_id`: The original `unique_id` of the entity (gateway namespace prefix stripped).
-    - `action`: The action to execute (`turn_on`, `turn_off`, `press`, `set_value`, `select_option`).
+    - `action`: The action to execute (`turn_on`, `turn_off`, `press`, `set_value`, `select_option`, `install`, `check`).
     - `value` (Any, Optional): The payload value (e.g., target float for `set_value`, or string option for `select_option`).
 
 ### Example with Value
@@ -310,6 +342,11 @@ The client should listen for these events, perform the physical action, and then
   }
 }
 ```
+
+### `update` commands
+
+- `install` — start installing the currently offered firmware (no `value`). The client should push `in_progress: true` (and `progress` if known) until the flash finishes; a successful flash typically reboots the device.
+- `check` — re-fetch the update manifest. Pushed when HA calls `homeassistant.update_entity` on this entity.
 
 ---
 
