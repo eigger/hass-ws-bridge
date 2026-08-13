@@ -174,7 +174,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
       - `update` 플랫폼은 아래 객체 형식을 사용합니다.
       - `light` / `cover` / `fan` / `valve` 플랫폼은 아래 객체 형식을 사용합니다.
       - `lock`은 `"locked"`/`"unlocked"`/… 또는 bool(`true`=잠김)을 받습니다.
-      - `date` / `time` / `datetime`은 ISO 8601 문자열을 보냅니다. 파싱 실패 시 unknown(`None`).
+      - `date` / `time` / `datetime`은 ISO 8601 문자열을 보냅니다. 파싱 실패 시 unknown(`None`). tz-naive datetime은 HA 로컬 타임존을 부착합니다(UTC로 해석하지 않음).
       - `event`는 event_type 문자열 또는 `{"event_type": "...", "attributes": {...}}`입니다. 재시작 시 last state로 **복원하지 않습니다**.
       - **객체(dict) 값 — 얕은 병합**: 이전에 저장된 상태와 새 `value`가 **둘 다 객체**이면 통합이 **얕은 병합**합니다(`{...prev, ...value}`). **단 `event`는 예외**(교체만 — 병합하면 이전 `attributes`가 다음 일회성 이벤트로 샌다). `{"progress": 50}` 또는 `{"brightness": 200}`만 보내도 다른 키가 보존됩니다. 이전에 보고한 키를 **지우려면** 해당 키에 JSON `null`을 보냅니다(키를 생략하는 것으로는 지워지지 않음). 그 외 타입 변경(스칼라→객체, 객체→스칼라, 또는 객체의 최초 기록)은 **교체**합니다. 엔티티는 항상 병합된 전체 결과를 받습니다.
       - 값은 JSON으로 직렬화 가능해야 합니다(`bytes`/tuple 금지). 색상은 반드시 리스트로 보냅니다.
