@@ -133,13 +133,11 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
         return self._stream_url
 
     async def async_turn_on(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_on")
+        self._send_command("turn_on")
         self._state["is_on"] = True
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_turn_off(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_off")
+        self._send_command("turn_off")
         self._state["is_on"] = False
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()

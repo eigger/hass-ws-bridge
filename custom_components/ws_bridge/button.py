@@ -29,4 +29,4 @@ class WsBridgeButton(WsBridgeEntity, ButtonEntity):
         self._attr_device_class = defn.get("device_class")
 
     async def async_press(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "press")
+        self._send_command("press")

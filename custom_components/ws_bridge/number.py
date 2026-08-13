@@ -55,6 +55,6 @@ class WsBridgeNumber(WsBridgeEntity, NumberEntity):
         safe_write_ha_state(self)
 
     async def async_set_native_value(self, value: float) -> None:
-        self._bridge.send_command(self._attr_unique_id, "set_value", value)
+        self._send_command("set_value", value)
         self._attr_native_value = value
         self.async_write_ha_state()

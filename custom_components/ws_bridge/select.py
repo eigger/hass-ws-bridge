@@ -43,6 +43,6 @@ class WsBridgeSelect(WsBridgeEntity, SelectEntity):
         safe_write_ha_state(self)
 
     async def async_select_option(self, option: str) -> None:
-        self._bridge.send_command(self._attr_unique_id, "select_option", option)
+        self._send_command("select_option", option)
         self._attr_current_option = option
         self.async_write_ha_state()

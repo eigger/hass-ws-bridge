@@ -30,7 +30,6 @@ from homeassistant.components.update import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.enum import try_parse_enum
 
@@ -152,10 +151,9 @@ class WsBridgeUpdate(WsBridgeCompositeEntity, UpdateEntity):
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
     ) -> None:
-        if not self._bridge.send_command(self._attr_unique_id, "install"):
-            raise HomeAssistantError("Gateway is not connected")
-        self._attr_in_progress = True
-        self.async_write_ha_state()
+        self._send_command("install")
+        self._state["in_progress"] = True
+        self._publish_state()
 
     async def async_update(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "check")
+        self._send_command("check")

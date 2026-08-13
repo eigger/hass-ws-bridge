@@ -57,6 +57,6 @@ class WsBridgeDateTime(WsBridgeEntity, DateTimeEntity):
 
     async def async_set_value(self, value: datetime) -> None:
         text = value.isoformat()
-        self._bridge.send_command(self._attr_unique_id, "set_value", text)
+        self._send_command("set_value", text)
         self._attr_native_value = value
         self.async_write_ha_state()

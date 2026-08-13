@@ -555,9 +555,60 @@ def test_handle_state_event_does_not_merge_attributes():
         )
         bridge.handle_state("gw1", "bell", {"event_type": "motion"})
 
-    assert bridge._states["gw1__bell"] == {"event_type": "motion"}
+    # event 는 복원하지 않으므로 _states / Store 에 넣지 않는다.
+    assert "gw1__bell" not in bridge._states
+    assert bridge._save_unsub is None
     assert send.call_args_list[-1].args[2] == {"event_type": "motion"}
-    assert "attributes" not in send.call_args_list[-1].args[2]
+    assert send.call_args_list[0].args[2] == {
+        "event_type": "doorbell",
+        "attributes": {"zone": "front"},
+    }
+
+
+def test_set_local_state_keeps_optimistic_keys_on_partial_push():
+    """낙관적 설정이 bridge._states 에 있으면 부분 푸시로 되돌아가지 않는다."""
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send"):
+        bridge.handle_state(
+            "gw1", "ac",
+            {"hvac_mode": "heat", "target_temperature": 26, "current_temperature": 22},
+        )
+    bridge.set_local_state(
+        "gw1__ac",
+        {"hvac_mode": "heat", "target_temperature": 24, "current_temperature": 22},
+    )
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send") as send:
+        bridge.handle_state("gw1", "ac", {"current_temperature": 27.5})
+
+    assert bridge._states["gw1__ac"] == {
+        "hvac_mode": "heat",
+        "target_temperature": 24,
+        "current_temperature": 27.5,
+    }
+    assert send.call_args.args[2]["target_temperature"] == 24
+
+
+def test_entity_send_command_raises_when_disconnected():
+    from homeassistant.exceptions import HomeAssistantError
+    from custom_components.ws_bridge.entity import WsBridgeEntity
+
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    entity = WsBridgeEntity(
+        bridge,
+        {
+            "unique_id": "gw1__sw",
+            "platform": "switch",
+            "name": "SW",
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    try:
+        entity._send_command("turn_on")
+        raise AssertionError("expected HomeAssistantError")
+    except HomeAssistantError as err:
+        assert "not connected" in str(err).lower()
 
 
 def test_handle_state_null_clears_merged_key():

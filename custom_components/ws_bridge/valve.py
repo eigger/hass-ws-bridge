@@ -110,24 +110,21 @@ class WsBridgeValve(WsBridgeCompositeEntity, ValveEntity):
         return str(self._state.get("state") or "").lower() == "closing"
 
     async def async_open_valve(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "open_valve")
+        self._send_command("open_valve")
         self._state["state"] = "opening"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_close_valve(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "close_valve")
+        self._send_command("close_valve")
         self._state["state"] = "closing"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_stop_valve(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "stop_valve")
+        self._send_command("stop_valve")
 
     async def async_set_valve_position(self, position: int) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "set_valve_position", params={"position": position}
+        self._send_command(
+            "set_valve_position", params={"position": position}
         )
         self._state["position"] = position
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()

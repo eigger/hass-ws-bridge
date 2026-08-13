@@ -185,23 +185,21 @@ class WsBridgeLight(WsBridgeCompositeEntity, LightEntity):
             for key in _TURN_ON_KEYS
             if key in kwargs and kwargs[key] is not None
         }
-        self._bridge.send_command(
-            self._attr_unique_id, "turn_on", params=params or None
+        self._send_command(
+            "turn_on", params=params or None
         )
         self._state["state"] = "on"
         for key, val in params.items():
             if key not in ("transition", "flash"):
                 self._state[key] = val
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         params = {}
         if (transition := kwargs.get("transition")) is not None:
             params["transition"] = transition
-        self._bridge.send_command(
-            self._attr_unique_id, "turn_off", params=params or None
+        self._send_command(
+            "turn_off", params=params or None
         )
         self._state["state"] = "off"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()

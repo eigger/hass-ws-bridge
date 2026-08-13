@@ -697,13 +697,18 @@ class WsBridge:
         if (client := self._clients.get(gateway_id)) is not None:
             if (ns_dev := self._entity_device.get(ns_uid)) is not None:
                 self._touch_device(client, ns_dev)
+        is_event = self._entity_platform(ns_uid) == PLATFORM_EVENT
         if isinstance(value, dict):
             # event 는 fire-and-forget — 얕은 병합하면 이전 attributes 가 다음 이벤트로 샌다.
-            if self._entity_platform(ns_uid) == PLATFORM_EVENT:
+            if is_event:
                 value = dict(value)
             else:
                 prev = self._states.get(ns_uid)
                 value = {**prev, **value} if isinstance(prev, dict) else dict(value)
+        if is_event:
+            # 복원하지 않으므로 디스크·메모리 영속화 생략 (발화마다 Store 방지).
+            async_dispatcher_send(self.hass, signal_value(self.entry_id, ns_uid), value)
+            return
         self._states[ns_uid] = value
         self._schedule_save()
         async_dispatcher_send(self.hass, signal_value(self.entry_id, ns_uid), value)
@@ -718,6 +723,18 @@ class WsBridge:
     @callback
     def last_state(self, unique_id: str) -> Any:
         return self._states.get(unique_id)
+
+    @callback
+    def set_local_state(self, unique_id: str, value: Any) -> None:
+        """낙관적 UI 상태를 _states 에 반영한다 (dispatcher 없음).
+
+        복합 엔티티가 _state 사본만 바꾸면, 이후 클라이언트의 부분 푸시가
+        stale 값과 병합되어 설정값이 되돌아간다.
+        """
+        if isinstance(value, dict):
+            value = dict(value)
+        self._states[unique_id] = value
+        self._schedule_save()
 
     # ── HA → 클라이언트 (해당 클라이언트로만 라우팅) ─────────────────────────
     @callback

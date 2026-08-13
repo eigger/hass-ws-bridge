@@ -92,45 +92,40 @@ class WsBridgeCover(WsBridgeCompositeEntity, CoverEntity):
         return str(self._state.get("state") or "").lower() == "closing"
 
     async def async_open_cover(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "open_cover")
+        self._send_command("open_cover")
         self._state["state"] = "opening"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "close_cover")
+        self._send_command("close_cover")
         self._state["state"] = "closing"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "stop_cover")
+        self._send_command("stop_cover")
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         position = kwargs.get("position")
-        self._bridge.send_command(
-            self._attr_unique_id, "set_cover_position", params={"position": position}
+        self._send_command(
+            "set_cover_position", params={"position": position}
         )
         self._state["position"] = position
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_open_cover_tilt(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "open_cover_tilt")
+        self._send_command("open_cover_tilt")
 
     async def async_close_cover_tilt(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "close_cover_tilt")
+        self._send_command("close_cover_tilt")
 
     async def async_stop_cover_tilt(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "stop_cover_tilt")
+        self._send_command("stop_cover_tilt")
 
     async def async_set_cover_tilt_position(self, **kwargs: Any) -> None:
         tilt = kwargs.get("tilt_position")
-        self._bridge.send_command(
-            self._attr_unique_id,
+        self._send_command(
             "set_cover_tilt_position",
             params={"tilt_position": tilt},
         )
         self._state["tilt_position"] = tilt
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()

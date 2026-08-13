@@ -100,57 +100,50 @@ class WsBridgeFan(WsBridgeCompositeEntity, FanEntity):
             params["percentage"] = percentage
         if preset_mode is not None:
             params["preset_mode"] = preset_mode
-        self._bridge.send_command(
-            self._attr_unique_id, "turn_on", params=params or None
+        self._send_command(
+            "turn_on", params=params or None
         )
         self._state["state"] = "on"
         if percentage is not None:
             self._state["percentage"] = percentage
         if preset_mode is not None:
             self._state["preset_mode"] = preset_mode
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_off")
+        self._send_command("turn_off")
         self._state["state"] = "off"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_percentage(self, percentage: int) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "set_percentage", params={"percentage": percentage}
+        self._send_command(
+            "set_percentage", params={"percentage": percentage}
         )
         self._state["percentage"] = percentage
         if percentage > 0:
             self._state["state"] = "on"
         else:
             self._state["state"] = "off"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id,
+        self._send_command(
             "set_preset_mode",
             params={"preset_mode": preset_mode},
         )
         self._state["preset_mode"] = preset_mode
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_oscillate(self, oscillating: bool) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "oscillate", params={"oscillating": oscillating}
+        self._send_command(
+            "oscillate", params={"oscillating": oscillating}
         )
         self._state["oscillating"] = oscillating
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_direction(self, direction: str) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "set_direction", params={"direction": direction}
+        self._send_command(
+            "set_direction", params={"direction": direction}
         )
         self._state["direction"] = direction
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
