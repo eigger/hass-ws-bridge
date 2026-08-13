@@ -157,67 +157,59 @@ class WsBridgeMediaPlayer(WsBridgeCompositeEntity, MediaPlayerEntity):
         self._attr_media_image_url = str(image) if image is not None else None
 
     async def async_media_play(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "media_play")
+        self._send_command("media_play")
         self._state["state"] = "playing"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_media_pause(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "media_pause")
+        self._send_command("media_pause")
         self._state["state"] = "paused"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_media_stop(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "media_stop")
+        self._send_command("media_stop")
         self._state["state"] = "idle"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_media_next_track(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "media_next_track")
+        self._send_command("media_next_track")
 
     async def async_media_previous_track(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "media_previous_track")
+        self._send_command("media_previous_track")
 
     async def async_set_volume_level(self, volume: float) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "volume_set", params={"volume_level": volume}
+        self._send_command(
+            "volume_set", params={"volume_level": volume}
         )
         self._state["volume_level"] = volume
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_mute_volume(self, mute: bool) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "volume_mute", params={"is_volume_muted": mute}
+        self._send_command(
+            "volume_mute", params={"is_volume_muted": mute}
         )
         self._state["is_volume_muted"] = mute
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_volume_up(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "volume_up")
+        self._send_command("volume_up")
 
     async def async_volume_down(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "volume_down")
+        self._send_command("volume_down")
 
     async def async_turn_on(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_on")
+        self._send_command("turn_on")
         self._state["state"] = "on"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_turn_off(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_off")
+        self._send_command("turn_off")
         self._state["state"] = "off"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_select_source(self, source: str) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "select_source", params={"source": source}
+        self._send_command(
+            "select_source", params={"source": source}
         )
         self._state["source"] = source
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()

@@ -8,6 +8,7 @@ from typing import Any
 
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, Entity
 
@@ -58,6 +59,21 @@ class WsBridgeEntity(Entity):
                 via_device=(DOMAIN, dev["gateway_id"]),    # 클라이언트(게이트웨이) 아래로 묶임
             )
         self._attr_available = True
+
+    def _send_command(
+        self,
+        action: str,
+        value: Any = None,
+        params: dict[str, Any] | None = None,
+    ) -> None:
+        """클라이언트로 명령을 보낸다. 미연결이면 낙관적 상태 전에 실패한다."""
+        kwargs: dict[str, Any] = {}
+        if value is not None:
+            kwargs["value"] = value
+        if params is not None:
+            kwargs["params"] = params
+        if not self._bridge.send_command(self._attr_unique_id, action, **kwargs):
+            raise HomeAssistantError("Gateway is not connected")
 
     @callback
     def async_update_defn(self, defn: dict[str, Any]) -> None:
@@ -116,6 +132,9 @@ class WsBridgeCompositeEntity(WsBridgeEntity):
     반영한다.
     """
 
+    # 낙관적으로만 쓰이는 전이 상태 키 — bridge 에 영속화하지 않는다.
+    _transient_state_keys: frozenset[str] = frozenset()
+
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
         self._state: dict[str, Any] = as_dict(bridge.last_state(self._attr_unique_id))
@@ -130,6 +149,36 @@ class WsBridgeCompositeEntity(WsBridgeEntity):
         self._state = as_dict(value)
         self._apply_state()
         safe_write_ha_state(self)
+
+    def _publish_state(self) -> None:
+        """낙관적 _state 를 bridge 에 반영한 뒤 HA 에 기록.
+
+        bridge._states 에 안 넣으면 이후 부분 state 푸시가 stale 값과 병합되어
+        낙관적 설정이 되돌아간다. 단 _transient_state_keys 는 제외한다 —
+        opening/in_progress 같은 전이 마커까지 저장하면 클라이언트가 확인을
+        못 보낸 채 HA 가 재시작될 때 그 상태로 영구히 고착된다.
+        """
+        self._bridge.set_local_state(
+            self._attr_unique_id, self._persistable_state()
+        )
+        self._apply_state()
+        self.async_write_ha_state()
+
+    def _persistable_state(self) -> dict[str, Any]:
+        """전이 키를 뺀 _state. 해당 키는 클라이언트가 마지막으로 보고한 값을 유지한다."""
+        if not self._transient_state_keys:
+            return self._state
+        payload = {
+            key: value
+            for key, value in self._state.items()
+            if key not in self._transient_state_keys
+        }
+        prev = self._bridge.last_state(self._attr_unique_id)
+        if isinstance(prev, dict):
+            for key in self._transient_state_keys:
+                if key in prev:
+                    payload[key] = prev[key]
+        return payload
 
     def _apply_state(self) -> None:
         """서브클래스에서 self._state → self._attr_* 로 반영."""

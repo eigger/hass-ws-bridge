@@ -11,7 +11,6 @@ from homeassistant.components.alarm_control_panel import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .bridge import WsBridge
@@ -115,10 +114,7 @@ class WsBridgeAlarmControlPanel(WsBridgeEntity, AlarmControlPanelEntity):
         return {"code": code}
 
     def _send(self, action: str, code: str | None) -> None:
-        if not self._bridge.send_command(
-            self._attr_unique_id, action, params=self._code_params(code)
-        ):
-            raise HomeAssistantError("Gateway is not connected")
+        self._send_command(action, params=self._code_params(code))
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         self._send("alarm_disarm", code)

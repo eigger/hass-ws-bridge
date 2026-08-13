@@ -88,13 +88,13 @@ class WsBridgeSiren(WsBridgeEntity, SirenEntity):
         for key in ("tone", "duration", "volume_level"):
             if key in kwargs and kwargs[key] is not None:
                 params[key] = kwargs[key]
-        self._bridge.send_command(
-            self._attr_unique_id, "turn_on", params=params or None
+        self._send_command(
+            "turn_on", params=params or None
         )
         self._attr_is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_off")
+        self._send_command("turn_off")
         self._attr_is_on = False
         self.async_write_ha_state()

@@ -21,7 +21,7 @@
 - **추가 브로커/포트 불필요**: Home Assistant 표준 WebSocket API(`/api/websocket`)와 장기 액세스 토큰만 사용합니다. MQTT 브로커를 따로 띄우거나 TCP 포트를 추가로 열 필요가 없습니다.
 - **동적 엔티티 생성**: 클라이언트가 WebSocket으로 JSON 메시지로 엔티티를 선언하면 Home Assistant에 즉시 생성됩니다.
 - **클라이언트 기반 장치 그룹화**: 각 클라이언트(`gateway_id`)는 HA에 게이트웨이(부모) 디바이스로 등록되고, 해당 클라이언트가 선언한 장치·엔티티는 `via_device`로 하위에 묶입니다.
-- **양방향 제어 라우팅**: `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve` 제어 이벤트(`command`)를 HA UI·자동화에서 발생시키면, 해당 엔티티를 등록한 클라이언트에만 전달합니다.
+- **양방향 제어 라우팅**: `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`, `media_player`, `camera` 제어 이벤트(`command`)를 HA UI·자동화에서 발생시키면, 해당 엔티티를 등록한 클라이언트에만 전달합니다.
 - **연결 상태 추적(LWT)**: 클라이언트 WebSocket 연결이 끊기면, 그 클라이언트가 등록한 하위 장치·엔티티가 자동으로 `unavailable`이 됩니다.
 - **연결 클라이언트 수 진단 센서**: 현재 WebSocket으로 연결된 클라이언트(`gateway_id`) 수를 실시간으로 표시하는 진단 센서를 제공합니다.
 

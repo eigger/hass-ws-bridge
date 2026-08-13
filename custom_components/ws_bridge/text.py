@@ -63,6 +63,6 @@ class WsBridgeText(WsBridgeEntity, TextEntity):
         return str(value)
 
     async def async_set_value(self, value: str) -> None:
-        self._bridge.send_command(self._attr_unique_id, "set_value", value)
+        self._send_command("set_value", value)
         self._attr_native_value = value
         self.async_write_ha_state()

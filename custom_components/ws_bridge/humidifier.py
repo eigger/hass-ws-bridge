@@ -88,29 +88,25 @@ class WsBridgeHumidifier(WsBridgeCompositeEntity, HumidifierEntity):
             _ACTION_MAP.get(str(action).lower()) if action is not None else None
         )
     async def async_turn_on(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_on")
+        self._send_command("turn_on")
         self._state["state"] = "on"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_off")
+        self._send_command("turn_off")
         self._state["state"] = "off"
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_humidity(self, humidity: int) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "set_humidity", params={"humidity": humidity}
+        self._send_command(
+            "set_humidity", params={"humidity": humidity}
         )
         self._state["target_humidity"] = humidity
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_mode(self, mode: str) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "set_mode", params={"mode": mode}
+        self._send_command(
+            "set_mode", params={"mode": mode}
         )
         self._state["mode"] = mode
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()

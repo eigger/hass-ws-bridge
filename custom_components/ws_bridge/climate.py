@@ -162,14 +162,12 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
         self._attr_preset_mode = str(preset) if preset is not None else None
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id,
+        self._send_command(
             "set_hvac_mode",
             params={"hvac_mode": hvac_mode},
         )
         self._state["hvac_mode"] = hvac_mode
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         params: dict[str, Any] = {}
@@ -179,8 +177,8 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
             params["target_temp_low"] = kwargs["target_temp_low"]
         if "target_temp_high" in kwargs:
             params["target_temp_high"] = kwargs["target_temp_high"]
-        self._bridge.send_command(
-            self._attr_unique_id, "set_temperature", params=params or None
+        self._send_command(
+            "set_temperature", params=params or None
         )
         if "temperature" in params:
             self._state["target_temperature"] = params["temperature"]
@@ -188,57 +186,49 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
             self._state["target_temp_low"] = params["target_temp_low"]
         if "target_temp_high" in params:
             self._state["target_temp_high"] = params["target_temp_high"]
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "set_fan_mode", params={"fan_mode": fan_mode}
+        self._send_command(
+            "set_fan_mode", params={"fan_mode": fan_mode}
         )
         self._state["fan_mode"] = fan_mode
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "set_swing_mode", params={"swing_mode": swing_mode}
+        self._send_command(
+            "set_swing_mode", params={"swing_mode": swing_mode}
         )
         self._state["swing_mode"] = swing_mode
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id,
+        self._send_command(
             "set_preset_mode",
             params={"preset_mode": preset_mode},
         )
         self._state["preset_mode"] = preset_mode
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_humidity(self, humidity: float) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "set_humidity", params={"humidity": humidity}
+        self._send_command(
+            "set_humidity", params={"humidity": humidity}
         )
         self._state["target_humidity"] = humidity
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_turn_on(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_on")
+        self._send_command("turn_on")
         if self._attr_hvac_mode in (None, HVACMode.OFF) and self._attr_hvac_modes:
             for mode in self._attr_hvac_modes:
                 if mode != HVACMode.OFF:
                     self._state["hvac_mode"] = mode
                     break
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_turn_off(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_off")
+        self._send_command("turn_off")
         # Only advertise OFF locally when the client listed it in hvac_modes.
         if HVACMode.OFF in self._attr_hvac_modes:
             self._state["hvac_mode"] = HVACMode.OFF
-            self._apply_state()
-            self.async_write_ha_state()
+            self._publish_state()

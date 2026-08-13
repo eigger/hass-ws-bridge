@@ -117,42 +117,37 @@ class WsBridgeWaterHeater(WsBridgeCompositeEntity, WaterHeaterEntity):
     async def async_set_temperature(self, **kwargs: Any) -> None:
         temperature = kwargs.get("temperature")
         params = {"temperature": temperature} if temperature is not None else None
-        self._bridge.send_command(
-            self._attr_unique_id, "set_temperature", params=params
+        self._send_command(
+            "set_temperature", params=params
         )
         if temperature is not None:
             self._state["target_temperature"] = temperature
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_set_operation_mode(self, operation_mode: str) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id,
+        self._send_command(
             "set_operation_mode",
             params={"operation_mode": operation_mode},
         )
         self._state["state"] = operation_mode
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_turn_away_mode_on(self) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "set_away_mode", params={"away_mode": True}
+        self._send_command(
+            "set_away_mode", params={"away_mode": True}
         )
         self._state["away_mode"] = True
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_turn_away_mode_off(self) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "set_away_mode", params={"away_mode": False}
+        self._send_command(
+            "set_away_mode", params={"away_mode": False}
         )
         self._state["away_mode"] = False
-        self._apply_state()
-        self.async_write_ha_state()
+        self._publish_state()
 
     async def async_turn_on(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_on")
+        self._send_command("turn_on")
 
     async def async_turn_off(self) -> None:
-        self._bridge.send_command(self._attr_unique_id, "turn_off")
+        self._send_command("turn_off")

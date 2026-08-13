@@ -555,9 +555,60 @@ def test_handle_state_event_does_not_merge_attributes():
         )
         bridge.handle_state("gw1", "bell", {"event_type": "motion"})
 
-    assert bridge._states["gw1__bell"] == {"event_type": "motion"}
+    # event 는 복원하지 않으므로 _states / Store 에 넣지 않는다.
+    assert "gw1__bell" not in bridge._states
+    assert bridge._save_unsub is None
     assert send.call_args_list[-1].args[2] == {"event_type": "motion"}
-    assert "attributes" not in send.call_args_list[-1].args[2]
+    assert send.call_args_list[0].args[2] == {
+        "event_type": "doorbell",
+        "attributes": {"zone": "front"},
+    }
+
+
+def test_set_local_state_keeps_optimistic_keys_on_partial_push():
+    """낙관적 설정이 bridge._states 에 있으면 부분 푸시로 되돌아가지 않는다."""
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send"):
+        bridge.handle_state(
+            "gw1", "ac",
+            {"hvac_mode": "heat", "target_temperature": 26, "current_temperature": 22},
+        )
+    bridge.set_local_state(
+        "gw1__ac",
+        {"hvac_mode": "heat", "target_temperature": 24, "current_temperature": 22},
+    )
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send") as send:
+        bridge.handle_state("gw1", "ac", {"current_temperature": 27.5})
+
+    assert bridge._states["gw1__ac"] == {
+        "hvac_mode": "heat",
+        "target_temperature": 24,
+        "current_temperature": 27.5,
+    }
+    assert send.call_args.args[2]["target_temperature"] == 24
+
+
+def test_entity_send_command_raises_when_disconnected():
+    from homeassistant.exceptions import HomeAssistantError
+    from custom_components.ws_bridge.entity import WsBridgeEntity
+
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    entity = WsBridgeEntity(
+        bridge,
+        {
+            "unique_id": "gw1__sw",
+            "platform": "switch",
+            "name": "SW",
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    try:
+        entity._send_command("turn_on")
+        raise AssertionError("expected HomeAssistantError")
+    except HomeAssistantError as err:
+        assert "not connected" in str(err).lower()
 
 
 def test_handle_state_null_clears_merged_key():
@@ -1291,3 +1342,72 @@ def test_manifest_version_pinned_to_pre_phase():
         Path("custom_components/ws_bridge/manifest.json").read_text()
     )
     assert manifest["version"] == "1.3.1"
+
+
+def _mk_entity(cls, platform, uid, seed, extra_defn=None):
+    """seed 상태를 미리 넣은 bridge + 연결된 클라이언트로 엔티티를 만든다."""
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge._clients["gw1"] = _Client("gw1", "GW", MagicMock())
+    bridge._entity_client[f"gw1__{uid}"] = "gw1"
+    defn = {
+        "unique_id": f"gw1__{uid}",
+        "platform": platform,
+        "name": "X",
+        "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+    }
+    defn.update(extra_defn or {})
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send"):
+        bridge.handle_state("gw1", uid, seed)
+    entity = cls(bridge, defn)
+    entity.hass = MagicMock()
+    entity.async_write_ha_state = lambda: None
+    return bridge, entity, defn
+
+
+def test_publish_state_does_not_persist_transient_cover_state():
+    """opening 은 낙관적 표시일 뿐 — 저장하면 재시작 후 'Opening' 으로 고착된다."""
+    from custom_components.ws_bridge.cover import WsBridgeCover
+
+    bridge, entity, defn = _mk_entity(
+        WsBridgeCover, "cover", "bl", {"state": "closed", "position": 0}
+    )
+    asyncio.run(entity.async_open_cover())
+
+    assert entity.is_opening is True                      # UI 는 즉시 반응
+    assert bridge._states["gw1__bl"]["state"] == "closed"  # 저장본은 그대로
+
+    restored = WsBridgeCover(bridge, defn)
+    restored.hass = MagicMock()
+    restored._apply_state()
+    assert restored.is_opening is False
+
+
+def test_publish_state_does_not_persist_update_in_progress():
+    """플래시 중 기기가 사라져도 재시작 후 'Installing…' 이 남으면 안 된다."""
+    from custom_components.ws_bridge.update import WsBridgeUpdate
+
+    bridge, entity, defn = _mk_entity(
+        WsBridgeUpdate, "update", "fw",
+        {"installed_version": "1.0.0", "latest_version": "1.0.1", "in_progress": False},
+    )
+    asyncio.run(entity.async_install(None, False))
+
+    assert entity._attr_in_progress is True
+    assert bridge._states["gw1__fw"]["in_progress"] is False
+
+    restored = WsBridgeUpdate(bridge, defn)
+    restored.hass = MagicMock()
+    restored._apply_state()
+    assert restored._attr_in_progress is False
+
+
+def test_update_refresh_hook_is_silent_when_disconnected():
+    """async_update 는 사용자 명령이 아니라 새로고침 훅 — 예외를 던지면 안 된다."""
+    from custom_components.ws_bridge.update import WsBridgeUpdate
+
+    bridge, entity, _ = _mk_entity(
+        WsBridgeUpdate, "update", "fw", {"installed_version": "1.0.0"}
+    )
+    bridge._clients.clear()   # 게이트웨이 끊김
+
+    asyncio.run(entity.async_update())   # 예외 없이 통과해야 한다
