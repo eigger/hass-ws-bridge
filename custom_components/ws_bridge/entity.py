@@ -132,6 +132,9 @@ class WsBridgeCompositeEntity(WsBridgeEntity):
     반영한다.
     """
 
+    # 낙관적으로만 쓰이는 전이 상태 키 — bridge 에 영속화하지 않는다.
+    _transient_state_keys: frozenset[str] = frozenset()
+
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
         self._state: dict[str, Any] = as_dict(bridge.last_state(self._attr_unique_id))
@@ -151,11 +154,31 @@ class WsBridgeCompositeEntity(WsBridgeEntity):
         """낙관적 _state 를 bridge 에 반영한 뒤 HA 에 기록.
 
         bridge._states 에 안 넣으면 이후 부분 state 푸시가 stale 값과 병합되어
-        낙관적 설정이 되돌아간다.
+        낙관적 설정이 되돌아간다. 단 _transient_state_keys 는 제외한다 —
+        opening/in_progress 같은 전이 마커까지 저장하면 클라이언트가 확인을
+        못 보낸 채 HA 가 재시작될 때 그 상태로 영구히 고착된다.
         """
-        self._bridge.set_local_state(self._attr_unique_id, self._state)
+        self._bridge.set_local_state(
+            self._attr_unique_id, self._persistable_state()
+        )
         self._apply_state()
         self.async_write_ha_state()
+
+    def _persistable_state(self) -> dict[str, Any]:
+        """전이 키를 뺀 _state. 해당 키는 클라이언트가 마지막으로 보고한 값을 유지한다."""
+        if not self._transient_state_keys:
+            return self._state
+        payload = {
+            key: value
+            for key, value in self._state.items()
+            if key not in self._transient_state_keys
+        }
+        prev = self._bridge.last_state(self._attr_unique_id)
+        if isinstance(prev, dict):
+            for key in self._transient_state_keys:
+                if key in prev:
+                    payload[key] = prev[key]
+        return payload
 
     def _apply_state(self) -> None:
         """서브클래스에서 self._state → self._attr_* 로 반영."""

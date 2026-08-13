@@ -67,6 +67,9 @@ def _as_position(value: Any) -> int | None:
 
 
 class WsBridgeValve(WsBridgeCompositeEntity, ValveEntity):
+    # cover 와 동일 — opening/closing 전이 마커는 저장하지 않는다.
+    _transient_state_keys = frozenset({"state"})
+
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
         self._configure_from_defn(defn)

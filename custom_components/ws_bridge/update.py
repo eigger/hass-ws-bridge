@@ -113,6 +113,10 @@ def _parse_update_state(value: Any) -> dict[str, Any]:
 
 
 class WsBridgeUpdate(WsBridgeCompositeEntity, UpdateEntity):
+    # 설치 진행 표시는 클라이언트가 확인해 줄 때까지 메모리에만 둔다 —
+    # 저장하면 플래시 중 기기가 사라졌을 때 영구히 "Installing…" 이 된다.
+    _transient_state_keys = frozenset({"in_progress"})
+
     _attr_supported_features = (
         UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
     )
@@ -156,4 +160,6 @@ class WsBridgeUpdate(WsBridgeCompositeEntity, UpdateEntity):
         self._publish_state()
 
     async def async_update(self) -> None:
-        self._send_command("check")
+        # 사용자 명령이 아니라 best-effort 새로고침 훅 — 미연결이라고 예외를 던지면
+        # HA 가 스택 트레이스를 남긴다. 조용히 넘긴다.
+        self._bridge.send_command(self._attr_unique_id, "check")

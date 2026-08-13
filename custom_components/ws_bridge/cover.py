@@ -56,6 +56,10 @@ def _as_position(value: Any) -> int | None:
 
 
 class WsBridgeCover(WsBridgeCompositeEntity, CoverEntity):
+    # opening/closing 은 낙관적 표시일 뿐 — 클라이언트 확인 없이 영속화하면
+    # 재시작 후 "Opening" 으로 고착된다.
+    _transient_state_keys = frozenset({"state"})
+
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
         self._attr_device_class = defn.get("device_class")
