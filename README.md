@@ -64,8 +64,13 @@ graph TD
 | `light` | Control | Brightness / color (`turn_on` / `turn_off` with `params`) |
 | `cover` | Control | Open/close/position/tilt (`open_cover`, `set_cover_position`, …) |
 | `fan` | Control | Speed / preset / oscillate / direction |
+| `text` | Control | Writable string (`set_value`; not `text_sensor`) |
+| `lock` | Control | `lock` / `unlock` / `open` |
+| `date` / `time` / `datetime` | Control | ISO string + `set_value` |
+| `event` | Read | `event_types` required (not restored on restart) |
+| `valve` | Control | Open/close/position |
 
-Planned (not accepted on the wire yet): `text` → `lock` → `date`/`time`/`datetime`/`event`/`valve` → `climate` (…). See [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms). `text` is writable and is not `text_sensor`.
+Planned (not accepted on the wire yet): `climate` family → `media_player` / `image` / `camera`. See [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms).
 
 ---
 

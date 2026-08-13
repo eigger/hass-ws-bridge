@@ -101,6 +101,27 @@ class FanEntityFeature(IntFlag):
     TURN_ON = 32
 
 
+class LockEntityFeature(IntFlag):
+    OPEN = 1
+
+
+class ValveEntityFeature(IntFlag):
+    OPEN = 1
+    CLOSE = 2
+    SET_POSITION = 4
+    STOP = 8
+
+
+class TextMode:
+    TEXT = "text"
+    PASSWORD = "password"
+
+
+class MockEventEntity(MockBase):
+    def _trigger_event(self, event_type, event_attributes=None):
+        self._last_triggered = (event_type, event_attributes or {})
+
+
 # Set up core mocks
 sys.modules["homeassistant"] = MagicMock()
 
@@ -149,9 +170,14 @@ for mod in [
     "homeassistant.components.light",
     "homeassistant.components.cover",
     "homeassistant.components.fan",
+    "homeassistant.components.text",
+    "homeassistant.components.lock",
+    "homeassistant.components.date",
+    "homeassistant.components.time",
+    "homeassistant.components.datetime",
+    "homeassistant.components.event",
+    "homeassistant.components.valve",
     "homeassistant.exceptions",
-    "homeassistant.util",
-    "homeassistant.util.dt",
     "homeassistant.util.enum",
 ]:
     sys.modules[mod] = MagicMock()
@@ -179,5 +205,39 @@ mock_cover.CoverEntityFeature = CoverEntityFeature
 mock_fan = sys.modules["homeassistant.components.fan"]
 mock_fan.FanEntity = MockBase
 mock_fan.FanEntityFeature = FanEntityFeature
+
+mock_text = sys.modules["homeassistant.components.text"]
+mock_text.TextEntity = MockBase
+mock_text.TextMode = TextMode
+
+mock_lock = sys.modules["homeassistant.components.lock"]
+mock_lock.LockEntity = MockBase
+mock_lock.LockEntityFeature = LockEntityFeature
+
+sys.modules["homeassistant.components.date"].DateEntity = MockBase
+sys.modules["homeassistant.components.time"].TimeEntity = MockBase
+sys.modules["homeassistant.components.datetime"].DateTimeEntity = MockBase
+
+mock_event = sys.modules["homeassistant.components.event"]
+mock_event.EventEntity = MockEventEntity
+
+mock_valve = sys.modules["homeassistant.components.valve"]
+mock_valve.ValveEntity = MockBase
+mock_valve.ValveEntityFeature = ValveEntityFeature
+
+# homeassistant.util 을 MagicMock 으로 두면 `from homeassistant.util import dt` 가
+# sys.modules['homeassistant.util.dt'] 가 아니라 MagicMock 자식을 돌려준다.
+import types
+
+_util_mod = types.ModuleType("homeassistant.util")
+_dt_mod = types.ModuleType("homeassistant.util.dt")
+_dt_mod.as_local = lambda dt: dt
+_dt_mod.parse_date = lambda value: __import__("datetime").date.fromisoformat(value) if isinstance(value, str) else None
+_dt_mod.parse_datetime = lambda value: __import__("datetime").datetime.fromisoformat(value) if isinstance(value, str) else None
+_util_mod.dt = _dt_mod
+sys.modules["homeassistant.util"] = _util_mod
+sys.modules["homeassistant.util.dt"] = _dt_mod
+# MagicMock 패키지는 속성 접근 시 sys.modules 를 보지 않으므로 명시적으로 연결
+sys.modules["homeassistant"].util = _util_mod
 
 sys.modules["homeassistant.exceptions"].HomeAssistantError = Exception

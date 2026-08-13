@@ -113,6 +113,11 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     vol.Optional("max_color_temp_kelvin"): vol.Any(vol.Coerce(int), None),  # light
     vol.Optional("speed_count"): vol.Any(vol.Coerce(int), None),  # fan
     vol.Optional("preset_modes"): vol.Any([str], None),           # fan
+    vol.Optional("pattern"): vol.Any(str, None),                  # text
+    vol.Optional("mode"): vol.Any(str, None),                     # text
+    vol.Optional("code_format"): vol.Any(str, None),              # lock
+    vol.Optional("event_types"): vol.Any([str], None),            # event
+    vol.Optional("reports_position"): vol.Any(bool, None),        # valve
 })
 @callback
 def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,

@@ -24,6 +24,13 @@ from custom_components.ws_bridge.light import _color_modes, _features as light_f
 from homeassistant.components.cover import CoverEntityFeature
 from homeassistant.components.fan import FanEntityFeature
 from homeassistant.components.light import ColorMode, LightEntityFeature
+from custom_components.ws_bridge.date import _parse_date
+from custom_components.ws_bridge.time import _parse_time
+from custom_components.ws_bridge.datetime import _parse_datetime
+from custom_components.ws_bridge.lock import _features as lock_features
+from custom_components.ws_bridge.valve import _features as valve_features
+from homeassistant.components.lock import LockEntityFeature
+from homeassistant.components.valve import ValveEntityFeature
 from custom_components.ws_bridge.update import _parse_update_state, _strip_build_suffix
 
 
@@ -816,3 +823,91 @@ def test_fan_set_percentage_zero_turns_off():
     assert entity._state["state"] == "off"
     assert entity._attr_is_on is False
     assert entity._attr_percentage == 0
+
+# ── Phase 2: text / lock / date / time / datetime / event / valve ────────────
+
+def test_text_and_text_sensor_are_distinct_platforms():
+    from custom_components.ws_bridge.const import PLATFORM_TEXT, PLATFORM_TEXT_SENSOR, ALL_PLATFORMS
+    assert PLATFORM_TEXT == "text"
+    assert PLATFORM_TEXT_SENSOR == "text_sensor"
+    assert PLATFORM_TEXT in ALL_PLATFORMS
+    assert PLATFORM_TEXT_SENSOR in ALL_PLATFORMS
+    assert PLATFORM_TEXT != PLATFORM_TEXT_SENSOR
+
+
+def test_lock_features_and_state_parser():
+    from custom_components.ws_bridge.lock import WsBridgeLock
+
+    assert lock_features(["open"]) & LockEntityFeature.OPEN
+    assert lock_features(None) == LockEntityFeature(0)
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    entity = WsBridgeLock(
+        bridge,
+        {
+            "unique_id": "gw1__door",
+            "platform": "lock",
+            "name": "Door",
+            "features": ["open"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    entity._apply("locking")
+    assert entity._attr_is_locking is True
+    assert entity._attr_is_locked is False
+    entity._apply("jammed")
+    assert entity._attr_is_jammed is True
+    entity._apply(True)
+    assert entity._attr_is_locked is True
+    entity._apply("unknown")
+    assert entity._attr_is_locked is None
+
+
+def test_date_time_datetime_parsers():
+    from datetime import date, time, datetime, timezone, timedelta
+
+    assert _parse_date("2026-08-13") == date(2026, 8, 13)
+    assert _parse_date("nope") is None
+    assert _parse_date(None) is None
+    assert _parse_time("07:30:00") == time(7, 30, 0)
+    assert _parse_time("bad") is None
+    aware = _parse_datetime("2026-08-13T07:30:00+09:00")
+    assert aware == datetime(2026, 8, 13, 7, 30, tzinfo=timezone(timedelta(hours=9)))
+    naive = _parse_datetime("2026-08-13T07:30:00")
+    assert naive == datetime(2026, 8, 13, 7, 30)  # as_local identity in tests
+    assert _parse_datetime("garbage") is None
+
+
+def test_event_ignores_undeclared_and_skips_last_state_restore():
+    from custom_components.ws_bridge.event import WsBridgeEvent
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge._states["gw1__btn"] = "pressed"
+    entity = WsBridgeEvent(
+        bridge,
+        {
+            "unique_id": "gw1__btn",
+            "platform": "event",
+            "name": "Button",
+            "event_types": ["pressed", "held"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    assert not hasattr(entity, "_last_triggered")
+    entity.hass = MagicMock()
+    entity.async_write_ha_state = MagicMock()
+    entity._on_value("pressed")
+    assert entity._last_triggered[0] == "pressed"
+    entity._on_value("ghost")
+    assert entity._last_triggered[0] == "pressed"  # unchanged
+    entity._on_value({"event_type": "held", "attributes": {"x": 1}})
+    assert entity._last_triggered == ("held", {"x": 1})
+
+
+def test_valve_features_default():
+    flags = valve_features(None)
+    assert flags & ValveEntityFeature.OPEN
+    assert flags & ValveEntityFeature.SET_POSITION
+    flags = valve_features(["open", "nope"])
+    assert flags & ValveEntityFeature.OPEN
+    assert not (flags & ValveEntityFeature.CLOSE)
