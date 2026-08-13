@@ -76,6 +76,7 @@ class WsBridge:
         self._clients: dict[str, _Client] = {}          # gateway_id → ctx
         self._conn_client: dict[Any, str] = {}          # connection → gateway_id
         self._entity_client: dict[str, str] = {}        # ns unique_id → gateway_id
+        self._entity_device: dict[str, str] = {}        # ns unique_id → ns device id
         self._entities: dict[str, Entity] = {}          # ns unique_id → live entity
         self._connections: set[Any] = set()            # active connections
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}.states")
@@ -139,6 +140,8 @@ class WsBridge:
             if platform is None:
                 continue
             self._entity_client[uid] = gateway_id
+            if ns_dev := defn.get("_device", {}).get("ns_id"):
+                self._entity_device[uid] = ns_dev
             self._pending.setdefault(platform, []).append(defn)
 
     @callback
@@ -240,6 +243,9 @@ class WsBridge:
                     if uid.startswith(ns_prefix):
                         self._defns.pop(uid, None)
             self._schedule_save()
+        # 같은 게이트웨이의 두 번째 커넥션은 첫 커넥션이 쌓아둔 추적 정보를
+        # 리셋하면 안 된다 — 마지막 커넥션이 끊길 때의 offline 팬아웃이 빈다.
+        is_first_connection = gateway_id not in self._conn_client.values()
         self._connections.add(connection)
         self._conn_client[connection] = gateway_id
         self._notify_clients_changed()
@@ -292,8 +298,15 @@ class WsBridge:
                 via_device_id=None,
                 sw_version=client.sw_version,
             )
-        for ns_dev in client.device_ids:   # 재연결 → 온라인 복귀
-            async_dispatcher_send(self.hass, signal_avail(self.entry_id, ns_dev), True)
+        if is_first_connection:
+            # 재연결 → 게이트웨이 자신은 즉시 온라인. sub-device는 이번 세션에
+            # 클라이언트가 다시 선언하거나 상태를 보낼 때 _touch_device()가
+            # 되돌린다. 예전에 알던 걸 무조건 되살리면 클라이언트에서 이미
+            # 사라진 sub-device의 엔티티까지 살아 있는 것처럼 보인다.
+            client.device_ids = {gateway_id}
+            async_dispatcher_send(
+                self.hass, signal_avail(self.entry_id, gateway_id), True
+            )
 
         @callback
         def _disconnect() -> None:
@@ -370,8 +383,9 @@ class WsBridge:
                 "gateway_id": gateway_id,
                 "is_gateway": False,
             }
-        client.device_ids.add(ns_device_id)
+        self._touch_device(client, ns_device_id)
         self._entity_client[ns["unique_id"]] = gateway_id
+        self._entity_device[ns["unique_id"]] = ns_device_id
 
         ns["_subentry_id"] = self._subentry_id_for_gateway(gateway_id)
 
@@ -613,6 +627,7 @@ class WsBridge:
         self._states.pop(ns_uid, None)
         self._defns.pop(ns_uid, None)
         self._entity_client.pop(ns_uid, None)
+        self._entity_device.pop(ns_uid, None)
         # 플랫폼이 아직 준비되지 않아 큐에 남아 있으면 빼준다 — 안 그러면
         # register_platform()의 flush가 방금 지운 엔티티를 되살린다.
         for platform, pending in self._pending.items():
@@ -635,6 +650,9 @@ class WsBridge:
         for uid in list(self._entity_client):
             if uid.startswith(prefix):
                 self._entity_client.pop(uid, None)
+        for uid in list(self._entity_device):
+            if uid.startswith(prefix):
+                self._entity_device.pop(uid, None)
         for uid in list(self._entities):
             if uid.startswith(prefix):
                 self._entities.pop(uid, None)
@@ -648,8 +666,24 @@ class WsBridge:
             ]
 
     @callback
+    def _touch_device(self, client: _Client, ns_dev: str) -> None:
+        """이번 커넥션에서 처음 보는 sub-device면 온라인으로 되돌린다.
+
+        선언(handle_entity)뿐 아니라 상태 갱신(handle_state)에서도 불린다 —
+        재연결 시 엔티티를 다시 선언하지 않고 state만 보내는 클라이언트도
+        그대로 동작하게 하기 위해서다.
+        """
+        if ns_dev in client.device_ids:
+            return
+        client.device_ids.add(ns_dev)
+        async_dispatcher_send(self.hass, signal_avail(self.entry_id, ns_dev), True)
+
+    @callback
     def handle_state(self, gateway_id: str, unique_id: str, value: Any) -> None:
         ns_uid = self._ns_uid(gateway_id, unique_id)
+        if (client := self._clients.get(gateway_id)) is not None:
+            if (ns_dev := self._entity_device.get(ns_uid)) is not None:
+                self._touch_device(client, ns_dev)
         self._states[ns_uid] = value
         self._schedule_save()
         async_dispatcher_send(self.hass, signal_value(self.entry_id, ns_uid), value)

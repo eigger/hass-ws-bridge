@@ -304,6 +304,102 @@ def test_sync_is_noop_when_everything_still_declared():
     bridge._store.async_save.assert_not_called()
 
 
+def _connect(bridge, gateway_id="gw1", connection=None, **kwargs):
+    """레지스트리를 모킹한 connect_client 호출."""
+    with patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+        mock_dev_reg = MagicMock()
+        mock_dr.async_get.return_value = mock_dev_reg
+        mock_dr.async_entries_for_config_entry.return_value = []
+        mock_dev_reg.async_get_or_create.return_value = MagicMock(
+            via_device_id=None, sw_version=None
+        )
+        return bridge.connect_client(
+            connection=connection or MagicMock(),
+            gateway_id=gateway_id,
+            name="GW1",
+            send_event=MagicMock(),
+            **kwargs,
+        )
+
+
+def test_reconnect_does_not_resurrect_undeclared_sub_devices():
+    """재연결 시 이전 세션의 sub-device를 무조건 online으로 되돌리면, 클라이언트에서
+    이미 사라진 sub-device의 엔티티까지 살아 있는 것처럼 보인다. 이번 세션에 다시
+    선언된 것만 복귀해야 한다."""
+    hass = MagicMock()
+    hass.config_entries.async_get_entry.return_value = None
+    bridge = WsBridge(hass, "entry1")
+    bridge.register_platform("sensor", MagicMock(), MagicMock())
+
+    conn = MagicMock()
+    disconnect = _connect(bridge, connection=conn)
+    for dev in ("keeps", "goes_away"):
+        bridge.handle_entity("gw1", {
+            "unique_id": f"{dev}_x", "platform": "sensor", "name": "X",
+            "device": {"id": dev},
+        })
+    assert bridge._clients["gw1"].device_ids == {"gw1", "gw1:keeps", "gw1:goes_away"}
+    disconnect()
+
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send") as send:
+        _connect(bridge)
+        bridge.handle_entity("gw1", {
+            "unique_id": "keeps_x", "platform": "sensor", "name": "X",
+            "device": {"id": "keeps"},
+        })
+
+    online = {
+        c.args[1] for c in send.call_args_list
+        if c.args[1].startswith("ws_bridge_entry1_avail_") and c.args[2] is True
+    }
+    assert "ws_bridge_entry1_avail_gw1:keeps" in online
+    assert "ws_bridge_entry1_avail_gw1:goes_away" not in online
+    assert bridge._clients["gw1"].device_ids == {"gw1", "gw1:keeps"}
+
+
+def test_reconnect_state_only_client_still_restores_availability():
+    """엔티티를 다시 선언하지 않고 state만 보내는 클라이언트도 그대로 동작해야 한다."""
+    hass = MagicMock()
+    hass.config_entries.async_get_entry.return_value = None
+    bridge = WsBridge(hass, "entry1")
+    bridge.register_platform("sensor", MagicMock(), MagicMock())
+
+    disconnect = _connect(bridge)
+    bridge.handle_entity("gw1", {
+        "unique_id": "sub_x", "platform": "sensor", "name": "X",
+        "device": {"id": "sub"},
+    })
+    disconnect()
+
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send") as send:
+        _connect(bridge)
+        bridge.handle_state("gw1", "sub_x", 42)
+
+    online = {
+        c.args[1] for c in send.call_args_list
+        if c.args[1].startswith("ws_bridge_entry1_avail_") and c.args[2] is True
+    }
+    assert "ws_bridge_entry1_avail_gw1:sub" in online
+
+
+def test_second_connection_does_not_reset_device_tracking():
+    """같은 게이트웨이의 두 번째 커넥션이 첫 커넥션의 추적 정보를 지우면,
+    마지막 커넥션이 끊길 때 offline 팬아웃이 빈다."""
+    hass = MagicMock()
+    hass.config_entries.async_get_entry.return_value = None
+    bridge = WsBridge(hass, "entry1")
+    bridge.register_platform("sensor", MagicMock(), MagicMock())
+
+    _connect(bridge, connection=MagicMock())
+    bridge.handle_entity("gw1", {
+        "unique_id": "sub_x", "platform": "sensor", "name": "X",
+        "device": {"id": "sub"},
+    })
+    _connect(bridge, connection=MagicMock())   # 두 번째 커넥션
+
+    assert bridge._clients["gw1"].device_ids == {"gw1", "gw1:sub"}
+
+
 def test_parse_location_full_payload():
     assert _parse_location(
         {"latitude": 37.5665, "longitude": 126.9780, "gps_accuracy": 8}
