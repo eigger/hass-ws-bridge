@@ -13,6 +13,7 @@ from homeassistant.helpers.entity import DeviceInfo, Entity
 
 from .bridge import WsBridge, signal_avail, signal_value
 from .const import DEFAULT_PLATFORM_ICONS, DOMAIN
+from .helpers import as_dict
 
 
 def safe_write_ha_state(entity: Entity) -> None:
@@ -105,3 +106,31 @@ class WsBridgeEntity(Entity):
                 self.hass, signal_value(self._bridge.entry_id, self._attr_unique_id), cb
             )
         )
+
+
+class WsBridgeCompositeEntity(WsBridgeEntity):
+    """상태가 여러 속성으로 구성되는 플랫폼(light/cover/climate 등)의 베이스.
+
+    `__init__` 에서는 `_state` 만 준비하고 `_apply_state` 는 호출하지 않는다 —
+    서브클래스가 자기 필드를 대입한 뒤 직접 호출하거나, `async_added_to_hass` 에서
+    반영한다.
+    """
+
+    def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
+        super().__init__(bridge, defn)
+        self._state: dict[str, Any] = as_dict(bridge.last_state(self._attr_unique_id))
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._apply_state()
+        self._subscribe_state(self._on_value)
+
+    @callback
+    def _on_value(self, value: Any) -> None:
+        self._state = as_dict(value)
+        self._apply_state()
+        safe_write_ha_state(self)
+
+    def _apply_state(self) -> None:
+        """서브클래스에서 self._state → self._attr_* 로 반영."""
+        raise NotImplementedError

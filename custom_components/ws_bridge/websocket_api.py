@@ -106,6 +106,7 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     vol.Optional("min"): vol.Any(vol.Coerce(float), None),  # number
     vol.Optional("max"): vol.Any(vol.Coerce(float), None),
     vol.Optional("step"): vol.Any(vol.Coerce(float), None),
+    vol.Optional("features"): vol.Any([str], None),
 })
 @callback
 def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,

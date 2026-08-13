@@ -17,9 +17,59 @@ def mock_callback(func):
     return func
 
 
+class Platform:
+    """HA Platform enum stand-in with real string values for pure tests."""
+
+    SENSOR = "sensor"
+    BINARY_SENSOR = "binary_sensor"
+    DEVICE_TRACKER = "device_tracker"
+    SWITCH = "switch"
+    NUMBER = "number"
+    SELECT = "select"
+    BUTTON = "button"
+    LIGHT = "light"
+    COVER = "cover"
+    FAN = "fan"
+    TEXT = "text"
+    LOCK = "lock"
+    DATE = "date"
+    TIME = "time"
+    DATETIME = "datetime"
+    EVENT = "event"
+    VALVE = "valve"
+    CLIMATE = "climate"
+    HUMIDIFIER = "humidifier"
+    WATER_HEATER = "water_heater"
+    SIREN = "siren"
+    ALARM_CONTROL_PANEL = "alarm_control_panel"
+    UPDATE = "update"
+    MEDIA_PLAYER = "media_player"
+    IMAGE = "image"
+    CAMERA = "camera"
+    VACUUM = "vacuum"
+    LAWN_MOWER = "lawn_mower"
+    REMOTE = "remote"
+    TODO = "todo"
+
+
+class EntityCategory(str):
+    """HA EntityCategory stand-in — callable like the real enum (`EntityCategory(cat)`)."""
+
+    def __new__(cls, value: str = ""):
+        return str.__new__(cls, value)
+
+
+EntityCategory.CONFIG = EntityCategory("config")
+EntityCategory.DIAGNOSTIC = EntityCategory("diagnostic")
+
+
 # Set up core mocks
 sys.modules["homeassistant"] = MagicMock()
-sys.modules["homeassistant.const"] = MagicMock()
+
+mock_const = MagicMock()
+mock_const.Platform = Platform
+mock_const.EntityCategory = EntityCategory
+sys.modules["homeassistant.const"] = mock_const
 
 # Mock homeassistant.core
 mock_core = MagicMock()
