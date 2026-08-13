@@ -56,7 +56,11 @@ class WsBridgeDateTime(WsBridgeEntity, DateTimeEntity):
         safe_write_ha_state(self)
 
     async def async_set_value(self, value: datetime) -> None:
-        text = value.isoformat()
+        # Send local wall-clock, tz-naive — the ESP client strips offsets
+        # without converting, and publishes tz-naive strings that we attach
+        # HA's local zone to on receive (see PROTOCOL datetime notes).
+        local = dt_util.as_local(value).replace(tzinfo=None)
+        text = local.isoformat(timespec="seconds")
         self._send_command("set_value", text)
         self._attr_native_value = value
         self.async_write_ha_state()
