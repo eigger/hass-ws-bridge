@@ -28,6 +28,7 @@ class Platform:
     NUMBER = "number"
     SELECT = "select"
     BUTTON = "button"
+    UPDATE = "update"
     LIGHT = "light"
     COVER = "cover"
     FAN = "fan"
@@ -43,7 +44,6 @@ class Platform:
     WATER_HEATER = "water_heater"
     SIREN = "siren"
     ALARM_CONTROL_PANEL = "alarm_control_panel"
-    UPDATE = "update"
     MEDIA_PLAYER = "media_player"
     IMAGE = "image"
     CAMERA = "camera"
@@ -112,6 +112,88 @@ class ValveEntityFeature(IntFlag):
     STOP = 8
 
 
+class ClimateEntityFeature(IntFlag):
+    TARGET_TEMPERATURE = 1
+    TARGET_TEMPERATURE_RANGE = 2
+    TARGET_HUMIDITY = 4
+    FAN_MODE = 8
+    PRESET_MODE = 16
+    SWING_MODE = 32
+    TURN_OFF = 128
+    TURN_ON = 256
+
+
+class HVACMode:
+    OFF = "off"
+    HEAT = "heat"
+    COOL = "cool"
+    HEAT_COOL = "heat_cool"
+    AUTO = "auto"
+    DRY = "dry"
+    FAN_ONLY = "fan_only"
+
+
+class HVACAction:
+    OFF = "off"
+    HEATING = "heating"
+    COOLING = "cooling"
+    DRYING = "drying"
+    FAN = "fan"
+    IDLE = "idle"
+    PREHEATING = "preheating"
+    DEFROSTING = "defrosting"
+
+
+class HumidifierEntityFeature(IntFlag):
+    MODES = 1
+
+
+class WaterHeaterEntityFeature(IntFlag):
+    TARGET_TEMPERATURE = 1
+    OPERATION_MODE = 2
+    AWAY_MODE = 4
+    ON_OFF = 8
+
+
+class SirenEntityFeature(IntFlag):
+    TURN_ON = 1
+    TURN_OFF = 2
+    TONES = 4
+    DURATION = 8
+    VOLUME_SET = 16
+
+
+class AlarmControlPanelEntityFeature(IntFlag):
+    ARM_HOME = 1
+    ARM_AWAY = 2
+    ARM_NIGHT = 4
+    ARM_VACATION = 8
+    ARM_CUSTOM_BYPASS = 16
+    TRIGGER = 32
+
+
+class CodeFormat:
+    NUMBER = "number"
+    TEXT = "text"
+
+
+class AlarmControlPanelState:
+    DISARMED = "disarmed"
+    ARMED_HOME = "armed_home"
+    ARMED_AWAY = "armed_away"
+    ARMED_NIGHT = "armed_night"
+    ARMED_VACATION = "armed_vacation"
+    ARMED_CUSTOM_BYPASS = "armed_custom_bypass"
+    ARMING = "arming"
+    PENDING = "pending"
+    TRIGGERED = "triggered"
+
+
+class UnitOfTemperature:
+    CELSIUS = "°C"
+    FAHRENHEIT = "°F"
+
+
 class TextMode:
     TEXT = "text"
     PASSWORD = "password"
@@ -177,6 +259,11 @@ for mod in [
     "homeassistant.components.datetime",
     "homeassistant.components.event",
     "homeassistant.components.valve",
+    "homeassistant.components.climate",
+    "homeassistant.components.humidifier",
+    "homeassistant.components.water_heater",
+    "homeassistant.components.siren",
+    "homeassistant.components.alarm_control_panel",
     "homeassistant.exceptions",
     "homeassistant.util.enum",
 ]:
@@ -224,6 +311,32 @@ mock_event.EventEntity = MockEventEntity
 mock_valve = sys.modules["homeassistant.components.valve"]
 mock_valve.ValveEntity = MockBase
 mock_valve.ValveEntityFeature = ValveEntityFeature
+
+mock_climate = sys.modules["homeassistant.components.climate"]
+mock_climate.ClimateEntity = MockBase
+mock_climate.ClimateEntityFeature = ClimateEntityFeature
+mock_climate.HVACMode = HVACMode
+mock_climate.HVACAction = HVACAction
+
+mock_humidifier = sys.modules["homeassistant.components.humidifier"]
+mock_humidifier.HumidifierEntity = MockBase
+mock_humidifier.HumidifierEntityFeature = HumidifierEntityFeature
+
+mock_water = sys.modules["homeassistant.components.water_heater"]
+mock_water.WaterHeaterEntity = MockBase
+mock_water.WaterHeaterEntityFeature = WaterHeaterEntityFeature
+
+mock_siren = sys.modules["homeassistant.components.siren"]
+mock_siren.SirenEntity = MockBase
+mock_siren.SirenEntityFeature = SirenEntityFeature
+
+mock_alarm = sys.modules["homeassistant.components.alarm_control_panel"]
+mock_alarm.AlarmControlPanelEntity = MockBase
+mock_alarm.AlarmControlPanelEntityFeature = AlarmControlPanelEntityFeature
+mock_alarm.AlarmControlPanelState = AlarmControlPanelState
+mock_alarm.CodeFormat = CodeFormat
+
+mock_const.UnitOfTemperature = UnitOfTemperature
 
 # homeassistant.util 을 MagicMock 으로 두면 `from homeassistant.util import dt` 가
 # sys.modules['homeassistant.util.dt'] 가 아니라 MagicMock 자식을 돌려준다.

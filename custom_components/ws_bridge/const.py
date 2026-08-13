@@ -59,6 +59,11 @@ PLATFORM_TIME = "time"
 PLATFORM_DATETIME = "datetime"
 PLATFORM_EVENT = "event"
 PLATFORM_VALVE = "valve"
+PLATFORM_CLIMATE = "climate"
+PLATFORM_HUMIDIFIER = "humidifier"
+PLATFORM_WATER_HEATER = "water_heater"
+PLATFORM_SIREN = "siren"
+PLATFORM_ALARM_CONTROL_PANEL = "alarm_control_panel"
 
 # text_sensor는 HA에 별도 도메인이 없다 — sensor 도메인 엔티티로 등록되지만(문자열
 # native_value), 클라이언트가 보내는 platform 값과 내부 등록 키는 구분해서 유지한다.
@@ -82,6 +87,11 @@ ALL_PLATFORMS = [
     PLATFORM_DATETIME,
     PLATFORM_EVENT,
     PLATFORM_VALVE,
+    PLATFORM_CLIMATE,
+    PLATFORM_HUMIDIFIER,
+    PLATFORM_WATER_HEATER,
+    PLATFORM_SIREN,
+    PLATFORM_ALARM_CONTROL_PANEL,
 ]
 
 # 클라이언트가 icon을 생략했을 때 플랫폼별 기본값 (device_class·switch는 HA 기본 아이콘 사용).
@@ -104,4 +114,9 @@ DEFAULT_PLATFORM_ICONS: dict[str, str] = {
     PLATFORM_DATETIME: "mdi:calendar-clock",
     PLATFORM_EVENT: "mdi:calendar-alert",
     PLATFORM_VALVE: "mdi:valve",
+    PLATFORM_CLIMATE: "mdi:thermostat",
+    PLATFORM_HUMIDIFIER: "mdi:air-humidifier",
+    PLATFORM_WATER_HEATER: "mdi:water-boiler",
+    PLATFORM_SIREN: "mdi:bullhorn",
+    PLATFORM_ALARM_CONTROL_PANEL: "mdi:shield-home",
 }

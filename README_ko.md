@@ -69,8 +69,13 @@ graph TD
 | `date` / `time` / `datetime` | 제어 | ISO 문자열 + `set_value` |
 | `event` | 읽기 | `event_types` 필수 (재시작 시 복원 안 함) |
 | `valve` | 제어 | 개폐/위치 |
+| `climate` | 제어 | HVAC 모드/온도/습도/팬/스윙 |
+| `humidifier` | 제어 | 습도/모드 |
+| `water_heater` | 제어 | 온도/운전모드/외출 |
+| `siren` | 제어 | `turn_on` / `turn_off` (+ tone/volume) |
+| `alarm_control_panel` | 제어 | arm/disarm/trigger |
 
-예정 (와이어에서 아직 거절됨): `climate` 계열 → `media_player` / `image` / `camera`. [PROTOCOL_ko.md §6](docs/PROTOCOL_ko.md#6-예정-플랫폼) 참고.
+예정 (와이어에서 아직 거절됨): `media_player` / `image` / `camera`. [PROTOCOL_ko.md §6](docs/PROTOCOL_ko.md#6-예정-플랫폼) 참고.
 
 ---
 
