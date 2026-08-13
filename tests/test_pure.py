@@ -1393,6 +1393,30 @@ def test_publish_state_does_not_persist_update_in_progress():
     assert restored._attr_in_progress is False
 
 
+def test_install_clears_stale_progress_percentage():
+    """이전 설치의 progress:100 이 낙관적 UI에 100%로 깜빡이면 안 된다."""
+    from custom_components.ws_bridge.update import WsBridgeUpdate
+
+    bridge, entity, _ = _mk_entity(
+        WsBridgeUpdate,
+        "update",
+        "fw",
+        {
+            "installed_version": "1.0.0",
+            "latest_version": "1.0.1",
+            "in_progress": False,
+            "progress": 100,
+        },
+    )
+    assert entity._attr_update_percentage is None  # not in_progress → hidden
+
+    asyncio.run(entity.async_install(None, False))
+
+    assert entity._attr_in_progress is True
+    assert entity._attr_update_percentage is None
+    assert entity._state.get("progress") is None
+
+
 def test_update_refresh_hook_is_silent_when_disconnected():
     """async_update 는 사용자 명령이 아니라 새로고침 훅 — 예외를 던지면 안 된다."""
     from custom_components.ws_bridge.update import WsBridgeUpdate
