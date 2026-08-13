@@ -48,6 +48,13 @@ def signal_clients(entry_id: str) -> str:
     return f"{DOMAIN}_{entry_id}_clients"
 
 
+def _nonempty(value: Any) -> str | None:
+    """프로토콜 선택 문자열. 비어 있으면 미전송으로 본다."""
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 @dataclass
 class _Client:
     gateway_id: str
@@ -56,6 +63,9 @@ class _Client:
     sw_version: str | None = None
     keep_last_state_on_disconnect: bool = False  # 클라이언트가 connect 시 선언
     device_ids: set[str] = field(default_factory=set)   # 네임스페이스된 sub-device id
+    manufacturer: str | None = None
+    model: str | None = None
+    hw_version: str | None = None
 
 
 class _PlatformReg:
@@ -221,18 +231,34 @@ class WsBridge:
         sw_version: str | None = None,
         subentry_id: str | None = None,
         keep_last_state_on_disconnect: bool = False,
+        manufacturer: str | None = None,
+        model: str | None = None,
+        hw_version: str | None = None,
     ) -> Callable[[], None]:
+        manufacturer = _nonempty(manufacturer)
+        model = _nonempty(model)
+        hw_version = _nonempty(hw_version)
+        sw_version = _nonempty(sw_version)
         client = self._clients.get(gateway_id)
         if client is None:
             client = self._clients[gateway_id] = _Client(
                 gateway_id, name or gateway_id, send_event, sw_version,
                 keep_last_state_on_disconnect,
+                manufacturer=manufacturer,
+                model=model,
+                hw_version=hw_version,
             )
         else:
             client.name = name or client.name
             client.send_event = send_event
             if sw_version:
                 client.sw_version = sw_version
+            if manufacturer:
+                client.manufacturer = manufacturer
+            if model:
+                client.model = model
+            if hw_version:
+                client.hw_version = hw_version
             client.keep_last_state_on_disconnect = keep_last_state_on_disconnect
         if self._keep_last.get(gateway_id) != keep_last_state_on_disconnect:
             self._keep_last[gateway_id] = keep_last_state_on_disconnect
@@ -281,23 +307,33 @@ class WsBridge:
                     _LOGGER.info("Removing duplicate/offline device: %s (%s)", d_entry.name, d_entry.identifiers)
                     dev_reg.async_remove_device(d_entry.id)
 
+        manufacturer = client.manufacturer or "ws_bridge"
+        model = client.model or "Gateway"
         gw_entry = dev_reg.async_get_or_create(
             config_entry_id=self.entry_id,
             config_subentry_id=subentry_id,
             identifiers={(DOMAIN, gateway_id)},
             name=client.name,
-            manufacturer="ws_bridge",
-            model="Gateway",
+            manufacturer=manufacturer,
+            model=model,
             sw_version=client.sw_version,
+            hw_version=client.hw_version,
         )
-        # via_device가 남아 있으면 제거, sw_version도 갱신
-        if gw_entry.via_device_id is not None or (
-            client.sw_version and gw_entry.sw_version != client.sw_version
+        # via_device가 남아 있으면 제거, 디바이스 정보도 갱신
+        if (
+            gw_entry.via_device_id is not None
+            or gw_entry.manufacturer != manufacturer
+            or gw_entry.model != model
+            or gw_entry.sw_version != client.sw_version
+            or gw_entry.hw_version != client.hw_version
         ):
             dev_reg.async_update_device(
                 gw_entry.id,
                 via_device_id=None,
+                manufacturer=manufacturer,
+                model=model,
                 sw_version=client.sw_version,
+                hw_version=client.hw_version,
             )
         if is_first_connection:
             # 재연결 → 게이트웨이 자신은 즉시 온라인. sub-device는 이번 세션에
@@ -359,6 +395,10 @@ class WsBridge:
                 "name": client.name,
                 "gateway_id": gateway_id,
                 "is_gateway": True,
+                "manufacturer": client.manufacturer,
+                "model": client.model,
+                "sw_version": client.sw_version,
+                "hw_version": client.hw_version,
             }
         else:
             ns_device_id = self._ns_dev(gateway_id, device["id"])

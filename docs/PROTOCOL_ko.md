@@ -26,6 +26,9 @@
    - `gateway_id` (String, 필수): 클라이언트를 고유하게 식별할 ID입니다. HA에 **게이트웨이 디바이스**로 등록되고, 생성되는 장치/엔티티의 네임스페이스 접두어로 사용됩니다.
    - `name` (String, 선택): 게이트웨이 기기의 표시 이름입니다. 통합 설정 화면의 게이트웨이 Subentry 제목으로도 사용됩니다.
    - `app_version` (String, 선택): 클라이언트의 펌웨어 또는 앱 버전입니다. 등록된 게이트웨이 기기의 `sw_version` 속성에 반영됩니다.
+   - `manufacturer` (String, 선택): 게이트웨이 기기 제조사. 생략 시 `ws_bridge`.
+   - `model` (String, 선택): 게이트웨이 기기 모델. 생략 시 `Gateway`.
+   - `hw_version` (String, 선택): 게이트웨이 하드웨어 버전. 생략 시 비움. 각 필드는 독립적이며, 있는 것만 보내면 됩니다.
    - `keep_last_state_on_disconnect` (Boolean, 선택, 기본값 `false`): `true`로 설정하면 이 게이트웨이의 엔티티는 웹소켓 연결이 끊겨도(전원/와이파이 단절 등 비정상 종료 포함) `unavailable`로 표시되지 않고 마지막 상태를 그대로 유지합니다(Last Will/Testament 없는 MQTT retain과 유사). 통합은 다음 `ws_bridge/connect`가 값을 바꿀 때까지 게이트웨이별로 이 값을 (디스크에 저장해서) 기억합니다. 기본값(`false`)은 기존 동작(연결 끊김 시 unavailable)과 동일합니다. 이 옵션은 **HA 재시작**에도 적용됩니다 — `keep_last_state_on_disconnect` 게이트웨이의 엔티티는 클라이언트 재연결을 기다리지 않고, HA가 뜨는 즉시 저장된 정의·마지막 상태값으로 (available 상태로) 바로 복원됩니다.
    - `ws_bridge/connect` 시 `gateway_id`에 맞는 Subentry가 없으면 **자동 생성**됩니다. (수동 등록 불필요)
    - 컴포넌트가 웹소켓 커넥션과 `gateway_id`를 바인딩하여 제어 명령(`command`)을 이 클라이언트에만 라우팅합니다.

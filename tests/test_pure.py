@@ -171,7 +171,10 @@ def test_connect_client_purges_stale_defns_when_flag_turns_off():
         mock_dev_reg = MagicMock()
         mock_dr.async_get.return_value = mock_dev_reg
         mock_dr.async_entries_for_config_entry.return_value = []
-        mock_dev_reg.async_get_or_create.return_value = MagicMock(via_device_id=None, sw_version=None)
+        mock_dev_reg.async_get_or_create.return_value = MagicMock(
+            via_device_id=None, sw_version=None, hw_version=None,
+            manufacturer="ws_bridge", model="Gateway",
+        )
 
         bridge.connect_client(
             connection=MagicMock(),
@@ -325,7 +328,8 @@ def _connect(bridge, gateway_id="gw1", connection=None, **kwargs):
         mock_dr.async_get.return_value = mock_dev_reg
         mock_dr.async_entries_for_config_entry.return_value = []
         mock_dev_reg.async_get_or_create.return_value = MagicMock(
-            via_device_id=None, sw_version=None
+            via_device_id=None, sw_version=None, hw_version=None,
+            manufacturer="ws_bridge", model="Gateway",
         )
         return bridge.connect_client(
             connection=connection or MagicMock(),
@@ -334,6 +338,70 @@ def _connect(bridge, gateway_id="gw1", connection=None, **kwargs):
             send_event=MagicMock(),
             **kwargs,
         )
+
+
+def test_connect_defaults_device_registry_when_fields_omitted():
+    hass = MagicMock()
+    hass.config_entries.async_get_entry.return_value = None
+    bridge = WsBridge(hass, "entry1")
+    with patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+        mock_dev_reg = MagicMock()
+        mock_dr.async_get.return_value = mock_dev_reg
+        mock_dr.async_entries_for_config_entry.return_value = []
+        mock_dev_reg.async_get_or_create.return_value = MagicMock(
+            via_device_id=None, sw_version=None, hw_version=None,
+            manufacturer="ws_bridge", model="Gateway",
+        )
+        bridge.connect_client(
+            connection=MagicMock(),
+            gateway_id="gw1",
+            name="GW1",
+            send_event=MagicMock(),
+        )
+        kwargs = mock_dev_reg.async_get_or_create.call_args.kwargs
+        assert kwargs["manufacturer"] == "ws_bridge"
+        assert kwargs["model"] == "Gateway"
+        assert kwargs["sw_version"] is None
+        assert kwargs["hw_version"] is None
+        mock_dev_reg.async_update_device.assert_not_called()
+
+
+def test_connect_applies_optional_device_fields_independently():
+    hass = MagicMock()
+    hass.config_entries.async_get_entry.return_value = None
+    bridge = WsBridge(hass, "entry1")
+    with patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+        mock_dev_reg = MagicMock()
+        mock_dr.async_get.return_value = mock_dev_reg
+        mock_dr.async_entries_for_config_entry.return_value = []
+        mock_dev_reg.async_get_or_create.return_value = MagicMock(
+            via_device_id=None, sw_version=None, hw_version=None,
+            manufacturer="ws_bridge", model="Gateway",
+        )
+        bridge.connect_client(
+            connection=MagicMock(),
+            gateway_id="gw1",
+            name="GW1",
+            send_event=MagicMock(),
+            manufacturer="Espressif",
+            hw_version="1.0",
+        )
+        kwargs = mock_dev_reg.async_get_or_create.call_args.kwargs
+        assert kwargs["manufacturer"] == "Espressif"
+        assert kwargs["model"] == "Gateway"
+        assert kwargs["hw_version"] == "1.0"
+        assert kwargs["sw_version"] is None
+
+
+def test_reconnect_keeps_previous_device_fields_when_omitted():
+    hass = MagicMock()
+    hass.config_entries.async_get_entry.return_value = None
+    bridge = WsBridge(hass, "entry1")
+    _connect(bridge, manufacturer="Espressif", model="ESP32-S3")
+    _connect(bridge)
+    client = bridge._clients["gw1"]
+    assert client.manufacturer == "Espressif"
+    assert client.model == "ESP32-S3"
 
 
 def test_reconnect_does_not_resurrect_undeclared_sub_devices():

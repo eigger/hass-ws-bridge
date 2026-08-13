@@ -49,8 +49,10 @@ class WsBridgeEntity(Entity):
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, dev["ns_id"])},
                 name=dev.get("name"),
-                manufacturer="ws_bridge",
-                model="Gateway",
+                manufacturer=dev.get("manufacturer") or "ws_bridge",
+                model=dev.get("model") or "Gateway",
+                sw_version=dev.get("sw_version"),
+                hw_version=dev.get("hw_version"),
             )
         else:
             self._attr_device_info = DeviceInfo(

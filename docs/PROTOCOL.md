@@ -26,6 +26,9 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
    - `gateway_id` (String, Required): A unique identifier for the client. Used to create a gateway device in HA and namespace all associated devices and entities to avoid collision.
    - `name` (String, Optional): Human-readable gateway display name. Also used as the gateway subentry title in integration settings.
    - `app_version` (String, Optional): The firmware or application version of the client. Updates the gateway device's `sw_version` in Home Assistant.
+ - `manufacturer` (String, Optional): Gateway device manufacturer. Omitted: `ws_bridge`.
+ - `model` (String, Optional): Gateway device model. Omitted: `Gateway`.
+ - `hw_version` (String, Optional): Gateway hardware version. Omitted: left unset. Each of these fields is independent — send only the ones you have.
    - `keep_last_state_on_disconnect` (Boolean, Optional, default `false`): When `true`, this gateway's entities are **not** marked `unavailable` when the WebSocket connection drops (including an ungraceful disconnect, e.g. power/Wi-Fi loss) — they keep showing their last reported state, similar to MQTT retained state without a Last Will/Testament. The integration remembers this value for the gateway (persisted to disk) until the next `ws_bridge/connect` changes it; the default (`false`) matches the previous behavior (mark unavailable on disconnect). This also covers an **HA restart**: entities for a `keep_last_state_on_disconnect` gateway are recreated immediately at HA startup from their persisted declaration and last state — available, with the last known value — without waiting for the client to reconnect.
    - On `ws_bridge/connect`, a matching subentry is **created automatically** if one does not exist (no manual registration).
    - The integration binds this WebSocket connection with the `gateway_id` to route commands specifically to this client.
