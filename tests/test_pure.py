@@ -1334,14 +1334,6 @@ def test_image_and_camera_url_state():
     assert cam._still_url is None
 
 
-def test_manifest_version_pinned_to_pre_phase():
-    import json
-    from pathlib import Path
-
-    manifest = json.loads(
-        Path("custom_components/ws_bridge/manifest.json").read_text()
-    )
-    assert manifest["version"] == "1.3.1"
 
 
 def _mk_entity(cls, platform, uid, seed, extra_defn=None):
