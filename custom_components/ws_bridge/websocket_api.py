@@ -6,6 +6,7 @@
  - ws_bridge/state        : 상태 갱신(배치)
  - ws_bridge/availability : sub-device 연결 상태
  - ws_bridge/remove       : 엔티티·장치·게이트웨이 삭제
+ - ws_bridge/sync         : 선언 전체 목록과 대조해 사라진 엔티티 정리
 
 제어 플랫폼: switch, number, select, button, update.
 """
@@ -29,6 +30,7 @@ from .const import (
     WS_ENTITY,
     WS_REMOVE,
     WS_STATE,
+    WS_SYNC,
 )
 
 
@@ -39,6 +41,7 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_state)
     websocket_api.async_register_command(hass, ws_availability)
     websocket_api.async_register_command(hass, ws_remove)
+    websocket_api.async_register_command(hass, ws_sync)
 
 
 def _bridges(hass: HomeAssistant) -> list[WsBridge]:
@@ -171,5 +174,24 @@ async def ws_remove(hass: HomeAssistant, connection: websocket_api.ActiveConnect
         else:
             await b.async_remove_gateway(gid)
         connection.send_result(msg["id"])
+        return
+    connection.send_error(msg["id"], "not_connected", "No ws_bridge session for this connection")
+
+
+# 빈 목록은 스키마에서 거부한다 — 설정을 못 읽었거나 부분 부팅한 클라이언트가
+# 실수로 전체를 날리는 사고를 막기 위해서다. 전체 삭제는 ws_bridge/remove(대상 생략).
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_SYNC,
+    vol.Required("unique_ids"): vol.All([str], vol.Length(min=1)),
+})
+@websocket_api.async_response
+async def ws_sync(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
+                  msg: dict[str, Any]) -> None:
+    """선언 전체 목록과 대조해, 이제는 없는 엔티티만 제거한다 (PROTOCOL.md §3.5)."""
+    for b in _bridges(hass):
+        if (gid := b.client_for(connection)) is None:
+            continue
+        removed = await b.async_sync_entities(gid, msg["unique_ids"])
+        connection.send_result(msg["id"], {"removed": removed})
         return
     connection.send_error(msg["id"], "not_connected", "No ws_bridge session for this connection")

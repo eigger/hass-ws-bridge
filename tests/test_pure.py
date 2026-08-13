@@ -1,7 +1,8 @@
 """Unit tests for the framework-agnostic ws_bridge logic."""
+import asyncio
 import os
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Ensure custom_components is in path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -168,6 +169,139 @@ def test_connect_client_purges_stale_defns_when_flag_turns_off():
 
     assert "gw1__a" not in bridge._defns
     assert "gw2__b" in bridge._defns
+
+
+def _sync_bridge():
+    """레지스트리를 모킹한 브릿지 — async_sync_entities 테스트용."""
+    hass = MagicMock()
+    hass.config_entries.async_get_entry.return_value = None
+    bridge = WsBridge(hass, "entry1")
+    bridge._store = MagicMock()
+    bridge._store.async_save = AsyncMock()
+    return bridge
+
+
+def _reg_entry(unique_id):
+    entry = MagicMock()
+    entry.unique_id = unique_id
+    return entry
+
+
+def test_sync_removes_only_undeclared_entities():
+    """선언 목록에 없는 것만 지우고, 살아남는 엔티티는 건드리지 않아야 한다
+    (히스토리·통계·entity_id 보존)."""
+    bridge = _sync_bridge()
+    bridge._created = {"gw1__a", "gw1__b", "gw1__c"}
+    bridge._states = {"gw1__a": 1, "gw1__b": 2, "gw1__c": 3}
+    bridge._entity_client = {u: "gw1" for u in bridge._created}
+    live = {u: MagicMock(async_remove=AsyncMock()) for u in bridge._created}
+    bridge._entities = dict(live)
+
+    with patch("custom_components.ws_bridge.bridge.er") as mock_er, \
+         patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+        mock_er.async_entries_for_config_entry.return_value = [
+            _reg_entry("gw1__a"), _reg_entry("gw1__b"), _reg_entry("gw1__c")
+        ]
+        mock_dr.async_entries_for_config_entry.return_value = []
+        removed = asyncio.run(bridge.async_sync_entities("gw1", ["a", "c"]))
+
+    assert removed == ["b"]
+    live["gw1__b"].async_remove.assert_awaited_once()
+    live["gw1__a"].async_remove.assert_not_called()
+    live["gw1__c"].async_remove.assert_not_called()
+    assert bridge._created == {"gw1__a", "gw1__c"}
+    assert bridge._states == {"gw1__a": 1, "gw1__c": 3}
+
+
+def test_sync_ignores_other_gateways_and_diagnostic_sensor():
+    """다른 게이트웨이의 엔티티와 통합 진단 센서는 절대 건드리면 안 된다."""
+    bridge = _sync_bridge()
+    bridge._created = {"gw1__a", "gw2__a"}
+    bridge._entities = {
+        u: MagicMock(async_remove=AsyncMock()) for u in bridge._created
+    }
+
+    with patch("custom_components.ws_bridge.bridge.er") as mock_er, \
+         patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+        mock_er.async_entries_for_config_entry.return_value = [
+            _reg_entry("gw1__a"),
+            _reg_entry("gw2__a"),
+            _reg_entry("entry1_connected_clients"),
+        ]
+        mock_dr.async_entries_for_config_entry.return_value = []
+        removed = asyncio.run(bridge.async_sync_entities("gw1", ["a"]))
+
+    assert removed == []
+    assert bridge._created == {"gw1__a", "gw2__a"}
+
+
+def test_sync_reconciles_restored_keep_last_definitions():
+    """keep_last_state_on_disconnect로 HA 재시작 때 부활한 정의도 대조 대상이다 —
+    클라이언트가 더는 선언하지 않는 엔티티가 영원히 살아남던 문제의 핵심."""
+    bridge = _sync_bridge()
+    bridge._keep_last = {"gw1": True}
+    bridge._defns = {
+        "gw1__a": {"unique_id": "gw1__a", "platform": "sensor",
+                   "_device": {"gateway_id": "gw1"}},
+        "gw1__gone": {"unique_id": "gw1__gone", "platform": "sensor",
+                      "_device": {"gateway_id": "gw1"}},
+    }
+    bridge._seed_restorable_entities()
+    assert len(bridge._pending["sensor"]) == 2
+
+    with patch("custom_components.ws_bridge.bridge.er") as mock_er, \
+         patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+        mock_er.async_entries_for_config_entry.return_value = []
+        mock_dr.async_entries_for_config_entry.return_value = []
+        removed = asyncio.run(bridge.async_sync_entities("gw1", ["a"]))
+
+    assert removed == ["gone"]
+    assert "gw1__gone" not in bridge._defns
+    # pending에 남아 있으면 플랫폼 준비 시점에 되살아난다
+    assert [d["unique_id"] for d in bridge._pending["sensor"]] == ["gw1__a"]
+
+
+def test_sync_prunes_sub_devices_left_empty():
+    """엔티티가 하나도 안 남은 sub-device는 기기 목록에서도 사라져야 한다.
+    게이트웨이 디바이스 자체는 유지한다."""
+    bridge = _sync_bridge()
+    bridge._created = {"gw1__a"}
+    bridge._entities = {"gw1__a": MagicMock(async_remove=AsyncMock())}
+    bridge._clients["gw1"] = _Client("gw1", "GW1", MagicMock())
+    bridge._clients["gw1"].device_ids = {"gw1", "gw1:sub1"}
+
+    gw_device = MagicMock(id="dev_gw", identifiers={("ws_bridge", "gw1")})
+    sub_device = MagicMock(id="dev_sub", identifiers={("ws_bridge", "gw1:sub1")})
+
+    with patch("custom_components.ws_bridge.bridge.er") as mock_er, \
+         patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+        mock_er.async_entries_for_config_entry.return_value = [_reg_entry("gw1__a")]
+        mock_er.async_entries_for_device.return_value = []   # 남은 엔티티 없음
+        mock_dev_reg = MagicMock()
+        mock_dr.async_get.return_value = mock_dev_reg
+        mock_dr.async_entries_for_config_entry.return_value = [gw_device, sub_device]
+        asyncio.run(bridge.async_sync_entities("gw1", ["nothing_matches"]))
+
+    mock_dev_reg.async_remove_device.assert_called_once_with("dev_sub")
+    assert bridge._clients["gw1"].device_ids == {"gw1"}
+
+
+def test_sync_is_noop_when_everything_still_declared():
+    bridge = _sync_bridge()
+    bridge._created = {"gw1__a", "gw1__b"}
+
+    with patch("custom_components.ws_bridge.bridge.er") as mock_er, \
+         patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+        mock_er.async_entries_for_config_entry.return_value = [
+            _reg_entry("gw1__a"), _reg_entry("gw1__b")
+        ]
+        mock_dr.async_entries_for_config_entry.return_value = []
+        removed = asyncio.run(
+            bridge.async_sync_entities("gw1", ["a", "b", "not_yet_created"])
+        )
+
+    assert removed == []
+    bridge._store.async_save.assert_not_called()
 
 
 def test_parse_location_full_payload():
