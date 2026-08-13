@@ -83,7 +83,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   }
   ```
   - `unique_id` (String, 필수): 게이트웨이 내에서 고유한 엔티티 식별자입니다. (HA 내부적으로는 `{gateway_id}__{unique_id}` 형태로 자동 변환됩니다.)
-  - `platform` (String, 필수): 엔티티 플랫폼 타입. 지원 목록: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `event`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`
+  - `platform` (String, 필수): 엔티티 플랫폼 타입. 지원 목록: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `event`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`, `media_player`, `image`, `camera`
   - `name` (String, 필수): 엔티티 이름.
   - `device` (Object, 옵션): 엔티티가 속한 하위 장치 정보.
     - `id` (String, 필수): 하위 장치 고유 ID.
@@ -113,6 +113,9 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
     - **`water_heater` 플랫폼**: `operation_list`(비어 있지 않으면 `operation_mode` feature 활성), `min_temp` / `max_temp`, `temperature_unit`(`"C"`/`"F"`, 기본 `"C"`), `features`(`target_temperature`/`operation_mode`/`away_mode`/`on_off`).
     - **`siren` 플랫폼**: `available_tones`(비어 있지 않으면 `tones` feature 활성), `features`(`turn_on`/`turn_off`/`tones`/`duration`/`volume_set`).
     - **`alarm_control_panel` 플랫폼**: `code_arm_required`(bool, 기본 `true`), `code_format`(`"number"`/`"text"`/생략 — lock과 달리 **정규식 아님**), `features`(`arm_home`/`arm_away`/`arm_night`/`arm_vacation`/`arm_custom_bypass`/`trigger`).
+    - **`media_player` 플랫폼** (1차: 재생/볼륨/소스): `source_list`, `features`(`play`/`pause`/`stop`/`next_track`/`previous_track`/`volume_set`/`volume_mute`/`volume_step`/`turn_on`/`turn_off`/`select_source`; `source_list`가 있으면 `select_source` 자동 활성).
+    - **`image` 플랫폼**: 선언 전용 필드 없음 — 상태에 `image_url`(URL만, base64 없음).
+    - **`camera` 플랫폼**: `brand` / `model`, `features`(`on_off`/`stream`; 상태에 `stream_source`가 있으면 `stream` 자동 활성). still/stream은 **URL만**.
 
 * **응답**
   ```json
@@ -151,6 +154,9 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 | `water_heater` | 제어 | 객체 (`state`/`temperature`/…) | `set_temperature` / `set_operation_mode` / `set_away_mode` / `turn_on` / `turn_off` |
 | `siren` | 제어 | 불리언 | `turn_on` (`params`) / `turn_off` |
 | `alarm_control_panel` | 제어 | 문자열 | `alarm_disarm` / `alarm_arm_*` / `alarm_trigger` |
+| `media_player` | 제어 | 객체 (`state`/볼륨/미디어/…, §3.2 참고) | `media_play` / `media_pause` / `media_stop` / `media_next_track` / `media_previous_track` / `volume_set` / `volume_mute` / `volume_up` / `volume_down` / `select_source` / `turn_on` / `turn_off` |
+| `image` | 읽기 | URL 문자열 또는 객체 | — |
+| `camera` | 제어 | 객체 (`still_image_url`/`stream_source`/…) | `turn_on` / `turn_off` |
 
 ---
 
@@ -176,13 +182,14 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   ```
   - `states` (List, 필수): 업데이트할 엔티티 정보 목록.
     - `unique_id` (String, 필수): 등록 시 사용했던 원본 `unique_id` (게이트웨이 네임스페이스 제외).
-    - `value` (Any, 필수): 새로운 상태 값. 대부분의 플랫폼은 스칼라이고, 상태가 단일 값이 아닌 플랫폼(`device_tracker`, `update`, `light`, `cover`, `fan`, `valve`, `climate`, `humidifier`, `water_heater` 등)은 **객체**를 사용합니다.
+    - `value` (Any, 필수): 새로운 상태 값. 대부분의 플랫폼은 스칼라이고, 상태가 단일 값이 아닌 플랫폼(`device_tracker`, `update`, `light`, `cover`, `fan`, `valve`, `climate`, `humidifier`, `water_heater`, `media_player`, `camera` 등)은 **객체**를 사용합니다.
       - 모든 플랫폼에 대해 문자열 `"unknown"`(대소문자 구분 없음)을 보내면 HA의 사용 불가(`None`) 상태로 매핑됩니다.
       - `binary_sensor` 플랫폼은 `"1"`, `"true"`, `"on"`, `"yes"` (대소문자 구분 없음) 또는 진위값 `true`를 On 상태로 매핑합니다.
       - `sensor` 플랫폼 중 `device_class`가 `"timestamp"`이거나 `"date"`인 경우, 문자열 값을 자동으로 날짜/시간 객체로 변환합니다.
       - `device_tracker` 플랫폼은 아래 객체 형식을 사용합니다.
       - `update` 플랫폼은 아래 객체 형식을 사용합니다.
-      - `light` / `cover` / `fan` / `valve` / `climate` / `humidifier` / `water_heater` 플랫폼은 아래 객체 형식을 사용합니다.
+      - `light` / `cover` / `fan` / `valve` / `climate` / `humidifier` / `water_heater` / `media_player` / `camera` 플랫폼은 아래 객체 형식을 사용합니다.
+      - `image`는 `image_url` 문자열(또는 `{"image_url": "..."}`)을 보냅니다. URL만 — base64 금지.
       - `lock`은 `"locked"`/`"unlocked"`/… 또는 bool(`true`=잠김)을 받습니다.
       - `date` / `time` / `datetime`은 ISO 8601 문자열을 보냅니다. 파싱 실패 시 unknown(`None`). tz-naive datetime은 HA 로컬 타임존을 부착합니다(UTC로 해석하지 않음).
       - `event`는 event_type 문자열 또는 `{"event_type": "...", "attributes": {...}}`입니다. 재시작 시 last state로 **복원하지 않습니다**.
@@ -339,6 +346,27 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 - **`siren`**: 불리언 (또는 `{"state": true}`).
 - **`alarm_control_panel`**: `"disarmed"` / `"armed_home"` / `"armed_away"` / `"armed_night"` / `"armed_vacation"` / `"armed_custom_bypass"` / `"arming"` / `"pending"` / `"triggered"`.
 
+#### `media_player` 상태 (객체 `value`)
+
+```json
+{"unique_id": "speaker", "value": {"state": "playing", "volume_level": 0.4, "media_title": "Song", "source": "HDMI"}}
+```
+
+- `state`(`off`/`on`/`idle`/`playing`/`paused`/`buffering`), `volume_level`(0–1), `is_volume_muted`, `media_title` / `media_artist`, `media_position` / `media_duration`(초), `source`, `media_image_url`.
+- 1차 범위: 재생 + 볼륨 + 소스. `browse_media` / grouping 미포함.
+
+#### `image` / `camera` 상태
+
+```json
+{"unique_id": "snap", "value": {"image_url": "http://cam.local/still.jpg"}}
+```
+
+```json
+{"unique_id": "front_cam", "value": {"still_image_url": "http://cam.local/still.jpg", "stream_source": "rtsp://cam.local/stream", "is_on": true}}
+```
+
+- **URL만** — WebSocket으로 base64/바이너리를 보내지 마세요. HA가 `still_image_url` / `image_url`을 fetch합니다.
+
 * **응답**
   ```json
   {
@@ -487,7 +515,7 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 
 ## 4. 제어 명령 수신 (HA → 클라이언트)
 
-제어형 엔티티(`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`)가 HA 상에서 조작되면, 해당 엔티티를 등록한 클라이언트 세션 채널을 통해 명령 이벤트가 실시간으로 전달됩니다.
+제어형 엔티티(`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`, `media_player`, `camera`)가 HA 상에서 조작되면, 해당 엔티티를 등록한 클라이언트 세션 채널을 통해 명령 이벤트가 실시간으로 전달됩니다.
 
 클라이언트는 이 이벤트를 구독하여 실제 장치를 동작시키고, 성공 후 `ws_bridge/state` 메시지를 보내 새로운 상태를 반영해야 합니다.
 
@@ -578,6 +606,18 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 {"kind": "command", "unique_id": "alarm", "action": "alarm_arm_away", "params": {"code": "1234"}}
 ```
 
+### Phase 4 예제
+
+```json
+{"unique_id": "speaker", "platform": "media_player", "name": "Speaker", "source_list": ["HDMI", "Bluetooth"]}
+{"unique_id": "front_cam", "platform": "camera", "name": "Front", "features": ["on_off", "stream"]}
+```
+
+```json
+{"kind": "command", "unique_id": "speaker", "action": "volume_set", "params": {"volume_level": 0.5}}
+{"kind": "command", "unique_id": "front_cam", "action": "turn_off"}
+```
+
 ### `update` 명령
 
 - `install` — 현재 제공된 펌웨어 설치를 시작합니다 (`value` 없음). 클라이언트는 플래시가 끝날 때까지 `in_progress: true`(알고 있으면 `progress`도)를 push해야 합니다. 성공하면 보통 기기가 재부팅됩니다.
@@ -598,6 +638,6 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 
 | 순서 | 플랫폼 | 비고 |
 |:---:|:---|:---|
-| 1 | `media_player` / `image` / `camera` | 설계 결정 후 (구현 계획서 참고). |
+| 1 | `vacuum` / `lawn_mower` / `remote` / `todo` | 보류(Phase 5) — 수요 확인 전 착수 금지. |
 
-Phase 1–3 추가됨 (`light`/`cover`/`fan`, Phase 2 스칼라, climate 계열).
+Phase 0–4 추가됨. `media_player` 1차는 재생/볼륨/소스, `image`/`camera`는 URL만(base64 없음).

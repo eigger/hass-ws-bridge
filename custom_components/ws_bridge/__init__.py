@@ -42,6 +42,9 @@ PLATFORMS = [
     Platform.WATER_HEATER,
     Platform.SIREN,
     Platform.ALARM_CONTROL_PANEL,
+    Platform.MEDIA_PLAYER,
+    Platform.IMAGE,
+    Platform.CAMERA,
 ]
 
 

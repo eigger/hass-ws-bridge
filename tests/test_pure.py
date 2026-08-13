@@ -1145,3 +1145,109 @@ def test_phase3_platforms_registered():
         PLATFORM_ALARM_CONTROL_PANEL,
     ):
         assert p in ALL_PLATFORMS
+
+
+# ── Phase 4: media_player / image / camera + version pin ─────────────────────
+
+def test_media_player_features_and_state():
+    from custom_components.ws_bridge.media_player import (
+        WsBridgeMediaPlayer,
+        _features,
+    )
+    from homeassistant.components.media_player import (
+        MediaPlayerEntityFeature,
+        MediaPlayerState,
+    )
+
+    flags = _features(None, has_sources=False)
+    assert flags & MediaPlayerEntityFeature.PLAY
+    assert not (flags & MediaPlayerEntityFeature.SELECT_SOURCE)
+    assert _features(["play"], has_sources=True) & MediaPlayerEntityFeature.SELECT_SOURCE
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge.send_command = MagicMock(return_value=True)
+    entity = WsBridgeMediaPlayer(
+        bridge,
+        {
+            "unique_id": "gw1__speaker",
+            "platform": "media_player",
+            "name": "Speaker",
+            "source_list": ["HDMI", "Bluetooth"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    entity.hass = MagicMock()
+    entity.async_write_ha_state = MagicMock()
+    entity._on_value(
+        {
+            "state": "playing",
+            "volume_level": 0.4,
+            "media_title": "Song",
+            "source": "HDMI",
+        }
+    )
+    assert entity._attr_state == MediaPlayerState.PLAYING
+    assert entity._attr_volume_level == 0.4
+    assert entity._attr_source == "HDMI"
+    asyncio.run(entity.async_media_pause())
+    bridge.send_command.assert_called_with("gw1__speaker", "media_pause")
+    assert entity._attr_state == MediaPlayerState.PAUSED
+
+
+def test_image_and_camera_url_state():
+    from custom_components.ws_bridge.image import WsBridgeImage
+    from custom_components.ws_bridge.camera import WsBridgeCamera, _features
+    from homeassistant.components.camera import CameraEntityFeature
+
+    assert not (_features(["stream"], has_stream=False) & CameraEntityFeature.STREAM)
+    assert _features(None, has_stream=True) & CameraEntityFeature.STREAM
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge.hass = MagicMock()
+    img = WsBridgeImage(
+        bridge,
+        {
+            "unique_id": "gw1__snap",
+            "platform": "image",
+            "name": "Snap",
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    img.hass = MagicMock()
+    img.async_write_ha_state = MagicMock()
+    img._on_value({"image_url": "http://cam.local/still.jpg"})
+    assert img._attr_image_url == "http://cam.local/still.jpg"
+    assert img._attr_image_last_updated is not None
+
+    cam = WsBridgeCamera(
+        bridge,
+        {
+            "unique_id": "gw1__cam",
+            "platform": "camera",
+            "name": "Cam",
+            "features": ["on_off", "stream"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    cam.hass = MagicMock()
+    cam.async_write_ha_state = MagicMock()
+    cam._on_value(
+        {
+            "still_image_url": "http://cam.local/still.jpg",
+            "stream_source": "rtsp://cam.local/stream",
+            "is_on": True,
+        }
+    )
+    assert cam._still_url.endswith("still.jpg")
+    assert asyncio.run(cam.stream_source()) == "rtsp://cam.local/stream"
+    assert cam._attr_supported_features & CameraEntityFeature.STREAM
+
+
+def test_manifest_version_pinned_to_pre_phase():
+    import json
+    from pathlib import Path
+
+    manifest = json.loads(
+        Path("custom_components/ws_bridge/manifest.json").read_text()
+    )
+    assert manifest["version"] == "1.3.1"

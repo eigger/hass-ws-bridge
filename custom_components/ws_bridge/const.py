@@ -64,6 +64,9 @@ PLATFORM_HUMIDIFIER = "humidifier"
 PLATFORM_WATER_HEATER = "water_heater"
 PLATFORM_SIREN = "siren"
 PLATFORM_ALARM_CONTROL_PANEL = "alarm_control_panel"
+PLATFORM_MEDIA_PLAYER = "media_player"
+PLATFORM_IMAGE = "image"
+PLATFORM_CAMERA = "camera"
 
 # text_sensor는 HA에 별도 도메인이 없다 — sensor 도메인 엔티티로 등록되지만(문자열
 # native_value), 클라이언트가 보내는 platform 값과 내부 등록 키는 구분해서 유지한다.
@@ -92,6 +95,9 @@ ALL_PLATFORMS = [
     PLATFORM_WATER_HEATER,
     PLATFORM_SIREN,
     PLATFORM_ALARM_CONTROL_PANEL,
+    PLATFORM_MEDIA_PLAYER,
+    PLATFORM_IMAGE,
+    PLATFORM_CAMERA,
 ]
 
 # 클라이언트가 icon을 생략했을 때 플랫폼별 기본값 (device_class·switch는 HA 기본 아이콘 사용).
@@ -119,4 +125,7 @@ DEFAULT_PLATFORM_ICONS: dict[str, str] = {
     PLATFORM_WATER_HEATER: "mdi:water-boiler",
     PLATFORM_SIREN: "mdi:bullhorn",
     PLATFORM_ALARM_CONTROL_PANEL: "mdi:shield-home",
+    PLATFORM_MEDIA_PLAYER: "mdi:cast",
+    PLATFORM_IMAGE: "mdi:image",
+    PLATFORM_CAMERA: "mdi:camera",
 }

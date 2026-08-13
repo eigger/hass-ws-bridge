@@ -74,8 +74,11 @@ graph TD
 | `water_heater` | 제어 | 온도/운전모드/외출 |
 | `siren` | 제어 | `turn_on` / `turn_off` (+ tone/volume) |
 | `alarm_control_panel` | 제어 | arm/disarm/trigger |
+| `media_player` | 제어 | 재생/볼륨/소스 (1차) |
+| `image` | 읽기 | URL 이미지 |
+| `camera` | 제어 | still/stream URL |
 
-예정 (와이어에서 아직 거절됨): `media_player` / `image` / `camera`. [PROTOCOL_ko.md §6](docs/PROTOCOL_ko.md#6-예정-플랫폼) 참고.
+예정 (와이어에서 아직 거절됨): `vacuum` / `lawn_mower` / `remote` / `todo`. [PROTOCOL_ko.md §6](docs/PROTOCOL_ko.md#6-예정-플랫폼) 참고.
 
 ---
 

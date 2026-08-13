@@ -131,6 +131,9 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     vol.Optional("operation_list"): vol.Any([str], None),          # water_heater
     vol.Optional("available_tones"): vol.Any([str], None),         # siren
     vol.Optional("code_arm_required"): vol.Any(bool, None),        # alarm_control_panel
+    vol.Optional("source_list"): vol.Any([str], None),             # media_player
+    vol.Optional("brand"): vol.Any(str, None),                     # camera
+    vol.Optional("model"): vol.Any(str, None),                     # camera
 })
 @callback
 def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
