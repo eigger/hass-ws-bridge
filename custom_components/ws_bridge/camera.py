@@ -1,8 +1,10 @@
 """camera 플랫폼: still/stream URL 기반 (바이트·base64 전송 없음)."""
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+import aiohttp
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -12,12 +14,16 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .bridge import WsBridge
 from .const import DOMAIN, PLATFORM_CAMERA
 from .entity import WsBridgeCompositeEntity
-from .helpers import parse_bool
+from .helpers import parse_bool, sanitize_remote_url
+
+_LOGGER = logging.getLogger(__name__)
 
 _FEATURE_MAP = {
     "on_off": CameraEntityFeature.ON_OFF,
     "stream": CameraEntityFeature.STREAM,
 }
+
+_STILL_TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 
 async def async_setup_entry(
@@ -62,9 +68,22 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
     @callback
     def _apply_state(self) -> None:
         still = self._state.get("still_image_url") or self._state.get("image_url")
-        self._still_url = str(still) if still is not None else None
+        raw_still = str(still) if still is not None else None
+        self._still_url = sanitize_remote_url(raw_still)
+        if raw_still and self._still_url is None:
+            _LOGGER.warning(
+                "Ignoring unsafe still_image_url for %s", self._attr_unique_id
+            )
         stream = self._state.get("stream_source")
-        self._stream_url = str(stream) if stream is not None else None
+        raw_stream = str(stream) if stream is not None else None
+        # rtsp(s) for ffmpeg; http(s) for HLS-style sources
+        self._stream_url = sanitize_remote_url(
+            raw_stream, schemes=("http", "https", "rtsp", "rtsps")
+        )
+        if raw_stream and self._stream_url is None:
+            _LOGGER.warning(
+                "Ignoring unsafe stream_source for %s", self._attr_unique_id
+            )
         self._attr_supported_features = _features(
             self._declared_features, has_stream=bool(self._stream_url)
         )
@@ -91,11 +110,23 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
             return None
         try:
             session = async_get_clientsession(self.hass)
-            async with session.get(self._still_url, timeout=10) as resp:
+            async with session.get(self._still_url, timeout=_STILL_TIMEOUT) as resp:
                 if resp.status != 200:
+                    _LOGGER.warning(
+                        "Still image fetch for %s returned HTTP %s (%s)",
+                        self._attr_unique_id,
+                        resp.status,
+                        self._still_url,
+                    )
                     return None
                 return await resp.read()
-        except Exception:  # noqa: BLE001 — 네트워크/세션 오류는 빈 프레임으로
+        except Exception as err:  # noqa: BLE001 — 네트워크 오류는 빈 프레임 + 로그
+            _LOGGER.warning(
+                "Still image fetch failed for %s (%s): %s",
+                self._attr_unique_id,
+                self._still_url,
+                err,
+            )
             return None
 
     async def stream_source(self) -> str | None:

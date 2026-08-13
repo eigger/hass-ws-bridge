@@ -1,7 +1,20 @@
 """pytest configuration — mock Home Assistant modules to allow testing without HA installed."""
 import sys
+import types
 from enum import IntFlag
 from unittest.mock import MagicMock
+
+# camera.py imports aiohttp; CI only installs pytest+voluptuous.
+_aiohttp = types.ModuleType("aiohttp")
+
+
+class _ClientTimeout:
+    def __init__(self, total=None, **kwargs):
+        self.total = total
+
+
+_aiohttp.ClientTimeout = _ClientTimeout
+sys.modules["aiohttp"] = _aiohttp
 
 
 class MockBase:

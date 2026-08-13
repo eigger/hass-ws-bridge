@@ -1184,11 +1184,36 @@ def test_media_player_features_and_state():
             "volume_level": 0.4,
             "media_title": "Song",
             "source": "HDMI",
+            "media_position": 42,
         }
     )
     assert entity._attr_state == MediaPlayerState.PLAYING
     assert entity._attr_volume_level == 0.4
     assert entity._attr_source == "HDMI"
+    assert entity._attr_media_position == 42
+    assert entity._attr_media_position_updated_at is not None
+    stamped = entity._attr_media_position_updated_at
+    entity._on_value(
+        {
+            "state": "playing",
+            "volume_level": 0.5,
+            "media_title": "Song",
+            "source": "HDMI",
+            "media_position": 42,
+        }
+    )
+    assert entity._attr_media_position_updated_at is stamped
+    entity._on_value(
+        {
+            "state": "playing",
+            "volume_level": 0.5,
+            "media_title": "Song",
+            "source": "HDMI",
+            "media_position": 50,
+        }
+    )
+    assert entity._attr_media_position == 50
+    assert entity._attr_media_position_updated_at is not stamped
     asyncio.run(entity.async_media_pause())
     bridge.send_command.assert_called_with("gw1__speaker", "media_pause")
     assert entity._attr_state == MediaPlayerState.PAUSED
@@ -1197,7 +1222,15 @@ def test_media_player_features_and_state():
 def test_image_and_camera_url_state():
     from custom_components.ws_bridge.image import WsBridgeImage
     from custom_components.ws_bridge.camera import WsBridgeCamera, _features
+    from custom_components.ws_bridge.helpers import sanitize_remote_url
     from homeassistant.components.camera import CameraEntityFeature
+
+    assert sanitize_remote_url("http://cam.local/still.jpg")
+    assert sanitize_remote_url("http://127.0.0.1/x") is None
+    assert sanitize_remote_url("file:///etc/passwd") is None
+    assert sanitize_remote_url(
+        "rtsp://cam.local/stream", schemes=("http", "https", "rtsp", "rtsps")
+    )
 
     assert not (_features(["stream"], has_stream=False) & CameraEntityFeature.STREAM)
     assert _features(None, has_stream=True) & CameraEntityFeature.STREAM
@@ -1218,6 +1251,11 @@ def test_image_and_camera_url_state():
     img._on_value({"image_url": "http://cam.local/still.jpg"})
     assert img._attr_image_url == "http://cam.local/still.jpg"
     assert img._attr_image_last_updated is not None
+    first_updated = img._attr_image_last_updated
+    img._on_value({"image_url": "http://cam.local/still.jpg", "extra": 1})
+    assert img._attr_image_last_updated is first_updated
+    img._on_value({"image_url": "http://cam.local/still2.jpg"})
+    assert img._attr_image_last_updated is not first_updated
 
     cam = WsBridgeCamera(
         bridge,
@@ -1241,6 +1279,8 @@ def test_image_and_camera_url_state():
     assert cam._still_url.endswith("still.jpg")
     assert asyncio.run(cam.stream_source()) == "rtsp://cam.local/stream"
     assert cam._attr_supported_features & CameraEntityFeature.STREAM
+    cam._on_value({"still_image_url": "http://127.0.0.1/admin", "is_on": True})
+    assert cam._still_url is None
 
 
 def test_manifest_version_pinned_to_pre_phase():

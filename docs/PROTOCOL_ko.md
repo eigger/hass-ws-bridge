@@ -353,6 +353,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 ```
 
 - `state`(`off`/`on`/`idle`/`playing`/`paused`/`buffering`), `volume_level`(0–1), `is_volume_muted`, `media_title` / `media_artist`, `media_position` / `media_duration`(초), `source`, `media_image_url`.
+- `media_position`이 바뀌면 HA 진행 바 보간을 위해 `media_position_updated_at`을 찍습니다.
 - 1차 범위: 재생 + 볼륨 + 소스. `browse_media` / grouping 미포함.
 
 #### `image` / `camera` 상태
@@ -366,6 +367,8 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 ```
 
 - **URL만** — WebSocket으로 base64/바이너리를 보내지 마세요. HA가 `still_image_url` / `image_url`을 fetch합니다.
+- `image`의 `image_last_updated`(ISO datetime)는 옵션. 생략 시 **`image_url`이 바뀔 때만** 타임스탬프를 갱신합니다(주기적 전체 상태 재전송으로 재다운로드하지 않음).
+- fetch 가능한 URL은 `http`/`https`(스트림은 `rtsp`/`rtsps`도 허용). 루프백·링크로컬·비네트워크 스킴은 거절합니다. LAN 카메라 호스트는 허용됩니다.
 
 * **응답**
   ```json

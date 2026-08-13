@@ -14,6 +14,7 @@ from homeassistant.components.media_player import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .bridge import WsBridge
 from .const import DOMAIN, PLATFORM_MEDIA_PLAYER
@@ -143,7 +144,12 @@ class WsBridgeMediaPlayer(WsBridgeCompositeEntity, MediaPlayerEntity):
         self._attr_media_title = str(title) if title is not None else None
         artist = self._state.get("media_artist")
         self._attr_media_artist = str(artist) if artist is not None else None
-        self._attr_media_position = _as_int(self._state.get("media_position"))
+        new_pos = _as_int(self._state.get("media_position"))
+        if new_pos != getattr(self, "_attr_media_position", None):
+            self._attr_media_position = new_pos
+            self._attr_media_position_updated_at = (
+                dt_util.utcnow() if new_pos is not None else None
+            )
         self._attr_media_duration = _as_int(self._state.get("media_duration"))
         source = self._state.get("source")
         self._attr_source = str(source) if source is not None else None

@@ -352,6 +352,7 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 ```
 
 - `state` (`off`/`on`/`idle`/`playing`/`paused`/`buffering`), `volume_level` (0–1), `is_volume_muted`, `media_title` / `media_artist`, `media_position` / `media_duration` (seconds), `source`, `media_image_url`.
+- When `media_position` changes, the integration stamps `media_position_updated_at` so HA can interpolate the progress bar.
 - v1 scope: playback + volume + source. No `browse_media` / grouping yet.
 
 #### `image` / `camera` state
@@ -365,6 +366,8 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 ```
 
 - **URL only** — do not send base64/binary over the WebSocket. HA fetches stills from `still_image_url` / `image_url`.
+- Optional `image_last_updated` (ISO datetime) for `image`. If omitted, the integration bumps the timestamp **only when `image_url` changes** (so periodic full-state sync does not re-download).
+- Fetchable URLs must be `http`/`https` (streams may also use `rtsp`/`rtsps`). Loopback / link-local / non-network schemes are rejected — HA will not SSRF to `localhost` on the user's behalf. LAN camera hosts remain allowed.
 
 * **Response**
   ```json

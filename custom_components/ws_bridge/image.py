@@ -1,6 +1,7 @@
 """image 플랫폼: 클라이언트가 제공한 URL 을 HA ImageEntity 로 노출 (바이트 전송 없음)."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -13,7 +14,9 @@ from homeassistant.util import dt as dt_util
 from .bridge import WsBridge
 from .const import DOMAIN, PLATFORM_IMAGE
 from .entity import WsBridgeEntity, safe_write_ha_state
-from .helpers import as_dict, is_unknown
+from .helpers import as_dict, is_unknown, sanitize_remote_url
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -54,8 +57,14 @@ class WsBridgeImage(WsBridgeEntity, ImageEntity):
             return
         data = as_dict(value) if isinstance(value, dict) else {"image_url": value}
         url = data.get("image_url") or data.get("url") or data.get("state")
-        new_url = str(url) if url is not None else None
-        if new_url != self._attr_image_url:
+        raw_url = str(url) if url is not None else None
+        new_url = sanitize_remote_url(raw_url)
+        if raw_url and new_url is None:
+            _LOGGER.warning(
+                "Ignoring unsafe image_url for %s", self._attr_unique_id
+            )
+        url_changed = new_url != self._attr_image_url
+        if url_changed:
             self._cached_image = None
         self._attr_image_url = new_url
         updated = data.get("image_last_updated")
@@ -67,7 +76,9 @@ class WsBridgeImage(WsBridgeEntity, ImageEntity):
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
             self._attr_image_last_updated = parsed
-        elif new_url is not None:
-            self._attr_image_last_updated = dt_util.utcnow()
-        else:
+        elif new_url is None:
             self._attr_image_last_updated = None
+        elif url_changed:
+            # Same URL re-pushed without timestamp must not bump last_updated
+            # (periodic full-state sync would re-download every cycle).
+            self._attr_image_last_updated = dt_util.utcnow()
