@@ -62,6 +62,8 @@ graph TD
 | `button` | 제어 | 실행 트리거 (`press`, 상태 없음) |
 | `update` | 제어 | 펌웨어 업데이트 (`install` / `check`, `installed_version` / `latest_version`) |
 
+예정 (와이어에서 아직 거절됨): `text` → `lock` → `cover` / `fan` (도메인별 PR) → `light` / `climate` (각자 단독). [PROTOCOL_ko.md §6](docs/PROTOCOL_ko.md#6-예정-플랫폼) 참고. `text`는 쓰기 가능이며 `text_sensor`와 다릅니다.
+
 ---
 
 ## 💾 설치

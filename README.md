@@ -62,6 +62,8 @@ graph TD
 | `button` | Control | Execution trigger (`press`, stateless) |
 | `update` | Control | Firmware update (`install` / `check`; `installed_version` / `latest_version`) |
 
+Planned (not accepted on the wire yet): `text` → `lock` → `cover` / `fan` (separate PRs) → `light` / `climate` (each standalone). See [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms). `text` is writable and is not `text_sensor`.
+
 ---
 
 ## 💾 Installation

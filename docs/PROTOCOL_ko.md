@@ -401,3 +401,18 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 - 엔티티 unique_id 구성 권장 형식: `<device_id>_<key>`.
 - 클라이언트가 선언하지 않은 엔티티는 HA에 생성되지 않습니다.
 - **유지 정책**: 한 번 선언된 엔티티는 `ws_bridge/remove`·`ws_bridge/sync`·Subentry 삭제로 **명시적으로 제거하기 전까지** HA에 남습니다. 재접속 시 선언되지 않았다는 이유만으로 자동 삭제되지는 않습니다 — 연결이 끊긴 것과 장치가 없어진 것을 통합이 구분할 수 없기 때문입니다. 클라이언트에서 없어진 엔티티를 정리하려면 §3.5를 사용하세요.
+
+---
+
+## 6. 예정 플랫폼
+
+아래 `platform` 값은 **지금 받지 않습니다**. `ws_bridge/entity`는 §3.1 목록 밖이면 거절합니다. **도메인은 한 번에 하나만** 넣습니다. 클라이언트(ESPHome 래핑 포함)보다 **PROTOCOL + HA 플랫폼**(`ALL_PLATFORMS`, `Platform.*`)을 먼저 올립니다. 기존 플랫폼 래핑은 HA를 건드리지 않아도 되지만, 새 도메인은 그렇지 않습니다.
+
+| 순서 | 플랫폼 | 메모 |
+|:---:|:---|:---|
+| 1 | `text` | 다음. 쓰기 가능 문자열 + `set_value` (`min`/`max`/`pattern`/`mode`). `text_sensor`(읽기 전용, HA `sensor`로 생성)와 다름. |
+| 2 | `lock` | `lock` / `unlock`. `open`과 PIN `code`는 해당 PR에서 범위를 정함. |
+| 3 | `cover`, `fan` | 도메인별 PR. position / %, feature 비트, 객체에 가까운 state. |
+| 4 | `light`, `climate` | 각자 단독, 마지막. `update`보다 큰 객체 state. |
+
+`date` / `time`은 `text`와 난이도가 비슷하지만 이 대기열에는 넣지 않습니다.

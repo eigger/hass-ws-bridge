@@ -400,3 +400,18 @@ The client should listen for these events, perform the physical action, and then
 - Recommended entity unique_id pattern: `<device_id>_<key>`.
 - Entities that have not been declared via `ws_bridge/entity` will not appear in Home Assistant.
 - **Retention**: once declared, an entity stays in HA until it is **explicitly** removed via `ws_bridge/remove`, `ws_bridge/sync`, or subentry deletion. It is never auto-deleted merely for not being redeclared on reconnect — the integration cannot tell a dropped connection apart from a device that is genuinely gone. To clean up entities that no longer exist on the client, use §3.5.
+
+---
+
+## 6. Planned platforms
+
+These `platform` values are **not** accepted today — `ws_bridge/entity` rejects anything outside the §3.1 list. Add **one domain at a time**. Land PROTOCOL + the HA platform (including `ALL_PLATFORMS` and `Platform.*`) **before** any client, including ESPHome wrapping; wrapping existing platforms does not need HA changes, but a new domain does.
+
+| Order | Platform | Notes |
+|:---:|:---|:---|
+| 1 | `text` | Next. Writable string + `set_value` (`min`/`max`/`pattern`/`mode`). Not `text_sensor` (read-only; created as an HA `sensor`). |
+| 2 | `lock` | `lock` / `unlock`. Decide `open` and PIN `code` in that PR. |
+| 3 | `cover`, `fan` | Separate PRs. Position / %, feature bits, object-ish state. |
+| 4 | `light`, `climate` | Each standalone, last. Object state larger than `update`. |
+
+`date` / `time` are the same complexity class as `text` but are not in this queue.
