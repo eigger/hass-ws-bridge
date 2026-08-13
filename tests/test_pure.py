@@ -16,6 +16,7 @@ from custom_components.ws_bridge.bridge import (
 )
 from custom_components.ws_bridge import _subentry_gateway_ids
 from custom_components.ws_bridge.const import ALL_PLATFORMS, PLATFORM_UPDATE
+from custom_components.ws_bridge.websocket_api import resolve_connect_sw_version
 from custom_components.ws_bridge.device_tracker import _parse_location
 from custom_components.ws_bridge.helpers import as_dict, is_unknown, parse_bool, parse_locked
 from custom_components.ws_bridge.cover import _features as cover_features
@@ -402,6 +403,13 @@ def test_reconnect_keeps_previous_device_fields_when_omitted():
     client = bridge._clients["gw1"]
     assert client.manufacturer == "Espressif"
     assert client.model == "ESP32-S3"
+
+
+def test_resolve_connect_sw_version_prefers_sw_version():
+    assert resolve_connect_sw_version({"sw_version": "2.0", "app_version": "1.0"}) == "2.0"
+    assert resolve_connect_sw_version({"app_version": "1.0"}) == "1.0"
+    assert resolve_connect_sw_version({"sw_version": "  ", "app_version": "1.0"}) == "1.0"
+    assert resolve_connect_sw_version({}) is None
 
 
 def test_reconnect_does_not_resurrect_undeclared_sub_devices():

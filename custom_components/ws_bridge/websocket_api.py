@@ -48,11 +48,21 @@ def _bridges(hass: HomeAssistant) -> list[WsBridge]:
     return [b for b in hass.data.get(DOMAIN, {}).values() if isinstance(b, WsBridge)]
 
 
+def resolve_connect_sw_version(msg: dict[str, Any]) -> str | None:
+    """게이트웨이 sw_version. `sw_version` 우선, 없으면 deprecated `app_version`."""
+    for key in ("sw_version", "app_version"):
+        value = msg.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
 @websocket_api.websocket_command({
     vol.Required("type"): WS_CONNECT,
     vol.Required("gateway_id"): str,
     vol.Optional("name"): vol.Any(str, None),
-    vol.Optional("app_version"): vol.Any(str, None),
+    vol.Optional("sw_version"): vol.Any(str, None),
+    vol.Optional("app_version"): vol.Any(str, None),  # deprecated alias of sw_version
     vol.Optional("manufacturer"): vol.Any(str, None),
     vol.Optional("model"): vol.Any(str, None),
     vol.Optional("hw_version"): vol.Any(str, None),
@@ -78,7 +88,7 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
                 gateway_id,
                 name,
                 _send_event,
-                msg.get("app_version"),
+                resolve_connect_sw_version(msg),
                 subentry_id,
                 keep_last_state_on_disconnect=msg[CONF_KEEP_LAST_STATE_ON_DISCONNECT],
                 manufacturer=msg.get("manufacturer"),

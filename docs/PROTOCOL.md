@@ -25,7 +25,8 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
    - Send: `{"id": <n>, "type": "ws_bridge/connect", "gateway_id": "<unique_id>", "name": "<display_name>"}`
    - `gateway_id` (String, Required): A unique identifier for the client. Used to create a gateway device in HA and namespace all associated devices and entities to avoid collision.
    - `name` (String, Optional): Human-readable gateway display name. Also used as the gateway subentry title in integration settings.
-   - `app_version` (String, Optional): The firmware or application version of the client. Updates the gateway device's `sw_version` in Home Assistant.
+   - `sw_version` (String, Optional): Firmware or application version. Updates the gateway device's `sw_version` in Home Assistant.
+   - `app_version` (String, Optional, **deprecated**): Alias of `sw_version`. Used only when `sw_version` is omitted; will be removed in a later release.
  - `manufacturer` (String, Optional): Gateway device manufacturer. Omitted: `ws_bridge`.
  - `model` (String, Optional): Gateway device model. Omitted: `Gateway`.
  - `hw_version` (String, Optional): Gateway hardware version. Omitted: left unset. Each of these fields is independent — send only the ones you have.
