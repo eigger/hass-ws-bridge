@@ -93,6 +93,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   - `suggested_display_precision` (Integer, Optional, `sensor` platform): Number of decimal places to round the displayed value to (mirrors the client's own rounding config, e.g. ESPHome's `accuracy_decimals`). Without it, Home Assistant shows the raw float exactly as received, which for many sensors means long, noisy decimals (e.g. `48.85864` instead of `48.9`).
   - `icon` (String, Optional): Icon name (e.g., `mdi:thermometer`).
   - `entity_category` (String, Optional): Entity category, either `"config"` or `"diagnostic"`.
+  - `features` (List of String, Optional): Capability flags for platforms that expose multiple operations (e.g. cover open/close/stop). Unknown names are ignored. When omitted, each platform uses its own sensible default. Current platforms do not require this field.
   - **Platform-Specific Fields**:
     - **`select` platform**: `options` (List of String, Required) - List of selectable options.
     - **`number` platform**: `min`, `max`, `step` (Float, Optional) - Range and step configuration.
@@ -146,12 +147,14 @@ Updates states for one or more entities in batch. If a state update arrives befo
   ```
   - `states` (List, Required): List of entity state updates.
     - `unique_id` (String, Required): The original entity `unique_id` (without the gateway namespace prefix).
-    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (currently `device_tracker` and `update`).
+    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (currently `device_tracker` and `update`; future multi-attribute platforms such as light/cover/climate use the same form).
       - Sending the string `"unknown"` (case-insensitive) for any platform will map to Home Assistant's `unavailable` (None) state.
       - For `binary_sensor`, values of `"1"`, `"true"`, `"on"`, `"yes"` (case-insensitive) or boolean `true` are mapped to the On state.
       - For `sensor` with `device_class` of `"timestamp"` or `"date"`, string values are automatically parsed into datetime/date objects.
       - For `device_tracker`, see the object form below.
       - For `update`, see the object form below.
+      - **Object (dict) values — shallow merge**: When both the previous stored state and the new `value` are objects, the integration **shallow-merges** them (`{...prev, ...value}`). Sending `{"progress": 50}` or `{"brightness": 200}` preserves other keys. Any other type change (scalar → object, object → scalar, or first write of an object) **replaces** the stored state. The full merged result is what entities receive.
+      - Values must be JSON-serializable (no `bytes`/tuples). Colors must be sent as lists.
   - `ts` (Number, Optional): Timestamp of the state update (currently accepted by the schema but ignored by the backend).
 
 #### `device_tracker` state (object `value`)
@@ -372,8 +375,9 @@ The client should listen for these events, perform the physical action, and then
   - `event` (Object): Command details.
     - `kind`: Always `"command"`.
     - `unique_id`: The original `unique_id` of the entity (gateway namespace prefix stripped).
-    - `action`: The action to execute (`turn_on`, `turn_off`, `press`, `set_value`, `select_option`, `install`, `check`).
-    - `value` (Any, Optional): The payload value (e.g., target float for `set_value`, or string option for `select_option`).
+    - `action`: The action to execute (`turn_on`, `turn_off`, `press`, `set_value`, `select_option`, `install`, `check`, …).
+    - `value` (Any, Optional): Single payload for actions that take one unnamed argument (e.g. target float for `set_value`, option string for `select_option`).
+    - `params` (Object, Optional): Named arguments for multi-argument actions (e.g. light `turn_on` with `brightness` / `rgb_color`). Omitted when empty. **Do not mix `value` and `params` on the same action** — use one or the other.
 
 ### Example with Value
 ```json
@@ -385,6 +389,24 @@ The client should listen for these events, perform the physical action, and then
     "unique_id": "target_temp",
     "action": "set_value",
     "value": 26.5
+  }
+}
+```
+
+### Example with Params
+```json
+{
+  "id": 1,
+  "type": "event",
+  "event": {
+    "kind": "command",
+    "unique_id": "living_led",
+    "action": "turn_on",
+    "params": {
+      "brightness": 128,
+      "rgb_color": [255, 0, 0],
+      "transition": 1.5
+    }
   }
 }
 ```

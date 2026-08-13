@@ -94,6 +94,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   - `suggested_display_precision` (Integer, 옵션, `sensor` 플랫폼): 표시할 소수점 자리수 (클라이언트 쪽 반올림 설정과 맞추는 용도, 예: ESPHome의 `accuracy_decimals`). 안 보내면 HA는 받은 float를 그대로 표시해서, 센서에 따라 `48.85864`처럼 지저분한 값이 뜰 수 있습니다.
   - `icon` (String, 옵션): 표시 아이콘 (예: `mdi:thermometer`).
   - `entity_category` (String, 옵션): 엔티티 카테고리. `"config"` 또는 `"diagnostic"`.
+  - `features` (List of String, 옵션): 여러 동작을 노출하는 플랫폼의 기능 플래그(예: cover의 open/close/stop). 알 수 없는 이름은 무시됩니다. 생략 시 플랫폼별 기본값을 사용합니다. 현재 플랫폼들은 이 필드가 필수가 아닙니다.
   - **플랫폼 전용 필드**:
     - **`select` 플랫폼**: `options` (List of String, 필수) - 선택 가능한 옵션 목록.
     - **`number` 플랫폼**: `min`, `max`, `step` (Float, 옵션) - 입력 범위 및 단계값.
@@ -147,12 +148,14 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   ```
   - `states` (List, 필수): 업데이트할 엔티티 정보 목록.
     - `unique_id` (String, 필수): 등록 시 사용했던 원본 `unique_id` (게이트웨이 네임스페이스 제외).
-    - `value` (Any, 필수): 새로운 상태 값. 대부분의 플랫폼은 스칼라이고, 상태가 단일 값이 아닌 플랫폼(현재 `device_tracker`와 `update`)은 **객체**를 사용합니다.
+    - `value` (Any, 필수): 새로운 상태 값. 대부분의 플랫폼은 스칼라이고, 상태가 단일 값이 아닌 플랫폼(현재 `device_tracker`와 `update`; 이후 light/cover/climate 등도 동일)은 **객체**를 사용합니다.
       - 모든 플랫폼에 대해 문자열 `"unknown"`(대소문자 구분 없음)을 보내면 HA의 사용 불가(`None`) 상태로 매핑됩니다.
       - `binary_sensor` 플랫폼은 `"1"`, `"true"`, `"on"`, `"yes"` (대소문자 구분 없음) 또는 진위값 `true`를 On 상태로 매핑합니다.
       - `sensor` 플랫폼 중 `device_class`가 `"timestamp"`이거나 `"date"`인 경우, 문자열 값을 자동으로 날짜/시간 객체로 변환합니다.
       - `device_tracker` 플랫폼은 아래 객체 형식을 사용합니다.
       - `update` 플랫폼은 아래 객체 형식을 사용합니다.
+      - **객체(dict) 값 — 얕은 병합**: 이전에 저장된 상태와 새 `value`가 **둘 다 객체**이면 통합이 **얕은 병합**합니다(`{...prev, ...value}`). `{"progress": 50}` 또는 `{"brightness": 200}`만 보내도 다른 키가 보존됩니다. 그 외 타입 변경(스칼라→객체, 객체→스칼라, 또는 객체의 최초 기록)은 **교체**합니다. 엔티티는 항상 병합된 전체 결과를 받습니다.
+      - 값은 JSON으로 직렬화 가능해야 합니다(`bytes`/tuple 금지). 색상은 반드시 리스트로 보냅니다.
   - `ts` (Number, 선택): 상태 업데이트 타임스탬프 (현재 스키마에서는 허용되나 백엔드 로직에서는 무시됩니다).
 
 #### `device_tracker` 상태 (객체 `value`)
@@ -373,8 +376,9 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
   - `event` (Object): 제어 세부 정보.
     - `kind`: 항상 `"command"` 입니다.
     - `unique_id`: 제어 대상 엔티티의 원본 `unique_id` (게이트웨이 네임스페이스 제거됨).
-    - `action`: 수행할 제어 동작 (`turn_on`, `turn_off`, `press`, `set_value`, `select_option`, `install`, `check`).
-    - `value` (Any, 옵션): 설정할 값 (예: `set_value` 시 대상 숫자, `select_option` 시 대상 문자열).
+    - `action`: 수행할 제어 동작 (`turn_on`, `turn_off`, `press`, `set_value`, `select_option`, `install`, `check`, …).
+    - `value` (Any, 옵션): 인자가 1개인 액션의 페이로드 (예: `set_value`의 숫자, `select_option`의 옵션 문자열).
+    - `params` (Object, 옵션): 인자가 여러 개인 액션의 이름 있는 인자 (예: light `turn_on`의 `brightness` / `rgb_color`). 비어 있으면 키 자체가 생략됩니다. **같은 액션에서 `value`와 `params`를 섞지 말 것** — 둘 중 하나만 사용합니다.
 
 ### 값 설정 예시
 ```json
@@ -386,6 +390,24 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
     "unique_id": "target_temp",
     "action": "set_value",
     "value": 26.5
+  }
+}
+```
+
+### params 예시
+```json
+{
+  "id": 1,
+  "type": "event",
+  "event": {
+    "kind": "command",
+    "unique_id": "living_led",
+    "action": "turn_on",
+    "params": {
+      "brightness": 128,
+      "rgb_color": [255, 0, 0],
+      "transition": 1.5
+    }
   }
 }
 ```

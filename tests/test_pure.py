@@ -17,6 +17,7 @@ from custom_components.ws_bridge.bridge import (
 from custom_components.ws_bridge import _subentry_gateway_ids
 from custom_components.ws_bridge.const import ALL_PLATFORMS, PLATFORM_UPDATE
 from custom_components.ws_bridge.device_tracker import _parse_location
+from custom_components.ws_bridge.helpers import as_dict, is_unknown, parse_bool, parse_locked
 from custom_components.ws_bridge.update import _parse_update_state, _strip_build_suffix
 
 
@@ -493,3 +494,120 @@ def test_send_command_returns_false_when_disconnected():
         {"kind": "command", "unique_id": "firmware", "action": "install"}
     )
 
+# ── Phase 0: 복합 상태 / params / helpers ────────────────────────────────────
+
+def test_handle_state_shallow_merges_dicts():
+    """dict + dict 는 얕은 병합. 이전 키가 보존된다."""
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send") as send:
+        bridge.handle_state("gw1", "led", {"state": "on", "brightness": 100})
+        bridge.handle_state("gw1", "led", {"brightness": 200})
+
+    assert bridge._states["gw1__led"] == {"state": "on", "brightness": 200}
+    assert send.call_args_list[-1].args[2] == {"state": "on", "brightness": 200}
+
+
+def test_handle_state_replaces_on_type_change():
+    """dict → 스칼라, 스칼라 → dict 는 교체한다."""
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send"):
+        bridge.handle_state("gw1", "a", {"state": "on"})
+        bridge.handle_state("gw1", "a", 42)
+        assert bridge._states["gw1__a"] == 42
+
+        bridge.handle_state("gw1", "a", {"brightness": 10})
+        assert bridge._states["gw1__a"] == {"brightness": 10}
+
+
+def test_handle_state_dispatches_full_merged_value():
+    """병합 결과 전체가 dispatcher로 전달된다."""
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send") as send:
+        bridge.handle_state("gw1", "led", {"state": "on", "rgb_color": [1, 2, 3]})
+        bridge.handle_state("gw1", "led", {"brightness": 50})
+
+    dispatched = send.call_args_list[-1].args[2]
+    assert dispatched == {"state": "on", "rgb_color": [1, 2, 3], "brightness": 50}
+
+
+def test_send_command_params():
+    """params 가 전달되고, None/빈 dict 이면 키 자체가 없다."""
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    send_event = MagicMock()
+    bridge._clients["gw1"] = _Client("gw1", "GW1", send_event)
+    bridge._entity_client["gw1__led"] = "gw1"
+
+    assert bridge.send_command("gw1__led", "turn_on", params={"brightness": 128}) is True
+    assert send_event.call_args.args[0] == {
+        "kind": "command",
+        "unique_id": "led",
+        "action": "turn_on",
+        "params": {"brightness": 128},
+    }
+
+    send_event.reset_mock()
+    bridge.send_command("gw1__led", "turn_off", params=None)
+    assert "params" not in send_event.call_args.args[0]
+
+    send_event.reset_mock()
+    bridge.send_command("gw1__led", "turn_off", params={})
+    assert "params" not in send_event.call_args.args[0]
+
+    send_event.reset_mock()
+    bridge.send_command("gw1__led", "set_value", value=26.5)
+    assert send_event.call_args.args[0] == {
+        "kind": "command",
+        "unique_id": "led",
+        "action": "set_value",
+        "value": 26.5,
+    }
+
+
+def test_parse_bool_matches_legacy_truthy():
+    """기존 _truthy 와 동일. 'open' 은 False (목록 확장 금지)."""
+    assert parse_bool("1") is True
+    assert parse_bool("TRUE") is True
+    assert parse_bool("on") is True
+    assert parse_bool("yes") is True
+    assert parse_bool("open") is False
+    assert parse_bool("unknown") is None
+    assert parse_bool(None) is None
+    assert parse_bool(0) is False
+    assert parse_bool(1) is True
+    assert parse_bool(True) is True
+    assert parse_bool(False) is False
+
+
+def test_helpers_is_unknown_and_as_dict():
+    assert is_unknown(None) is True
+    assert is_unknown("unknown") is True
+    assert is_unknown("UNKNOWN") is True
+    assert is_unknown("on") is False
+    assert is_unknown(0) is False
+
+    assert as_dict({"a": 1}) == {"a": 1}
+    assert as_dict("on") == {"state": "on"}
+    assert as_dict(None) == {}
+    assert as_dict("unknown") == {}
+
+
+def test_parse_locked_accepts_lock_vocabulary():
+    """lock 전용 어휘. parse_bool 과 분리되어 기존 플랫폼에 영향 없음."""
+    assert parse_locked("locked") is True
+    assert parse_locked("lock") is True
+    assert parse_locked("open") is False
+    assert parse_bool("locked") is False
+
+
+def test_all_platforms_are_forwarded():
+    """ALL_PLATFORMS의 모든 항목이 HA 플랫폼으로 forward 되는지.
+    text_sensor는 sensor 플랫폼에 얹혀 가므로 예외."""
+    from custom_components.ws_bridge import PLATFORMS
+
+    forwarded = {str(p) for p in PLATFORMS}
+    expected = set(ALL_PLATFORMS) - {"text_sensor"}
+    assert expected <= forwarded

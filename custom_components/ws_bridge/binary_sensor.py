@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .bridge import WsBridge
 from .const import DOMAIN, PLATFORM_BINARY_SENSOR
 from .entity import WsBridgeEntity, safe_write_ha_state
+from .helpers import parse_bool
 
 
 async def async_setup_entry(
@@ -20,20 +21,12 @@ async def async_setup_entry(
     bridge.register_platform(PLATFORM_BINARY_SENSOR, async_add_entities, WsBridgeBinarySensor)
 
 
-def _truthy(value: Any) -> bool | None:
-    if value is None or (isinstance(value, str) and value.lower() == "unknown"):
-        return None
-    if isinstance(value, str):
-        return value.lower() in ("1", "true", "on", "yes")
-    return bool(value)
-
-
 class WsBridgeBinarySensor(WsBridgeEntity, BinarySensorEntity):
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
         self._attr_device_class = defn.get("device_class")
         last = bridge.last_state(self._attr_unique_id)
-        self._attr_is_on = _truthy(last)
+        self._attr_is_on = parse_bool(last)
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._attr_device_class = defn.get("device_class")
@@ -45,5 +38,5 @@ class WsBridgeBinarySensor(WsBridgeEntity, BinarySensorEntity):
 
     @callback
     def _on_value(self, value: Any) -> None:
-        self._attr_is_on = _truthy(value)
+        self._attr_is_on = parse_bool(value)
         safe_write_ha_state(self)

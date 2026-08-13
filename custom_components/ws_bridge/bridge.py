@@ -684,6 +684,9 @@ class WsBridge:
         if (client := self._clients.get(gateway_id)) is not None:
             if (ns_dev := self._entity_device.get(ns_uid)) is not None:
                 self._touch_device(client, ns_dev)
+        if isinstance(value, dict):
+            prev = self._states.get(ns_uid)
+            value = {**prev, **value} if isinstance(prev, dict) else dict(value)
         self._states[ns_uid] = value
         self._schedule_save()
         async_dispatcher_send(self.hass, signal_value(self.entry_id, ns_uid), value)
@@ -701,7 +704,10 @@ class WsBridge:
 
     # ── HA → 클라이언트 (해당 클라이언트로만 라우팅) ─────────────────────────
     @callback
-    def send_command(self, unique_id: str, action: str, value: Any = None) -> bool:
+    def send_command(
+        self, unique_id: str, action: str,
+        value: Any = None, params: dict[str, Any] | None = None,
+    ) -> bool:
         gateway_id = self._entity_client.get(unique_id)
         client = self._clients.get(gateway_id) if gateway_id else None
         if client is None:
@@ -713,6 +719,8 @@ class WsBridge:
         }
         if value is not None:
             event["value"] = value
+        if params:
+            event["params"] = params
         client.send_event(event)
         return True
 
