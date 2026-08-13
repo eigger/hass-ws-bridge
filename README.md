@@ -21,7 +21,7 @@ A generic Home Assistant integration that enables **any authenticated WebSocket 
 - **No Additional Brokers/Ports**: Communicates directly using Home Assistant's standard WebSocket API (`/api/websocket`) and a Long-Lived Access Token. No need to run an MQTT broker or expose extra TCP ports.
 - **Dynamic Entity Provisioning**: Entities are created instantly in Home Assistant as soon as the client declares them via JSON messages over the WebSocket connection.
 - **Client-based Device Grouping**: Each client (identified by `gateway_id`) is registered as a parent device (Gateway) in Home Assistant. All devices/entities declared by that client are grouped as child devices (`via_device`) under it for clean organization.
-- **Bi-directional Command Routing**: Supports control components including `switch`, `number`, `select`, `button`, and `update`. Control events (`command`) triggered by the HA UI or automations are routed back exclusively to the originating client.
+- **Bi-directional Command Routing**: Supports control components including `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, and `fan`. Control events (`command`) triggered by the HA UI or automations are routed back exclusively to the originating client.
 - **Connection State Tracking (LWT)**: If the client's WebSocket connection drops, all child devices and entities registered by that client are automatically set to `unavailable` to prevent stale states.
 - **Connected Clients Diagnostic Sensor**: Provides a diagnostic sensor that reports the number of currently connected WebSocket clients (`gateway_id`) in real time.
 
@@ -61,8 +61,11 @@ graph TD
 | `select` | Control | Option selection control (`select_option`, `options`) |
 | `button` | Control | Execution trigger (`press`, stateless) |
 | `update` | Control | Firmware update (`install` / `check`; `installed_version` / `latest_version`) |
+| `light` | Control | Brightness / color (`turn_on` / `turn_off` with `params`) |
+| `cover` | Control | Open/close/position/tilt (`open_cover`, `set_cover_position`, …) |
+| `fan` | Control | Speed / preset / oscillate / direction |
 
-Planned (not accepted on the wire yet): `text` → `lock` → `cover` / `fan` (separate PRs) → `light` / `climate` (each standalone). See [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms). `text` is writable and is not `text_sensor`.
+Planned (not accepted on the wire yet): `text` → `lock` → `date`/`time`/`datetime`/`event`/`valve` → `climate` (…). See [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms). `text` is writable and is not `text_sensor`.
 
 ---
 

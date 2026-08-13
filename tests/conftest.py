@@ -1,5 +1,6 @@
 """pytest configuration — mock Home Assistant modules to allow testing without HA installed."""
 import sys
+from enum import IntFlag
 from unittest.mock import MagicMock
 
 
@@ -63,6 +64,43 @@ EntityCategory.CONFIG = EntityCategory("config")
 EntityCategory.DIAGNOSTIC = EntityCategory("diagnostic")
 
 
+class ColorMode:
+    ONOFF = "onoff"
+    BRIGHTNESS = "brightness"
+    COLOR_TEMP = "color_temp"
+    HS = "hs"
+    RGB = "rgb"
+    RGBW = "rgbw"
+    RGBWW = "rgbww"
+    WHITE = "white"
+
+
+class LightEntityFeature(IntFlag):
+    EFFECT = 4
+    FLASH = 8
+    TRANSITION = 32
+
+
+class CoverEntityFeature(IntFlag):
+    OPEN = 1
+    CLOSE = 2
+    SET_POSITION = 4
+    STOP = 8
+    OPEN_TILT = 16
+    CLOSE_TILT = 32
+    STOP_TILT = 64
+    SET_TILT_POSITION = 128
+
+
+class FanEntityFeature(IntFlag):
+    SET_SPEED = 1
+    OSCILLATE = 2
+    DIRECTION = 4
+    PRESET_MODE = 8
+    TURN_OFF = 16
+    TURN_ON = 32
+
+
 # Set up core mocks
 sys.modules["homeassistant"] = MagicMock()
 
@@ -108,6 +146,9 @@ for mod in [
     "homeassistant.components.select",
     "homeassistant.components.button",
     "homeassistant.components.update",
+    "homeassistant.components.light",
+    "homeassistant.components.cover",
+    "homeassistant.components.fan",
     "homeassistant.exceptions",
     "homeassistant.util",
     "homeassistant.util.dt",
@@ -125,5 +166,18 @@ mock_update = sys.modules["homeassistant.components.update"]
 mock_update.UpdateEntity = MockBase
 mock_update.UpdateEntityFeature = MagicMock()
 mock_update.UpdateDeviceClass = MagicMock()
+
+mock_light = sys.modules["homeassistant.components.light"]
+mock_light.LightEntity = MockBase
+mock_light.ColorMode = ColorMode
+mock_light.LightEntityFeature = LightEntityFeature
+
+mock_cover = sys.modules["homeassistant.components.cover"]
+mock_cover.CoverEntity = MockBase
+mock_cover.CoverEntityFeature = CoverEntityFeature
+
+mock_fan = sys.modules["homeassistant.components.fan"]
+mock_fan.FanEntity = MockBase
+mock_fan.FanEntityFeature = FanEntityFeature
 
 sys.modules["homeassistant.exceptions"].HomeAssistantError = Exception

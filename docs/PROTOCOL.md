@@ -9,7 +9,7 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
 ## 1. Role Definitions
 
 - **Client**: Responsible for **declaring** entities, **pushing** state updates, and executing control commands sent from Home Assistant.
-- **Integration**: Responsible for **creating** entities based on client declarations and **updating** their states. For control platforms (`switch`, `number`, `select`, `button`, `update`), it **relays** command requests from HA back to the originating client. It has no hardware-specific decoding logic.
+- **Integration**: Responsible for **creating** entities based on client declarations and **updating** their states. For control platforms (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`), it **relays** command requests from HA back to the originating client. It has no hardware-specific decoding logic.
 
 ---
 
@@ -82,7 +82,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   }
   ```
   - `unique_id` (String, Required): Unique identifier within the client namespace.
-  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`.
+  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`.
   - `name` (String, Required): Name of the entity.
   - `device` (Object, Optional): The sub-device this entity belongs to.
     - `id` (String, Required): Unique sub-device ID.
@@ -93,12 +93,15 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   - `suggested_display_precision` (Integer, Optional, `sensor` platform): Number of decimal places to round the displayed value to (mirrors the client's own rounding config, e.g. ESPHome's `accuracy_decimals`). Without it, Home Assistant shows the raw float exactly as received, which for many sensors means long, noisy decimals (e.g. `48.85864` instead of `48.9`).
   - `icon` (String, Optional): Icon name (e.g., `mdi:thermometer`).
   - `entity_category` (String, Optional): Entity category, either `"config"` or `"diagnostic"`.
-  - `features` (List of String, Optional): Capability flags for platforms that expose multiple operations (e.g. cover open/close/stop). Unknown names are ignored. When omitted, each platform uses its own sensible default. Current platforms do not require this field.
+  - `features` (List of String, Optional): Capability flags (`cover`, `light`, `fan`, …). Unknown names are ignored. When omitted, each platform uses its own default (e.g. cover `OPEN|CLOSE|STOP`).
   - **Platform-Specific Fields**:
     - **`select` platform**: `options` (List of String, Required) - List of selectable options.
     - **`number` platform**: `min`, `max`, `step` (Float, Optional) - Range and step configuration.
     - **`device_tracker` platform**: no extra declare fields — the location travels in the state `value` object (see §3.2).
     - **`update` platform**: no extra declare fields — versions travel in the state `value` object (see §3.2). `device_class` defaults to `firmware` on the HA side if omitted.
+    - **`light` platform**: `supported_color_modes` (List of String, Optional — `onoff`/`brightness`/`color_temp`/`hs`/`rgb`/`rgbw`/`rgbww`/`white`; default `["onoff"]`), `effect_list` (List of String, Optional), `min_color_temp_kelvin` / `max_color_temp_kelvin` (Integer, Optional), `features` (`transition`/`flash`/`effect`).
+    - **`cover` platform**: `features` (`open`/`close`/`stop`/`set_position`/`open_tilt`/`close_tilt`/`stop_tilt`/`set_tilt_position`; default open+close+stop).
+    - **`fan` platform**: `speed_count` (Integer, Optional, default `100`), `preset_modes` (List of String, Optional), `features` (`set_speed`/`oscillate`/`direction`/`preset_mode`/`turn_on`/`turn_off`; default turn_on+turn_off+set_speed).
 
 * **Response**
   ```json
@@ -122,6 +125,9 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
 | `select` | Control | String (current option) | `select_option` (requires `value` as option) |
 | `button` | Control | — | `press` |
 | `update` | Control | Object (`installed_version`/`latest_version`, see §3.2) | `install` / `check` |
+| `light` | Control | Object (`state`/`brightness`/…, see §3.2) | `turn_on` / `turn_off` (`params`) |
+| `cover` | Control | Object (`state`/`position`/…, see §3.2) | `open_cover` / `close_cover` / `stop_cover` / `set_cover_position` / tilt variants |
+| `fan` | Control | Object (`state`/`percentage`/…, see §3.2) | `turn_on` / `turn_off` / `set_percentage` / `set_preset_mode` / `oscillate` / `set_direction` |
 
 ---
 
@@ -147,12 +153,13 @@ Updates states for one or more entities in batch. If a state update arrives befo
   ```
   - `states` (List, Required): List of entity state updates.
     - `unique_id` (String, Required): The original entity `unique_id` (without the gateway namespace prefix).
-    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (currently `device_tracker` and `update`; future multi-attribute platforms such as light/cover/climate use the same form).
+    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (`device_tracker`, `update`, `light`, `cover`, `fan`, …).
       - Sending the string `"unknown"` (case-insensitive) for any platform will map to Home Assistant's `unavailable` (None) state.
       - For `binary_sensor`, values of `"1"`, `"true"`, `"on"`, `"yes"` (case-insensitive) or boolean `true` are mapped to the On state.
       - For `sensor` with `device_class` of `"timestamp"` or `"date"`, string values are automatically parsed into datetime/date objects.
       - For `device_tracker`, see the object form below.
       - For `update`, see the object form below.
+      - For `light` / `cover` / `fan`, see the object forms below.
       - **Object (dict) values — shallow merge**: When both the previous stored state and the new `value` are objects, the integration **shallow-merges** them (`{...prev, ...value}`). Sending `{"progress": 50}` or `{"brightness": 200}` preserves other keys. To **clear** a previously reported key, send JSON `null` for that key (omitting the key does **not** clear it). Any other type change (scalar → object, object → scalar, or first write of an object) **replaces** the stored state. The full merged result is what entities receive.
       - Values must be JSON-serializable (no `bytes`/tuples). Colors must be sent as lists.
   - `ts` (Number, Optional): Timestamp of the state update (currently accepted by the schema but ignored by the backend).
@@ -218,6 +225,43 @@ Object states are **shallow-merged**. Omit a key to keep the previous value; sen
 - After install, dropping release notes: include `"summary": null` / `"release_url": null` if those keys were reported before.
 
 Sending the string `"unknown"` (or a non-object) clears the version fields entirely (replace, not merge).
+
+#### `light` state (object `value`)
+
+```json
+{
+  "unique_id": "living_led",
+  "value": {
+    "state": "on",
+    "brightness": 180,
+    "color_mode": "rgb",
+    "rgb_color": [255, 64, 0]
+  }
+}
+```
+
+- `state` (`"on"`/`"off"` or bool), `brightness` (0–255), `color_mode`, `color_temp_kelvin`, `hs_color` (`[h, s]`), `rgb_color` / `rgbw_color` / `rgbww_color` (lists), `effect`.
+- Colors **must** be lists (not tuples) for JSON.
+- `supported_color_modes` must follow HA rules: do **not** mix `onoff`/`brightness` with color modes (`rgb`, `color_temp`, …) — the integration drops the standalone modes if both are declared.
+- If `color_mode` is omitted, the integration infers it from which color keys are present (and supported).
+
+#### `cover` state (object `value`)
+
+```json
+{"unique_id": "blind", "value": {"state": "open", "position": 70}}
+```
+
+- `state` (`"open"`/`"closed"`/`"opening"`/`"closing"`), `position` (0–100, **0 = fully closed, 100 = fully open**), `tilt_position` (0–100).
+- HA `is_closed` uses `position == 0` when present; otherwise `state == "closed"`; if both are absent, the cover is **unknown** (not shown as open).
+- `opening` / `closing` set `is_opening` / `is_closing` so the UI can show motion even while `position` is still `0` or `100`.
+
+#### `fan` state (object `value`)
+
+```json
+{"unique_id": "ceiling_fan", "value": {"state": "on", "percentage": 40, "oscillating": true, "direction": "forward"}}
+```
+
+- `state`, `percentage` (0–100), `preset_mode`, `oscillating` (bool), `direction` (`"forward"`/`"reverse"`).
 
 * **Response**
   ```json
@@ -367,7 +411,7 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 
 ## 4. Control Commands (Home Assistant → Client)
 
-When a controllable entity (`switch`, `number`, `select`, `button`, `update`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
+When a controllable entity (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
 
 The client should listen for these events, perform the physical action, and then push the updated state back using a `ws_bridge/state` message.
 
@@ -445,7 +489,7 @@ These `platform` values are **not** accepted today — `ws_bridge/entity` reject
 |:---:|:---|:---|
 | 1 | `text` | Next. Writable string + `set_value` (`min`/`max`/`pattern`/`mode`). Not `text_sensor` (read-only; created as an HA `sensor`). |
 | 2 | `lock` | `lock` / `unlock`. Decide `open` and PIN `code` in that PR. |
-| 3 | `cover`, `fan` | Separate PRs. Position / %, feature bits, object-ish state. |
-| 4 | `light`, `climate` | Each standalone, last. Object state larger than `update`. |
+| 3 | `date` / `time` / `datetime` / `event` / `valve` | Same complexity class as `text` / simple control. |
+| 4 | `climate` (+ humidifier / water_heater / …) | Object state larger than `light`. |
 
-`date` / `time` are the same complexity class as `text` but are not in this queue.
+`light` / `cover` / `fan` shipped in Phase 1.

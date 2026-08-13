@@ -18,6 +18,12 @@ from custom_components.ws_bridge import _subentry_gateway_ids
 from custom_components.ws_bridge.const import ALL_PLATFORMS, PLATFORM_UPDATE
 from custom_components.ws_bridge.device_tracker import _parse_location
 from custom_components.ws_bridge.helpers import as_dict, is_unknown, parse_bool, parse_locked
+from custom_components.ws_bridge.cover import _features as cover_features
+from custom_components.ws_bridge.fan import _features as fan_features
+from custom_components.ws_bridge.light import _color_modes, _features as light_features
+from homeassistant.components.cover import CoverEntityFeature
+from homeassistant.components.fan import FanEntityFeature
+from homeassistant.components.light import ColorMode, LightEntityFeature
 from custom_components.ws_bridge.update import _parse_update_state, _strip_build_suffix
 
 
@@ -658,3 +664,155 @@ def test_all_platforms_are_forwarded():
     forwarded = {str(p) for p in PLATFORMS}
     expected = set(ALL_PLATFORMS) - {"text_sensor"}
     assert expected <= forwarded
+
+# ── Phase 1: light / cover / fan ─────────────────────────────────────────────
+
+def test_light_color_modes_and_features():
+    assert _color_modes(None) == {ColorMode.ONOFF}
+    assert _color_modes(["rgb", "nope"]) == {ColorMode.RGB}
+    # HA: ONOFF/BRIGHTNESS 는 다른 색 모드와 배타
+    assert _color_modes(["brightness", "rgb"]) == {ColorMode.RGB}
+    assert _color_modes(["onoff", "brightness"]) == {ColorMode.BRIGHTNESS}
+    flags = light_features(["transition", "unknown"], has_effects=True)
+    assert flags & LightEntityFeature.TRANSITION
+    assert flags & LightEntityFeature.EFFECT
+
+
+def test_light_apply_state_tolerates_bad_numbers():
+    """brightness/color_temp 파싱 실패가 예외로 전파되면 이후 갱신이 전부 죽는다."""
+    from custom_components.ws_bridge.light import WsBridgeLight
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    entity = WsBridgeLight(
+        bridge,
+        {
+            "unique_id": "gw1__led",
+            "platform": "light",
+            "name": "LED",
+            "supported_color_modes": ["rgb", "color_temp"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    entity._state = {"state": "on", "brightness": "abc", "color_temp_kelvin": "warm"}
+    entity._apply_state()
+    assert entity._attr_is_on is True
+    assert entity._attr_brightness is None
+    assert entity._attr_color_temp_kelvin is None
+
+
+def test_light_infers_color_mode_from_payload():
+    from custom_components.ws_bridge.light import WsBridgeLight
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    entity = WsBridgeLight(
+        bridge,
+        {
+            "unique_id": "gw1__led",
+            "platform": "light",
+            "name": "LED",
+            "supported_color_modes": ["rgb", "color_temp"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    entity._state = {"state": "on", "rgb_color": [255, 64, 0]}
+    entity._apply_state()
+    assert entity._attr_color_mode == ColorMode.RGB
+    assert entity._attr_rgb_color == (255, 64, 0)
+
+
+def test_cover_features_default_and_unknown_ignored():
+    default = cover_features(None)
+    assert default & CoverEntityFeature.OPEN
+    assert default & CoverEntityFeature.CLOSE
+    assert default & CoverEntityFeature.STOP
+    flags = cover_features(["open", "set_position", "nope"])
+    assert flags & CoverEntityFeature.OPEN
+    assert flags & CoverEntityFeature.SET_POSITION
+    assert not (flags & CoverEntityFeature.CLOSE)
+
+
+def test_cover_is_closed_none_when_unknown():
+    """position/state 둘 다 없으면 None — False 면 열린 것처럼 오표시."""
+    from custom_components.ws_bridge.cover import WsBridgeCover
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    entity = WsBridgeCover(
+        bridge,
+        {
+            "unique_id": "gw1__blind",
+            "platform": "cover",
+            "name": "Blind",
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    assert entity.is_closed is None
+    entity._state = {"position": 0}
+    entity._apply_state()
+    assert entity.is_closed is True
+    entity._state = {"position": 50}
+    entity._apply_state()
+    assert entity.is_closed is False
+    entity._state = {"state": "closed"}
+    entity._attr_current_cover_position = None
+    assert entity.is_closed is True
+
+
+def test_cover_opening_closing_override_position():
+    """position=0 이어도 state=opening 이면 HA 가 OPENING 으로 표시해야 한다."""
+    from custom_components.ws_bridge.cover import WsBridgeCover
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    entity = WsBridgeCover(
+        bridge,
+        {
+            "unique_id": "gw1__blind",
+            "platform": "cover",
+            "name": "Blind",
+            "features": ["open", "close", "set_position"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    entity._state = {"state": "opening", "position": 0}
+    entity._apply_state()
+    assert entity.is_opening is True
+    assert entity.is_closing is False
+    assert entity.is_closed is True  # position 기준 — HA state 는 is_opening 우선
+    entity._state = {"state": "closing", "position": 100}
+    entity._apply_state()
+    assert entity.is_closing is True
+
+
+def test_fan_features_default_and_unknown_ignored():
+    default = fan_features(None)
+    assert default & FanEntityFeature.TURN_ON
+    assert default & FanEntityFeature.SET_SPEED
+    flags = fan_features(["oscillate", "ghost"])
+    assert flags & FanEntityFeature.OSCILLATE
+    assert not (flags & FanEntityFeature.SET_SPEED)
+
+
+def test_fan_set_percentage_zero_turns_off():
+    from custom_components.ws_bridge.fan import WsBridgeFan
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge.send_command = MagicMock(return_value=True)
+    entity = WsBridgeFan(
+        bridge,
+        {
+            "unique_id": "gw1__fan",
+            "platform": "fan",
+            "name": "Fan",
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    entity._state = {"state": "on", "percentage": 40}
+    entity._apply_state()
+    entity.hass = MagicMock()
+    entity.async_write_ha_state = MagicMock()
+
+    import asyncio
+
+    asyncio.run(entity.async_set_percentage(0))
+    assert entity._state["state"] == "off"
+    assert entity._attr_is_on is False
+    assert entity._attr_percentage == 0
