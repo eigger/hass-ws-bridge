@@ -22,6 +22,7 @@ WS_ENTITY = f"{DOMAIN}/entity"
 WS_STATE = f"{DOMAIN}/state"
 WS_AVAILABILITY = f"{DOMAIN}/availability"
 WS_REMOVE = f"{DOMAIN}/remove"
+WS_SYNC = f"{DOMAIN}/sync"
 
 # ws_bridge/remove mode (PROTOCOL.md §3.4)
 REMOVE_MODE_EXACT = "exact"

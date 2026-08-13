@@ -411,6 +411,82 @@ class WsBridge:
         self._entities[uid] = entity
         reg.add_entities([entity], **kwargs)
 
+    # ── 동기화 (ws_bridge/sync) ──────────────────────────────────────────────
+    async def async_sync_entities(
+        self, gateway_id: str, unique_ids: list[str]
+    ) -> list[str]:
+        """클라이언트가 선언한 '전체 목록'과 대조해, 목록에 없는 이 게이트웨이의
+        엔티티를 제거하고 제거된 (원본) unique_id 목록을 돌려준다.
+
+        살아남는 엔티티는 건드리지 않으므로 히스토리·통계·entity_id가 그대로
+        보존된다 — 전체 삭제 후 재선언하는 방식과의 결정적인 차이.
+        연결이 끊겨 unavailable인 엔티티, HA 재시작 때 저장된 정의로 복원된
+        (keep_last_state_on_disconnect) 엔티티도 모두 대조 대상이다.
+        """
+        keep = {self._ns_uid(gateway_id, uid) for uid in unique_ids}
+        prefix = f"{gateway_id}__"
+
+        known: set[str] = set()
+        entity_reg = er.async_get(self.hass)
+        for entity_entry in er.async_entries_for_config_entry(entity_reg, self.entry_id):
+            uid = entity_entry.unique_id
+            if uid and uid.startswith(prefix):
+                known.add(uid)
+        # 아직 레지스트리에 안 올라온 것(플랫폼 준비 전 pending)과 저장된 정의도 포함
+        known.update(uid for uid in self._created if uid.startswith(prefix))
+        known.update(uid for uid in self._defns if uid.startswith(prefix))
+        known.update(
+            uid
+            for pending in self._pending.values()
+            for defn in pending
+            if (uid := defn.get("unique_id", "")).startswith(prefix)
+        )
+        # 통합 진단 센서는 게이트웨이 소유가 아니므로 절대 대조 대상이 아니다
+        known = {
+            uid for uid in known
+            if not uid.endswith(f"_{CONNECTED_CLIENTS_UNIQUE_ID}")
+        }
+
+        stale = sorted(known - keep)
+        if not stale:
+            return []
+
+        for uid in stale:
+            await self._remove_entity_ns(uid, persist=False)
+        await self.async_save()
+        self._prune_empty_devices(gateway_id)
+
+        removed = [self._strip(gateway_id, uid) for uid in stale]
+        _LOGGER.info(
+            "Sync removed %d stale entity/entities for gateway %s: %s",
+            len(removed), gateway_id, ", ".join(removed),
+        )
+        return removed
+
+    @callback
+    def _prune_empty_devices(self, gateway_id: str) -> None:
+        """엔티티가 하나도 남지 않은 sub-device를 레지스트리와 클라이언트 상태에서
+        정리한다. 게이트웨이 디바이스 자체는 엔티티가 없어도 유지한다."""
+        dev_reg = dr.async_get(self.hass)
+        entity_reg = er.async_get(self.hass)
+        client = self._clients.get(gateway_id)
+        gw_prefix = f"{gateway_id}:"
+
+        for device in list(dr.async_entries_for_config_entry(dev_reg, self.entry_id)):
+            ns_dev = next(
+                (ident[1] for ident in device.identifiers if ident[0] == DOMAIN), None
+            )
+            if ns_dev is None or not ns_dev.startswith(gw_prefix):
+                continue
+            if er.async_entries_for_device(
+                entity_reg, device.id, include_disabled_entities=True
+            ):
+                continue
+            _LOGGER.info("Removing sub-device with no remaining entities: %s", ns_dev)
+            dev_reg.async_remove_device(device.id)
+            if client is not None:
+                client.device_ids.discard(ns_dev)
+
     # ── 삭제 (subentry / ws_bridge/remove) ───────────────────────────────────
     async def async_remove_entity(
         self, gateway_id: str, unique_id: str, mode: str = "exact"
@@ -418,6 +494,7 @@ class WsBridge:
         use_prefix = mode == REMOVE_MODE_PREFIX
         if not use_prefix:
             await self._remove_entity_ns(self._ns_uid(gateway_id, unique_id))
+            _LOGGER.info("Removed entity: %s (gateway %s)", unique_id, gateway_id)
             return
 
         entity_reg = er.async_get(self.hass)
@@ -437,6 +514,13 @@ class WsBridge:
 
         for uid in to_remove:
             await self._remove_entity_ns(uid)
+
+        if to_remove:
+            _LOGGER.info(
+                "Removed %d entity/entities matching prefix %s (gateway %s): %s",
+                len(to_remove), unique_id, gateway_id,
+                ", ".join(sorted(self._strip(gateway_id, uid) for uid in to_remove)),
+            )
 
     async def async_remove_device(
         self, gateway_id: str, device_id: str, mode: str = "exact"
@@ -462,6 +546,12 @@ class WsBridge:
                 if entity_entry.config_entry_id == self.entry_id and entity_entry.unique_id:
                     await self._remove_entity_ns(entity_entry.unique_id)
             dev_reg.async_remove_device(device_registry_id)
+
+        if devices_to_remove:
+            _LOGGER.info(
+                "Removed %d sub-device(s) and their entities for %s=%s (gateway %s)",
+                len(devices_to_remove), mode, device_id, gateway_id,
+            )
 
         if client := self._clients.get(gateway_id):
             to_discard = {
@@ -523,6 +613,13 @@ class WsBridge:
         self._states.pop(ns_uid, None)
         self._defns.pop(ns_uid, None)
         self._entity_client.pop(ns_uid, None)
+        # 플랫폼이 아직 준비되지 않아 큐에 남아 있으면 빼준다 — 안 그러면
+        # register_platform()의 flush가 방금 지운 엔티티를 되살린다.
+        for platform, pending in self._pending.items():
+            if any(d.get("unique_id") == ns_uid for d in pending):
+                self._pending[platform] = [
+                    d for d in pending if d.get("unique_id") != ns_uid
+                ]
         if persist:
             await self.async_save()
 

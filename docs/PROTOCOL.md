@@ -304,6 +304,52 @@ When a **gateway subentry** is deleted in **Settings → WebSocket Bridge**, or 
 
 ---
 
+### 3.5 Entity List Sync (`ws_bridge/sync`)
+
+The client declares **its full entity list**, and the integration removes any entity of that gateway which is **not** in the list. Use it to clean up sensors that no longer exist on the client side.
+
+Once declared, an entity stays in HA until explicitly removed (see §5), so dropping a sensor from the client config leaves it behind in HA. This is more visible for gateways using `keep_last_state_on_disconnect`, whose stored definitions are restored on every HA restart. This command is the cleanup path.
+
+* **Request**
+  ```json
+  {
+    "id": 7,
+    "type": "ws_bridge/sync",
+    "unique_ids": ["multisensor_lux", "temp_sensor_01", "switch_01"]
+  }
+  ```
+  - `unique_ids` (List of String, Required, **at least 1**): Original `unique_id` of **every** entity this gateway currently provides. Anything absent from this list is removed.
+
+* **Response** — the original `unique_id`s that were actually removed.
+  ```json
+  {
+    "id": 7,
+    "type": "result",
+    "success": true,
+    "result": { "removed": ["old_sensor"] }
+  }
+  ```
+
+#### Behaviour
+
+- **Surviving entities are left untouched.** Unlike wipe-then-redeclare, entity_id, history, and long-term statistics are preserved. Safe to call on every reconnect.
+- Scope is limited to the **calling gateway**. Other gateways' entities and the integration diagnostic sensor (`connected_clients`) are never affected.
+- Entities that are `unavailable`, still queued before their platform is ready, or restored via `keep_last_state_on_disconnect` are all included in the comparison.
+- Sub-devices left with no entities are removed from the device registry as well. The gateway device itself is kept.
+- An empty array (`[]`) is **rejected by the schema**, so a client that failed to load its config or booted partially cannot wipe everything by accident. For a full wipe, use `ws_bridge/remove` with no target.
+
+#### When to send
+
+Send it once, right after declaring **all** entities.
+
+```
+ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/state
+```
+
+> **Caution**: A client that discovers devices over time (e.g. sub-devices created only once a BLE advertisement is received) will **delete everything it has not seen yet** if it calls this right after connecting. Such clients should either skip this command or call it only when the full list is genuinely known (e.g. after a completed scan cycle). The integration never guesses whether declaration is "done" — that call is entirely the client's.
+
+---
+
 ## 4. Control Commands (Home Assistant → Client)
 
 When a controllable entity (`switch`, `number`, `select`, `button`, `update`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
@@ -353,3 +399,4 @@ The client should listen for these events, perform the physical action, and then
 ## 5. Notes
 - Recommended entity unique_id pattern: `<device_id>_<key>`.
 - Entities that have not been declared via `ws_bridge/entity` will not appear in Home Assistant.
+- **Retention**: once declared, an entity stays in HA until it is **explicitly** removed via `ws_bridge/remove`, `ws_bridge/sync`, or subentry deletion. It is never auto-deleted merely for not being redeclared on reconnect — the integration cannot tell a dropped connection apart from a device that is genuinely gone. To clean up entities that no longer exist on the client, use §3.5.
