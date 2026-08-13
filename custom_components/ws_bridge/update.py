@@ -156,7 +156,10 @@ class WsBridgeUpdate(WsBridgeCompositeEntity, UpdateEntity):
         self, version: str | None, backup: bool, **kwargs: Any
     ) -> None:
         self._send_command("install")
+        # Clear stale progress from a previous install (often 100) so the
+        # optimistic UI does not flash 100% before the client reports 0.
         self._state["in_progress"] = True
+        self._state["progress"] = None
         self._publish_state()
 
     async def async_update(self) -> None:
