@@ -548,7 +548,7 @@ def test_all_platforms_are_forwarded():
 | 〃 §3.2 `value` 설명 | **dict 허용 + 얕은 병합 규칙**을 Phase 0에서 명시 |
 | 〃 §4 커맨드 이벤트 | **`params` 필드**를 Phase 0에서 명시 |
 | `README.md` / `README_ko.md` 기능 목록 | 제어 가능 컴포넌트 나열 부분(`switch`, `number`, `select`, `button`)에 신규 항목 추가 |
-| `custom_components/ws_bridge/manifest.json` | Phase 완료마다 `version` 상향 (Phase 0 → `1.4.0` — main이 이미 `1.3.x`이므로, 이후 마이너 증가) |
+| `custom_components/ws_bridge/manifest.json` | **Phase마다 올리지 않는다.** 기능 배치가 끝난 뒤 릴리스 시 한 번만 올린다 (현재는 Phase 시작 전 `1.3.1` 유지). |
 
 `strings.json` / `translations/*.json`은 **신규 진단 엔티티를 추가하지 않는 한 수정 불필요**하다.
 

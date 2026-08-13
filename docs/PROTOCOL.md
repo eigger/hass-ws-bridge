@@ -9,7 +9,7 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
 ## 1. Role Definitions
 
 - **Client**: Responsible for **declaring** entities, **pushing** state updates, and executing control commands sent from Home Assistant.
-- **Integration**: Responsible for **creating** entities based on client declarations and **updating** their states. For control platforms (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`), it **relays** command requests from HA back to the originating client. It has no hardware-specific decoding logic.
+- **Integration**: Responsible for **creating** entities based on client declarations and **updating** their states. For control platforms (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`, `media_player`, `camera`), it **relays** command requests from HA back to the originating client. It has no hardware-specific decoding logic.
 
 ---
 
@@ -82,7 +82,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   }
   ```
   - `unique_id` (String, Required): Unique identifier within the client namespace.
-  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `event`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`.
+  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `event`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`, `media_player`, `image`, `camera`.
   - `name` (String, Required): Name of the entity.
   - `device` (Object, Optional): The sub-device this entity belongs to.
     - `id` (String, Required): Unique sub-device ID.
@@ -112,6 +112,9 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
     - **`water_heater` platform**: `operation_list` (non-empty list enables `operation_mode` feature), `min_temp` / `max_temp`, `temperature_unit` (`"C"`/`"F"`, default `"C"`), `features` (`target_temperature`/`operation_mode`/`away_mode`/`on_off`).
     - **`siren` platform**: `available_tones` (non-empty list enables `tones` feature), `features` (`turn_on`/`turn_off`/`tones`/`duration`/`volume_set`).
     - **`alarm_control_panel` platform**: `code_arm_required` (Boolean, Optional, default `true`), `code_format` (`"number"`/`"text"`/omit — unlike lock, this is **not** a regex), `features` (`arm_home`/`arm_away`/`arm_night`/`arm_vacation`/`arm_custom_bypass`/`trigger`).
+    - **`media_player` platform** (v1: playback / volume / source): `source_list`, `features` (`play`/`pause`/`stop`/`next_track`/`previous_track`/`volume_set`/`volume_mute`/`volume_step`/`turn_on`/`turn_off`/`select_source`; `select_source` auto-enabled when `source_list` is set).
+    - **`image` platform**: no extra declare fields — state carries `image_url` (URL only; no base64).
+    - **`camera` platform**: `brand` / `model`, `features` (`on_off`/`stream`; `stream` auto-enabled when state has `stream_source`). Still/stream are **URLs only**.
 
 * **Response**
   ```json
@@ -150,6 +153,9 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
 | `water_heater` | Control | Object (`state`/`temperature`/…) | `set_temperature` / `set_operation_mode` / `set_away_mode` / `turn_on` / `turn_off` |
 | `siren` | Control | Boolean | `turn_on` (`params`) / `turn_off` |
 | `alarm_control_panel` | Control | String | `alarm_disarm` / `alarm_arm_*` / `alarm_trigger` |
+| `media_player` | Control | Object (`state`/volume/media/…, see §3.2) | `media_play` / `media_pause` / `media_stop` / `media_next_track` / `media_previous_track` / `volume_set` / `volume_mute` / `volume_up` / `volume_down` / `select_source` / `turn_on` / `turn_off` |
+| `image` | Read | URL string or object | — |
+| `camera` | Control | Object (`still_image_url`/`stream_source`/…) | `turn_on` / `turn_off` |
 
 ---
 
@@ -175,13 +181,14 @@ Updates states for one or more entities in batch. If a state update arrives befo
   ```
   - `states` (List, Required): List of entity state updates.
     - `unique_id` (String, Required): The original entity `unique_id` (without the gateway namespace prefix).
-    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (`device_tracker`, `update`, `light`, `cover`, `fan`, `valve`, `climate`, `humidifier`, `water_heater`, …).
+    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (`device_tracker`, `update`, `light`, `cover`, `fan`, `valve`, `climate`, `humidifier`, `water_heater`, `media_player`, `camera`, …).
       - Sending the string `"unknown"` (case-insensitive) for any platform will map to Home Assistant's `unavailable` (None) state.
       - For `binary_sensor`, values of `"1"`, `"true"`, `"on"`, `"yes"` (case-insensitive) or boolean `true` are mapped to the On state.
       - For `sensor` with `device_class` of `"timestamp"` or `"date"`, string values are automatically parsed into datetime/date objects.
       - For `device_tracker`, see the object form below.
       - For `update`, see the object form below.
-      - For `light` / `cover` / `fan` / `valve` / `climate` / `humidifier` / `water_heater`, see the object forms below.
+      - For `light` / `cover` / `fan` / `valve` / `climate` / `humidifier` / `water_heater` / `media_player` / `camera`, see the object forms below.
+      - For `image`, send an `image_url` string (or `{"image_url": "..."}`). URL only — no base64.
       - For `lock`, accept `"locked"`/`"unlocked"`/… or bool (`true` = locked).
       - For `date` / `time` / `datetime`, send ISO 8601 strings; parse failures become unknown (`None`). Tz-naive datetimes get HA's local timezone attached (not interpreted as UTC).
       - For `event`, send an event_type string or `{"event_type": "...", "attributes": {...}}`. Events are **not** restored from last state on restart.
@@ -338,6 +345,30 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 - **`siren`**: boolean (or `{"state": true}`).
 - **`alarm_control_panel`**: `"disarmed"` / `"armed_home"` / `"armed_away"` / `"armed_night"` / `"armed_vacation"` / `"armed_custom_bypass"` / `"arming"` / `"pending"` / `"triggered"`.
 
+#### `media_player` state (object `value`)
+
+```json
+{"unique_id": "speaker", "value": {"state": "playing", "volume_level": 0.4, "media_title": "Song", "source": "HDMI"}}
+```
+
+- `state` (`off`/`on`/`idle`/`playing`/`paused`/`buffering`), `volume_level` (0–1), `is_volume_muted`, `media_title` / `media_artist`, `media_position` / `media_duration` (seconds), `source`, `media_image_url`.
+- When `media_position` changes, the integration stamps `media_position_updated_at` so HA can interpolate the progress bar.
+- v1 scope: playback + volume + source. No `browse_media` / grouping yet.
+
+#### `image` / `camera` state
+
+```json
+{"unique_id": "snap", "value": {"image_url": "http://cam.local/still.jpg"}}
+```
+
+```json
+{"unique_id": "front_cam", "value": {"still_image_url": "http://cam.local/still.jpg", "stream_source": "rtsp://cam.local/stream", "is_on": true}}
+```
+
+- **URL only** — do not send base64/binary over the WebSocket. HA fetches stills from `still_image_url` / `image_url`.
+- Optional `image_last_updated` (ISO datetime) for `image`. If omitted, the integration bumps the timestamp **only when `image_url` changes** (so periodic full-state sync does not re-download).
+- Fetchable URLs must be `http`/`https` (streams may also use `rtsp`/`rtsps`). Loopback / link-local / non-network schemes are rejected — HA will not SSRF to `localhost` on the user's behalf. LAN camera hosts remain allowed.
+
 * **Response**
   ```json
   {
@@ -486,7 +517,7 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 
 ## 4. Control Commands (Home Assistant → Client)
 
-When a controllable entity (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
+When a controllable entity (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`, `media_player`, `camera`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
 
 The client should listen for these events, perform the physical action, and then push the updated state back using a `ws_bridge/state` message.
 
@@ -577,6 +608,17 @@ Command events:
 {"kind": "command", "unique_id": "alarm", "action": "alarm_arm_away", "params": {"code": "1234"}}
 ```
 
+### Phase 4 examples
+
+```json
+{"unique_id": "speaker", "platform": "media_player", "name": "Speaker", "source_list": ["HDMI", "Bluetooth"]}
+{"unique_id": "front_cam", "platform": "camera", "name": "Front", "features": ["on_off", "stream"]}
+```
+
+```json
+{"kind": "command", "unique_id": "speaker", "action": "volume_set", "params": {"volume_level": 0.5}}
+{"kind": "command", "unique_id": "front_cam", "action": "turn_off"}
+```
 
 ### `update` commands
 
@@ -598,6 +640,6 @@ These `platform` values are **not** accepted today — `ws_bridge/entity` reject
 
 | Order | Platform | Notes |
 |:---:|:---|:---|
-| 1 | `media_player` / `image` / `camera` | Design decision first (see implementation plan). |
+| 1 | `vacuum` / `lawn_mower` / `remote` / `todo` | Deferred (Phase 5) — do not start without demand. |
 
-Phase 1–3 have shipped (`light`/`cover`/`fan`, scalar Phase 2, and climate family).
+Phases 0–4 have shipped. `media_player` v1 is playback/volume/source only; `image`/`camera` are URL-only (no base64).

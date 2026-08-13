@@ -74,8 +74,11 @@ graph TD
 | `water_heater` | Control | Temp / operation / away |
 | `siren` | Control | `turn_on` / `turn_off` (+ tone/volume) |
 | `alarm_control_panel` | Control | arm/disarm/trigger |
+| `media_player` | Control | Playback / volume / source (v1) |
+| `image` | Read | URL image |
+| `camera` | Control | Still/stream URL |
 
-Planned (not accepted on the wire yet): `media_player` / `image` / `camera`. See [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms).
+Planned (not accepted on the wire yet): `vacuum` / `lawn_mower` / `remote` / `todo`. See [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms).
 
 ---
 

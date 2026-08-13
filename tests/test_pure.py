@@ -1145,3 +1145,149 @@ def test_phase3_platforms_registered():
         PLATFORM_ALARM_CONTROL_PANEL,
     ):
         assert p in ALL_PLATFORMS
+
+
+# ── Phase 4: media_player / image / camera + version pin ─────────────────────
+
+def test_media_player_features_and_state():
+    from custom_components.ws_bridge.media_player import (
+        WsBridgeMediaPlayer,
+        _features,
+    )
+    from homeassistant.components.media_player import (
+        MediaPlayerEntityFeature,
+        MediaPlayerState,
+    )
+
+    flags = _features(None, has_sources=False)
+    assert flags & MediaPlayerEntityFeature.PLAY
+    assert not (flags & MediaPlayerEntityFeature.SELECT_SOURCE)
+    assert _features(["play"], has_sources=True) & MediaPlayerEntityFeature.SELECT_SOURCE
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge.send_command = MagicMock(return_value=True)
+    entity = WsBridgeMediaPlayer(
+        bridge,
+        {
+            "unique_id": "gw1__speaker",
+            "platform": "media_player",
+            "name": "Speaker",
+            "source_list": ["HDMI", "Bluetooth"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    entity.hass = MagicMock()
+    entity.async_write_ha_state = MagicMock()
+    entity._on_value(
+        {
+            "state": "playing",
+            "volume_level": 0.4,
+            "media_title": "Song",
+            "source": "HDMI",
+            "media_position": 42,
+        }
+    )
+    assert entity._attr_state == MediaPlayerState.PLAYING
+    assert entity._attr_volume_level == 0.4
+    assert entity._attr_source == "HDMI"
+    assert entity._attr_media_position == 42
+    assert entity._attr_media_position_updated_at is not None
+    stamped = entity._attr_media_position_updated_at
+    entity._on_value(
+        {
+            "state": "playing",
+            "volume_level": 0.5,
+            "media_title": "Song",
+            "source": "HDMI",
+            "media_position": 42,
+        }
+    )
+    assert entity._attr_media_position_updated_at is stamped
+    entity._on_value(
+        {
+            "state": "playing",
+            "volume_level": 0.5,
+            "media_title": "Song",
+            "source": "HDMI",
+            "media_position": 50,
+        }
+    )
+    assert entity._attr_media_position == 50
+    assert entity._attr_media_position_updated_at is not stamped
+    asyncio.run(entity.async_media_pause())
+    bridge.send_command.assert_called_with("gw1__speaker", "media_pause")
+    assert entity._attr_state == MediaPlayerState.PAUSED
+
+
+def test_image_and_camera_url_state():
+    from custom_components.ws_bridge.image import WsBridgeImage
+    from custom_components.ws_bridge.camera import WsBridgeCamera, _features
+    from custom_components.ws_bridge.helpers import sanitize_remote_url
+    from homeassistant.components.camera import CameraEntityFeature
+
+    assert sanitize_remote_url("http://cam.local/still.jpg")
+    assert sanitize_remote_url("http://127.0.0.1/x") is None
+    assert sanitize_remote_url("file:///etc/passwd") is None
+    assert sanitize_remote_url(
+        "rtsp://cam.local/stream", schemes=("http", "https", "rtsp", "rtsps")
+    )
+
+    assert not (_features(["stream"], has_stream=False) & CameraEntityFeature.STREAM)
+    assert _features(None, has_stream=True) & CameraEntityFeature.STREAM
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge.hass = MagicMock()
+    img = WsBridgeImage(
+        bridge,
+        {
+            "unique_id": "gw1__snap",
+            "platform": "image",
+            "name": "Snap",
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    img.hass = MagicMock()
+    img.async_write_ha_state = MagicMock()
+    img._on_value({"image_url": "http://cam.local/still.jpg"})
+    assert img._attr_image_url == "http://cam.local/still.jpg"
+    assert img._attr_image_last_updated is not None
+    first_updated = img._attr_image_last_updated
+    img._on_value({"image_url": "http://cam.local/still.jpg", "extra": 1})
+    assert img._attr_image_last_updated is first_updated
+    img._on_value({"image_url": "http://cam.local/still2.jpg"})
+    assert img._attr_image_last_updated is not first_updated
+
+    cam = WsBridgeCamera(
+        bridge,
+        {
+            "unique_id": "gw1__cam",
+            "platform": "camera",
+            "name": "Cam",
+            "features": ["on_off", "stream"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    cam.hass = MagicMock()
+    cam.async_write_ha_state = MagicMock()
+    cam._on_value(
+        {
+            "still_image_url": "http://cam.local/still.jpg",
+            "stream_source": "rtsp://cam.local/stream",
+            "is_on": True,
+        }
+    )
+    assert cam._still_url.endswith("still.jpg")
+    assert asyncio.run(cam.stream_source()) == "rtsp://cam.local/stream"
+    assert cam._attr_supported_features & CameraEntityFeature.STREAM
+    cam._on_value({"still_image_url": "http://127.0.0.1/admin", "is_on": True})
+    assert cam._still_url is None
+
+
+def test_manifest_version_pinned_to_pre_phase():
+    import json
+    from pathlib import Path
+
+    manifest = json.loads(
+        Path("custom_components/ws_bridge/manifest.json").read_text()
+    )
+    assert manifest["version"] == "1.3.1"

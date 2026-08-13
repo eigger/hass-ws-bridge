@@ -1,7 +1,20 @@
 """pytest configuration — mock Home Assistant modules to allow testing without HA installed."""
 import sys
+import types
 from enum import IntFlag
 from unittest.mock import MagicMock
+
+# camera.py imports aiohttp; CI only installs pytest+voluptuous.
+_aiohttp = types.ModuleType("aiohttp")
+
+
+class _ClientTimeout:
+    def __init__(self, total=None, **kwargs):
+        self.total = total
+
+
+_aiohttp.ClientTimeout = _ClientTimeout
+sys.modules["aiohttp"] = _aiohttp
 
 
 class MockBase:
@@ -196,6 +209,39 @@ class AlarmControlPanelState:
     TRIGGERED = "triggered"
 
 
+class MediaPlayerEntityFeature(IntFlag):
+    PAUSE = 1
+    SEEK = 2
+    VOLUME_SET = 4
+    VOLUME_MUTE = 8
+    PREVIOUS_TRACK = 16
+    NEXT_TRACK = 32
+    TURN_ON = 128
+    TURN_OFF = 256
+    PLAY_MEDIA = 512
+    VOLUME_STEP = 1024
+    SELECT_SOURCE = 2048
+    STOP = 4096
+    CLEAR_PLAYLIST = 8192
+    PLAY = 16384
+    SHUFFLE_SET = 32768
+    REPEAT_SET = 65536
+
+
+class MediaPlayerState:
+    OFF = "off"
+    ON = "on"
+    IDLE = "idle"
+    PLAYING = "playing"
+    PAUSED = "paused"
+    BUFFERING = "buffering"
+
+
+class CameraEntityFeature(IntFlag):
+    ON_OFF = 1
+    STREAM = 2
+
+
 class UnitOfTemperature:
     CELSIUS = "°C"
     FAHRENHEIT = "°F"
@@ -271,6 +317,10 @@ for mod in [
     "homeassistant.components.water_heater",
     "homeassistant.components.siren",
     "homeassistant.components.alarm_control_panel",
+    "homeassistant.components.media_player",
+    "homeassistant.components.image",
+    "homeassistant.components.camera",
+    "homeassistant.helpers.aiohttp_client",
     "homeassistant.exceptions",
     "homeassistant.util.enum",
 ]:
@@ -344,6 +394,20 @@ mock_alarm.AlarmControlPanelEntityFeature = AlarmControlPanelEntityFeature
 mock_alarm.AlarmControlPanelState = AlarmControlPanelState
 mock_alarm.CodeFormat = CodeFormat
 
+mock_media = sys.modules["homeassistant.components.media_player"]
+mock_media.MediaPlayerEntity = MockBase
+mock_media.MediaPlayerEntityFeature = MediaPlayerEntityFeature
+mock_media.MediaPlayerState = MediaPlayerState
+
+mock_image = sys.modules["homeassistant.components.image"]
+mock_image.ImageEntity = MockBase
+
+mock_camera = sys.modules["homeassistant.components.camera"]
+mock_camera.Camera = MockBase
+mock_camera.CameraEntityFeature = CameraEntityFeature
+
+sys.modules["homeassistant.helpers.aiohttp_client"].async_get_clientsession = MagicMock()
+
 mock_const.UnitOfTemperature = UnitOfTemperature
 
 # homeassistant.util 을 MagicMock 으로 두면 `from homeassistant.util import dt` 가
@@ -353,6 +417,9 @@ import types
 _util_mod = types.ModuleType("homeassistant.util")
 _dt_mod = types.ModuleType("homeassistant.util.dt")
 _dt_mod.as_local = lambda dt: dt
+_dt_mod.utcnow = lambda: __import__("datetime").datetime.now(
+    tz=__import__("datetime").timezone.utc
+)
 _dt_mod.DEFAULT_TIME_ZONE = __import__("datetime").timezone(
     __import__("datetime").timedelta(hours=9)
 )
