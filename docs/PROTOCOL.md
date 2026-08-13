@@ -9,7 +9,7 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
 ## 1. Role Definitions
 
 - **Client**: Responsible for **declaring** entities, **pushing** state updates, and executing control commands sent from Home Assistant.
-- **Integration**: Responsible for **creating** entities based on client declarations and **updating** their states. For control platforms (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`), it **relays** command requests from HA back to the originating client. It has no hardware-specific decoding logic.
+- **Integration**: Responsible for **creating** entities based on client declarations and **updating** their states. For control platforms (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`), it **relays** command requests from HA back to the originating client. It has no hardware-specific decoding logic.
 
 ---
 
@@ -82,7 +82,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   }
   ```
   - `unique_id` (String, Required): Unique identifier within the client namespace.
-  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`.
+  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `event`, `valve`.
   - `name` (String, Required): Name of the entity.
   - `device` (Object, Optional): The sub-device this entity belongs to.
     - `id` (String, Required): Unique sub-device ID.
@@ -93,7 +93,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   - `suggested_display_precision` (Integer, Optional, `sensor` platform): Number of decimal places to round the displayed value to (mirrors the client's own rounding config, e.g. ESPHome's `accuracy_decimals`). Without it, Home Assistant shows the raw float exactly as received, which for many sensors means long, noisy decimals (e.g. `48.85864` instead of `48.9`).
   - `icon` (String, Optional): Icon name (e.g., `mdi:thermometer`).
   - `entity_category` (String, Optional): Entity category, either `"config"` or `"diagnostic"`.
-  - `features` (List of String, Optional): Capability flags (`cover`, `light`, `fan`, …). Unknown names are ignored. When omitted, each platform uses its own default (e.g. cover `OPEN|CLOSE|STOP`).
+  - `features` (List of String, Optional): Capability flags (`cover`, `light`, `fan`, `lock`, `valve`, …). Unknown names are ignored. When omitted, each platform uses its own default (e.g. cover `OPEN|CLOSE|STOP`).
   - **Platform-Specific Fields**:
     - **`select` platform**: `options` (List of String, Required) - List of selectable options.
     - **`number` platform**: `min`, `max`, `step` (Float, Optional) - Range and step configuration.
@@ -102,6 +102,11 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
     - **`light` platform**: `supported_color_modes` (List of String, Optional — `onoff`/`brightness`/`color_temp`/`hs`/`rgb`/`rgbw`/`rgbww`/`white`; default `["onoff"]`), `effect_list` (List of String, Optional), `min_color_temp_kelvin` / `max_color_temp_kelvin` (Integer, Optional), `features` (`transition`/`flash`/`effect`).
     - **`cover` platform**: `features` (`open`/`close`/`stop`/`set_position`/`open_tilt`/`close_tilt`/`stop_tilt`/`set_tilt_position`; default open+close+stop).
     - **`fan` platform**: `speed_count` (Integer, Optional, default `100`), `preset_modes` (List of String, Optional), `features` (`set_speed`/`oscillate`/`direction`/`preset_mode`/`turn_on`/`turn_off`; default turn_on+turn_off+set_speed).
+    - **`text` platform** (writable; **not** `text_sensor`): `min`/`max` (Integer, Optional — **string length**, default `0`/`255`), `pattern` (String, Optional), `mode` (`"text"`/`"password"`, default `"text"`).
+    - **`lock` platform**: `features` (`open`), `code_format` (String, Optional — **regex** used by HA to validate the code input, e.g. `"^\\d{4}$"`; not `"number"`/`"text"`, which belong to `alarm_control_panel`).
+    - **`date` / `time` / `datetime` platforms**: no extra declare fields — state is an ISO string (see §3.2).
+    - **`event` platform**: `event_types` (List of String, Required, non-empty).
+    - **`valve` platform**: `features` (`open`/`close`/`stop`/`set_position`), `reports_position` (Boolean, Optional, default `true`). When `reports_position` is `false`, omit `set_position` (default features exclude it).
 
 * **Response**
   ```json
@@ -128,6 +133,13 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
 | `light` | Control | Object (`state`/`brightness`/…, see §3.2) | `turn_on` / `turn_off` (`params`) |
 | `cover` | Control | Object (`state`/`position`/…, see §3.2) | `open_cover` / `close_cover` / `stop_cover` / `set_cover_position` / tilt variants |
 | `fan` | Control | Object (`state`/`percentage`/…, see §3.2) | `turn_on` / `turn_off` / `set_percentage` / `set_preset_mode` / `oscillate` / `set_direction` |
+| `text` | Control | String | `set_value` (requires `value`) |
+| `lock` | Control | String/Boolean | `lock` / `unlock` / `open` |
+| `date` | Control | ISO date string | `set_value` (requires `value`) |
+| `time` | Control | ISO time string | `set_value` (requires `value`) |
+| `datetime` | Control | ISO datetime string | `set_value` (requires `value`) |
+| `event` | Read | event_type string or object | — |
+| `valve` | Control | Object (`state`/`position`, see §3.2) | `open_valve` / `close_valve` / `stop_valve` / `set_valve_position` |
 
 ---
 
@@ -153,14 +165,17 @@ Updates states for one or more entities in batch. If a state update arrives befo
   ```
   - `states` (List, Required): List of entity state updates.
     - `unique_id` (String, Required): The original entity `unique_id` (without the gateway namespace prefix).
-    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (`device_tracker`, `update`, `light`, `cover`, `fan`, …).
+    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (`device_tracker`, `update`, `light`, `cover`, `fan`, `valve`, …).
       - Sending the string `"unknown"` (case-insensitive) for any platform will map to Home Assistant's `unavailable` (None) state.
       - For `binary_sensor`, values of `"1"`, `"true"`, `"on"`, `"yes"` (case-insensitive) or boolean `true` are mapped to the On state.
       - For `sensor` with `device_class` of `"timestamp"` or `"date"`, string values are automatically parsed into datetime/date objects.
       - For `device_tracker`, see the object form below.
       - For `update`, see the object form below.
-      - For `light` / `cover` / `fan`, see the object forms below.
-      - **Object (dict) values — shallow merge**: When both the previous stored state and the new `value` are objects, the integration **shallow-merges** them (`{...prev, ...value}`). Sending `{"progress": 50}` or `{"brightness": 200}` preserves other keys. To **clear** a previously reported key, send JSON `null` for that key (omitting the key does **not** clear it). Any other type change (scalar → object, object → scalar, or first write of an object) **replaces** the stored state. The full merged result is what entities receive.
+      - For `light` / `cover` / `fan` / `valve`, see the object forms below.
+      - For `lock`, accept `"locked"`/`"unlocked"`/… or bool (`true` = locked).
+      - For `date` / `time` / `datetime`, send ISO 8601 strings; parse failures become unknown (`None`). Tz-naive datetimes get HA's local timezone attached (not interpreted as UTC).
+      - For `event`, send an event_type string or `{"event_type": "...", "attributes": {...}}`. Events are **not** restored from last state on restart.
+      - **Object (dict) values — shallow merge**: When both the previous stored state and the new `value` are objects, the integration **shallow-merges** them (`{...prev, ...value}`), **except `event`** (replace only — merging would leak prior `attributes` into the next fire-and-forget event). Sending `{"progress": 50}` or `{"brightness": 200}` preserves other keys. To **clear** a previously reported key, send JSON `null` for that key (omitting the key does **not** clear it). Any other type change (scalar → object, object → scalar, or first write of an object) **replaces** the stored state. The full merged result is what entities receive.
       - Values must be JSON-serializable (no `bytes`/tuples). Colors must be sent as lists.
   - `ts` (Number, Optional): Timestamp of the state update (currently accepted by the schema but ignored by the backend).
 
@@ -262,6 +277,29 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 ```
 
 - `state`, `percentage` (0–100), `preset_mode`, `oscillating` (bool), `direction` (`"forward"`/`"reverse"`).
+
+#### `text` / `lock` / `date` / `time` / `datetime` / `event` state
+
+- **`text`**: string (writable HA `text` domain — not `text_sensor`).
+- **`lock`**: `"locked"` / `"unlocked"` / `"locking"` / `"unlocking"` / `"jammed"` / `"opening"` / `"open"`, or bool (`true` = locked).
+- **`date`**: `"YYYY-MM-DD"`; **`time`**: `"HH:MM:SS"` (ISO); **`datetime`**: ISO datetime (tz-naive values get HA's local timezone attached — they are **not** treated as UTC).
+- **`event`**: `"doorbell"` or `{"event_type": "doorbell", "attributes": {"foo": 1}}`. Only types listed in `event_types` are accepted; others are ignored with a warning. **Do not** rely on last-state restore — events are fire-and-forget. Dict event payloads are **not** shallow-merged.
+
+```json
+{"unique_id": "front_lock", "value": "locked"}
+```
+
+```json
+{"unique_id": "door_bell", "value": {"event_type": "doorbell", "attributes": {"zone": "front"}}}
+```
+
+#### `valve` state (object `value`)
+
+```json
+{"unique_id": "main_valve", "value": {"state": "open", "position": 40}}
+```
+
+- `state` (`"open"`/`"closed"`/`"opening"`/`"closing"`), `position` (0–100). When `reports_position` is `false`, use `state`/`is_closed` semantics only — do not mix position reporting modes.
 
 * **Response**
   ```json
@@ -411,7 +449,7 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 
 ## 4. Control Commands (Home Assistant → Client)
 
-When a controllable entity (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
+When a controllable entity (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
 
 The client should listen for these events, perform the physical action, and then push the updated state back using a `ws_bridge/state` message.
 
@@ -433,7 +471,7 @@ The client should listen for these events, perform the physical action, and then
     - `unique_id`: The original `unique_id` of the entity (gateway namespace prefix stripped).
     - `action`: The action to execute (`turn_on`, `turn_off`, `press`, `set_value`, `select_option`, `install`, `check`, …).
     - `value` (Any, Optional): Single payload for actions that take one unnamed argument (e.g. target float for `set_value`, option string for `select_option`).
-    - `params` (Object, Optional): Named arguments for multi-argument actions (e.g. light `turn_on` with `brightness` / `rgb_color`). Omitted when empty. **Do not mix `value` and `params` on the same action** — use one or the other.
+    - `params` (Object, Optional): Named arguments for multi-argument actions (e.g. light `turn_on` with `brightness` / `rgb_color`, lock `code`, valve `position`). Omitted when empty. **Do not mix `value` and `params` on the same action** — use one or the other. Clients must not log `params.code`.
 
 ### Example with Value
 ```json
@@ -467,6 +505,26 @@ The client should listen for these events, perform the physical action, and then
 }
 ```
 
+### Phase 2 examples
+
+Declare (excerpt):
+
+```json
+{"unique_id": "note", "platform": "text", "name": "Note", "min": 0, "max": 64, "mode": "text"}
+{"unique_id": "front_lock", "platform": "lock", "name": "Front", "features": ["open"], "code_format": "^\\d{4}$"}
+{"unique_id": "doorbell", "platform": "event", "name": "Doorbell", "event_types": ["doorbell", "motion"]}
+{"unique_id": "main_valve", "platform": "valve", "name": "Main", "reports_position": true, "features": ["open", "close", "set_position"]}
+```
+
+Command events:
+
+```json
+{"kind": "command", "unique_id": "note", "action": "set_value", "value": "hello"}
+{"kind": "command", "unique_id": "front_lock", "action": "unlock", "params": {"code": "1234"}}
+{"kind": "command", "unique_id": "main_valve", "action": "set_valve_position", "params": {"position": 40}}
+```
+
+
 ### `update` commands
 
 - `install` — start installing the currently offered firmware (no `value`). The client should push `in_progress: true` (and `progress` if known) until the flash finishes; a successful flash typically reboots the device.
@@ -483,13 +541,11 @@ The client should listen for these events, perform the physical action, and then
 
 ## 6. Planned platforms
 
-These `platform` values are **not** accepted today — `ws_bridge/entity` rejects anything outside the §3.1 list. Add **one domain at a time**. Land PROTOCOL + the HA platform (including `ALL_PLATFORMS` and `Platform.*`) **before** any client, including ESPHome wrapping; wrapping existing platforms does not need HA changes, but a new domain does.
+These `platform` values are **not** accepted today — `ws_bridge/entity` rejects anything outside the §3.1 list.
 
 | Order | Platform | Notes |
 |:---:|:---|:---|
-| 1 | `text` | Next. Writable string + `set_value` (`min`/`max`/`pattern`/`mode`). Not `text_sensor` (read-only; created as an HA `sensor`). |
-| 2 | `lock` | `lock` / `unlock`. Decide `open` and PIN `code` in that PR. |
-| 3 | `date` / `time` / `datetime` / `event` / `valve` | Same complexity class as `text` / simple control. |
-| 4 | `climate` (+ humidifier / water_heater / …) | Object state larger than `light`. |
+| 1 | `climate` (+ humidifier / water_heater / siren / alarm_control_panel) | Large object state + many actions. |
+| 2 | `media_player` / `image` / `camera` | Design decision first (see implementation plan). |
 
-`light` / `cover` / `fan` shipped in Phase 1.
+Phase 1 (`light`/`cover`/`fan`) and Phase 2 (`text`/`lock`/`date`/`time`/`datetime`/`event`/`valve`) have shipped.

@@ -113,10 +113,24 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     vol.Optional("max_color_temp_kelvin"): vol.Any(vol.Coerce(int), None),  # light
     vol.Optional("speed_count"): vol.Any(vol.Coerce(int), None),  # fan
     vol.Optional("preset_modes"): vol.Any([str], None),           # fan
+    vol.Optional("pattern"): vol.Any(str, None),                  # text
+    vol.Optional("mode"): vol.Any(str, None),                     # text
+    vol.Optional("code_format"): vol.Any(str, None),              # lock (regex)
+    vol.Optional("event_types"): vol.Any([str], None),            # event (required when platform=event)
+    vol.Optional("reports_position"): vol.Any(bool, None),        # valve
 })
 @callback
 def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
               msg: dict[str, Any]) -> None:
+    if msg.get("platform") == "event":
+        types = msg.get("event_types")
+        if not isinstance(types, list) or not types:
+            connection.send_error(
+                msg["id"],
+                "invalid_format",
+                "event_types is required for platform=event (non-empty list)",
+            )
+            return
     defn = {k: v for k, v in msg.items() if k != "id"}
     for b in _bridges(hass):
         if (gid := b.client_for(connection)) is not None:

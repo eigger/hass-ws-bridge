@@ -30,6 +30,13 @@ PLATFORMS = [
     Platform.LIGHT,
     Platform.COVER,
     Platform.FAN,
+    Platform.TEXT,
+    Platform.LOCK,
+    Platform.DATE,
+    Platform.TIME,
+    Platform.DATETIME,
+    Platform.EVENT,
+    Platform.VALVE,
 ]
 
 

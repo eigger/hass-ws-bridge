@@ -25,6 +25,7 @@ from homeassistant.helpers.storage import Store
 from .const import (
     CONNECTED_CLIENTS_UNIQUE_ID,
     DOMAIN,
+    PLATFORM_EVENT,
     REMOVE_MODE_PREFIX,
     SUBENTRY_TYPE_GATEWAY,
 )
@@ -678,6 +679,18 @@ class WsBridge:
         client.device_ids.add(ns_dev)
         async_dispatcher_send(self.hass, signal_avail(self.entry_id, ns_dev), True)
 
+    def _entity_platform(self, ns_uid: str) -> str | None:
+        """선언된 엔티티의 platform. event 병합 스킵 등에 사용."""
+        if (ent := self._entities.get(ns_uid)) is not None:
+            return ent._defn.get("platform")
+        if (defn := self._defns.get(ns_uid)) is not None:
+            return defn.get("platform")
+        for pending in self._pending.values():
+            for defn in pending:
+                if defn.get("unique_id") == ns_uid:
+                    return defn.get("platform")
+        return None
+
     @callback
     def handle_state(self, gateway_id: str, unique_id: str, value: Any) -> None:
         ns_uid = self._ns_uid(gateway_id, unique_id)
@@ -685,8 +698,12 @@ class WsBridge:
             if (ns_dev := self._entity_device.get(ns_uid)) is not None:
                 self._touch_device(client, ns_dev)
         if isinstance(value, dict):
-            prev = self._states.get(ns_uid)
-            value = {**prev, **value} if isinstance(prev, dict) else dict(value)
+            # event 는 fire-and-forget — 얕은 병합하면 이전 attributes 가 다음 이벤트로 샌다.
+            if self._entity_platform(ns_uid) == PLATFORM_EVENT:
+                value = dict(value)
+            else:
+                prev = self._states.get(ns_uid)
+                value = {**prev, **value} if isinstance(prev, dict) else dict(value)
         self._states[ns_uid] = value
         self._schedule_save()
         async_dispatcher_send(self.hass, signal_value(self.entry_id, ns_uid), value)
