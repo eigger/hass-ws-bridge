@@ -103,10 +103,10 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
     - **`cover` platform**: `features` (`open`/`close`/`stop`/`set_position`/`open_tilt`/`close_tilt`/`stop_tilt`/`set_tilt_position`; default open+close+stop).
     - **`fan` platform**: `speed_count` (Integer, Optional, default `100`), `preset_modes` (List of String, Optional), `features` (`set_speed`/`oscillate`/`direction`/`preset_mode`/`turn_on`/`turn_off`; default turn_on+turn_off+set_speed).
     - **`text` platform** (writable; **not** `text_sensor`): `min`/`max` (Integer, Optional — **string length**, default `0`/`255`), `pattern` (String, Optional), `mode` (`"text"`/`"password"`, default `"text"`).
-    - **`lock` platform**: `features` (`open`), `code_format` (String, Optional).
+    - **`lock` platform**: `features` (`open`), `code_format` (String, Optional — **regex** used by HA to validate the code input, e.g. `"^\\d{4}$"`; not `"number"`/`"text"`, which belong to `alarm_control_panel`).
     - **`date` / `time` / `datetime` platforms**: no extra declare fields — state is an ISO string (see §3.2).
-    - **`event` platform**: `event_types` (List of String, Required).
-    - **`valve` platform**: `features` (`open`/`close`/`stop`/`set_position`), `reports_position` (Boolean, Optional, default `true`).
+    - **`event` platform**: `event_types` (List of String, Required, non-empty).
+    - **`valve` platform**: `features` (`open`/`close`/`stop`/`set_position`), `reports_position` (Boolean, Optional, default `true`). When `reports_position` is `false`, omit `set_position` (default features exclude it).
 
 * **Response**
   ```json
@@ -173,9 +173,9 @@ Updates states for one or more entities in batch. If a state update arrives befo
       - For `update`, see the object form below.
       - For `light` / `cover` / `fan` / `valve`, see the object forms below.
       - For `lock`, accept `"locked"`/`"unlocked"`/… or bool (`true` = locked).
-      - For `date` / `time` / `datetime`, send ISO 8601 strings; parse failures become unknown (`None`).
+      - For `date` / `time` / `datetime`, send ISO 8601 strings; parse failures become unknown (`None`). Tz-naive datetimes get HA's local timezone attached (not interpreted as UTC).
       - For `event`, send an event_type string or `{"event_type": "...", "attributes": {...}}`. Events are **not** restored from last state on restart.
-      - **Object (dict) values — shallow merge**: When both the previous stored state and the new `value` are objects, the integration **shallow-merges** them (`{...prev, ...value}`). Sending `{"progress": 50}` or `{"brightness": 200}` preserves other keys. To **clear** a previously reported key, send JSON `null` for that key (omitting the key does **not** clear it). Any other type change (scalar → object, object → scalar, or first write of an object) **replaces** the stored state. The full merged result is what entities receive.
+      - **Object (dict) values — shallow merge**: When both the previous stored state and the new `value` are objects, the integration **shallow-merges** them (`{...prev, ...value}`), **except `event`** (replace only — merging would leak prior `attributes` into the next fire-and-forget event). Sending `{"progress": 50}` or `{"brightness": 200}` preserves other keys. To **clear** a previously reported key, send JSON `null` for that key (omitting the key does **not** clear it). Any other type change (scalar → object, object → scalar, or first write of an object) **replaces** the stored state. The full merged result is what entities receive.
       - Values must be JSON-serializable (no `bytes`/tuples). Colors must be sent as lists.
   - `ts` (Number, Optional): Timestamp of the state update (currently accepted by the schema but ignored by the backend).
 
@@ -282,8 +282,8 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 
 - **`text`**: string (writable HA `text` domain — not `text_sensor`).
 - **`lock`**: `"locked"` / `"unlocked"` / `"locking"` / `"unlocking"` / `"jammed"` / `"opening"` / `"open"`, or bool (`true` = locked).
-- **`date`**: `"YYYY-MM-DD"`; **`time`**: `"HH:MM:SS"` (ISO); **`datetime`**: ISO datetime (tz-naive values are treated as local).
-- **`event`**: `"doorbell"` or `{"event_type": "doorbell", "attributes": {"foo": 1}}`. Only types listed in `event_types` are accepted; others are ignored with a warning. **Do not** rely on last-state restore — events are fire-and-forget.
+- **`date`**: `"YYYY-MM-DD"`; **`time`**: `"HH:MM:SS"` (ISO); **`datetime`**: ISO datetime (tz-naive values get HA's local timezone attached — they are **not** treated as UTC).
+- **`event`**: `"doorbell"` or `{"event_type": "doorbell", "attributes": {"foo": 1}}`. Only types listed in `event_types` are accepted; others are ignored with a warning. **Do not** rely on last-state restore — events are fire-and-forget. Dict event payloads are **not** shallow-merged.
 
 ```json
 {"unique_id": "front_lock", "value": "locked"}
@@ -511,7 +511,7 @@ Declare (excerpt):
 
 ```json
 {"unique_id": "note", "platform": "text", "name": "Note", "min": 0, "max": 64, "mode": "text"}
-{"unique_id": "front_lock", "platform": "lock", "name": "Front", "features": ["open"], "code_format": "number"}
+{"unique_id": "front_lock", "platform": "lock", "name": "Front", "features": ["open"], "code_format": "^\\d{4}$"}
 {"unique_id": "doorbell", "platform": "event", "name": "Doorbell", "event_types": ["doorbell", "motion"]}
 {"unique_id": "main_valve", "platform": "valve", "name": "Main", "reports_position": true, "features": ["open", "close", "set_position"]}
 ```

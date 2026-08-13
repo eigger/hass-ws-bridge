@@ -232,6 +232,9 @@ import types
 _util_mod = types.ModuleType("homeassistant.util")
 _dt_mod = types.ModuleType("homeassistant.util.dt")
 _dt_mod.as_local = lambda dt: dt
+_dt_mod.DEFAULT_TIME_ZONE = __import__("datetime").timezone(
+    __import__("datetime").timedelta(hours=9)
+)
 _dt_mod.parse_date = lambda value: __import__("datetime").date.fromisoformat(value) if isinstance(value, str) else None
 _dt_mod.parse_datetime = lambda value: __import__("datetime").datetime.fromisoformat(value) if isinstance(value, str) else None
 _util_mod.dt = _dt_mod

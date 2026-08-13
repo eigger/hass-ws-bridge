@@ -531,6 +531,35 @@ def test_handle_state_shallow_merges_dicts():
     assert send.call_args_list[-1].args[2] == {"state": "on", "brightness": 200}
 
 
+def test_handle_state_event_does_not_merge_attributes():
+    """event 플랫폼은 얕은 병합을 건너뛴다 — 이전 attributes 가 다음 이벤트로 새면 안 된다."""
+    from custom_components.ws_bridge.event import WsBridgeEvent
+
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    entity = WsBridgeEvent(
+        bridge,
+        {
+            "unique_id": "gw1__bell",
+            "platform": "event",
+            "name": "Bell",
+            "event_types": ["doorbell", "motion"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    bridge._entities["gw1__bell"] = entity
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send") as send:
+        bridge.handle_state(
+            "gw1", "bell",
+            {"event_type": "doorbell", "attributes": {"zone": "front"}},
+        )
+        bridge.handle_state("gw1", "bell", {"event_type": "motion"})
+
+    assert bridge._states["gw1__bell"] == {"event_type": "motion"}
+    assert send.call_args_list[-1].args[2] == {"event_type": "motion"}
+    assert "attributes" not in send.call_args_list[-1].args[2]
+
+
 def test_handle_state_null_clears_merged_key():
     """병합 후 JSON null 로 키를 지울 수 있다 (device_tracker GPS 유실 등)."""
     hass = MagicMock()
@@ -865,6 +894,7 @@ def test_lock_features_and_state_parser():
 
 def test_date_time_datetime_parsers():
     from datetime import date, time, datetime, timezone, timedelta
+    from homeassistant.util import dt as dt_util
 
     assert _parse_date("2026-08-13") == date(2026, 8, 13)
     assert _parse_date("nope") is None
@@ -874,7 +904,8 @@ def test_date_time_datetime_parsers():
     aware = _parse_datetime("2026-08-13T07:30:00+09:00")
     assert aware == datetime(2026, 8, 13, 7, 30, tzinfo=timezone(timedelta(hours=9)))
     naive = _parse_datetime("2026-08-13T07:30:00")
-    assert naive == datetime(2026, 8, 13, 7, 30)  # as_local identity in tests
+    assert naive == datetime(2026, 8, 13, 7, 30, tzinfo=dt_util.DEFAULT_TIME_ZONE)
+    assert naive.tzinfo is not None
     assert _parse_datetime("garbage") is None
 
 
@@ -908,6 +939,12 @@ def test_valve_features_default():
     flags = valve_features(None)
     assert flags & ValveEntityFeature.OPEN
     assert flags & ValveEntityFeature.SET_POSITION
+    flags = valve_features(None, reports_position=False)
+    assert flags & ValveEntityFeature.OPEN
+    assert not (flags & ValveEntityFeature.SET_POSITION)
+    flags = valve_features(["open", "set_position"], reports_position=False)
+    assert flags & ValveEntityFeature.OPEN
+    assert not (flags & ValveEntityFeature.SET_POSITION)
     flags = valve_features(["open", "nope"])
     assert flags & ValveEntityFeature.OPEN
     assert not (flags & ValveEntityFeature.CLOSE)

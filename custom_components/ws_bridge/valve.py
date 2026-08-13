@@ -19,11 +19,16 @@ _FEATURE_MAP = {
     "set_position": ValveEntityFeature.SET_POSITION,
 }
 
-_DEFAULT_FEATURES = (
+_DEFAULT_FEATURES_POSITION = (
     ValveEntityFeature.OPEN
     | ValveEntityFeature.CLOSE
     | ValveEntityFeature.STOP
     | ValveEntityFeature.SET_POSITION
+)
+_DEFAULT_FEATURES_NO_POSITION = (
+    ValveEntityFeature.OPEN
+    | ValveEntityFeature.CLOSE
+    | ValveEntityFeature.STOP
 )
 
 
@@ -34,14 +39,21 @@ async def async_setup_entry(
     bridge.register_platform(PLATFORM_VALVE, async_add_entities, WsBridgeValve)
 
 
-def _features(names: list[str] | None) -> ValveEntityFeature:
+def _features(
+    names: list[str] | None, *, reports_position: bool = True
+) -> ValveEntityFeature:
+    default = (
+        _DEFAULT_FEATURES_POSITION if reports_position else _DEFAULT_FEATURES_NO_POSITION
+    )
     if not names:
-        return _DEFAULT_FEATURES
+        return default
     flags = ValveEntityFeature(0)
     for name in names:
         if (flag := _FEATURE_MAP.get(name)) is not None:
             flags |= flag
-    return flags or _DEFAULT_FEATURES
+    if not reports_position:
+        flags &= ~ValveEntityFeature.SET_POSITION
+    return flags or default
 
 
 def _as_position(value: Any) -> int | None:
@@ -62,9 +74,11 @@ class WsBridgeValve(WsBridgeCompositeEntity, ValveEntity):
 
     def _configure_from_defn(self, defn: dict[str, Any]) -> None:
         self._attr_device_class = defn.get("device_class")
-        self._attr_supported_features = _features(defn.get("features"))
         reports = defn.get("reports_position")
         self._attr_reports_position = True if reports is None else bool(reports)
+        self._attr_supported_features = _features(
+            defn.get("features"), reports_position=self._attr_reports_position
+        )
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._configure_from_defn(defn)

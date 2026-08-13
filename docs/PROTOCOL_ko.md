@@ -104,10 +104,10 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
     - **`cover` 플랫폼**: `features`(`open`/`close`/`stop`/`set_position`/`open_tilt`/`close_tilt`/`stop_tilt`/`set_tilt_position`, 기본 open+close+stop).
     - **`fan` 플랫폼**: `speed_count`(정수, 옵션, 기본 100), `preset_modes`, `features`(`set_speed`/`oscillate`/`direction`/`preset_mode`/`turn_on`/`turn_off`, 기본 turn_on+turn_off+set_speed).
     - **`text` 플랫폼** (쓰기 가능; **`text_sensor`와 다름**): `min`/`max`(정수, 옵션 — **문자열 길이**, 기본 0/255), `pattern`, `mode`(`"text"`/`"password"`, 기본 `"text"`).
-    - **`lock` 플랫폼**: `features`(`open`), `code_format`(문자열, 옵션).
+    - **`lock` 플랫폼**: `features`(`open`), `code_format`(문자열, 옵션 — HA가 코드 입력을 검증하는 **정규식**, 예: `"^\\d{4}$"`; `"number"`/`"text"`는 `alarm_control_panel` 어휘이므로 사용하지 않음).
     - **`date` / `time` / `datetime` 플랫폼**: 선언 전용 필드 없음 — 상태는 ISO 문자열(§3.2 참고).
-    - **`event` 플랫폼**: `event_types`(문자열 리스트, 필수).
-    - **`valve` 플랫폼**: `features`(`open`/`close`/`stop`/`set_position`), `reports_position`(bool, 옵션, 기본 `true`).
+    - **`event` 플랫폼**: `event_types`(문자열 리스트, 필수, 비어 있으면 안 됨).
+    - **`valve` 플랫폼**: `features`(`open`/`close`/`stop`/`set_position`), `reports_position`(bool, 옵션, 기본 `true`). `reports_position`이 `false`이면 `set_position`을 넣지 마세요(기본 features에서도 제외).
 
 * **응답**
   ```json
@@ -176,7 +176,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
       - `lock`은 `"locked"`/`"unlocked"`/… 또는 bool(`true`=잠김)을 받습니다.
       - `date` / `time` / `datetime`은 ISO 8601 문자열을 보냅니다. 파싱 실패 시 unknown(`None`).
       - `event`는 event_type 문자열 또는 `{"event_type": "...", "attributes": {...}}`입니다. 재시작 시 last state로 **복원하지 않습니다**.
-      - **객체(dict) 값 — 얕은 병합**: 이전에 저장된 상태와 새 `value`가 **둘 다 객체**이면 통합이 **얕은 병합**합니다(`{...prev, ...value}`). `{"progress": 50}` 또는 `{"brightness": 200}`만 보내도 다른 키가 보존됩니다. 이전에 보고한 키를 **지우려면** 해당 키에 JSON `null`을 보냅니다(키를 생략하는 것으로는 지워지지 않음). 그 외 타입 변경(스칼라→객체, 객체→스칼라, 또는 객체의 최초 기록)은 **교체**합니다. 엔티티는 항상 병합된 전체 결과를 받습니다.
+      - **객체(dict) 값 — 얕은 병합**: 이전에 저장된 상태와 새 `value`가 **둘 다 객체**이면 통합이 **얕은 병합**합니다(`{...prev, ...value}`). **단 `event`는 예외**(교체만 — 병합하면 이전 `attributes`가 다음 일회성 이벤트로 샌다). `{"progress": 50}` 또는 `{"brightness": 200}`만 보내도 다른 키가 보존됩니다. 이전에 보고한 키를 **지우려면** 해당 키에 JSON `null`을 보냅니다(키를 생략하는 것으로는 지워지지 않음). 그 외 타입 변경(스칼라→객체, 객체→스칼라, 또는 객체의 최초 기록)은 **교체**합니다. 엔티티는 항상 병합된 전체 결과를 받습니다.
       - 값은 JSON으로 직렬화 가능해야 합니다(`bytes`/tuple 금지). 색상은 반드시 리스트로 보냅니다.
   - `ts` (Number, 선택): 상태 업데이트 타임스탬프 (현재 스키마에서는 허용되나 백엔드 로직에서는 무시됩니다).
 
@@ -283,8 +283,8 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 
 - **`text`**: 문자열 (쓰기 가능 HA `text` 도메인 — `text_sensor` 아님).
 - **`lock`**: `"locked"` / `"unlocked"` / `"locking"` / `"unlocking"` / `"jammed"` / `"opening"` / `"open"`, 또는 bool(`true`=잠김).
-- **`date`**: `"YYYY-MM-DD"`; **`time`**: `"HH:MM:SS"`(ISO); **`datetime`**: ISO datetime (tz-naive는 로컬로 보정).
-- **`event`**: `"doorbell"` 또는 `{"event_type": "doorbell", "attributes": {"foo": 1}}`. `event_types`에 없는 값은 경고 후 무시. **last state 복원 없음** — 일회성 이벤트.
+- **`date`**: `"YYYY-MM-DD"`; **`time`**: `"HH:MM:SS"`(ISO); **`datetime`**: ISO datetime (tz-naive는 HA 로컬 타임존을 **부착** — UTC로 해석하지 않음).
+- **`event`**: `"doorbell"` 또는 `{"event_type": "doorbell", "attributes": {"foo": 1}}`. `event_types`에 없는 값은 경고 후 무시. **last state 복원 없음** — 일회성 이벤트. dict 이벤트 payload는 **얕은 병합하지 않음**.
 
 ```json
 {"unique_id": "front_lock", "value": "locked"}
@@ -512,7 +512,7 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 
 ```json
 {"unique_id": "note", "platform": "text", "name": "Note", "min": 0, "max": 64, "mode": "text"}
-{"unique_id": "front_lock", "platform": "lock", "name": "Front", "features": ["open"], "code_format": "number"}
+{"unique_id": "front_lock", "platform": "lock", "name": "Front", "features": ["open"], "code_format": "^\\d{4}$"}
 {"unique_id": "doorbell", "platform": "event", "name": "Doorbell", "event_types": ["doorbell", "motion"]}
 {"unique_id": "main_valve", "platform": "valve", "name": "Main", "reports_position": true, "features": ["open", "close", "set_position"]}
 ```

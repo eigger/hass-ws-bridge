@@ -355,7 +355,7 @@ class WsBridgeCompositeEntity(WsBridgeEntity):
 
 #### 4.5 `lock` → HA `lock`
 
-- **선언**: `features` (`open`), `code_format`(str|null)
+- **선언**: `features` (`open`), `code_format`(str|null — HA LockEntity 검증용 **정규식**, 예 `"^\d{4}$"`. `"number"`/`"text"`는 alarm_control_panel 어휘)
 - **상태**: `"locked"`, `"unlocked"`, `"locking"`, `"unlocking"`, `"jammed"`, `"opening"`, `"open"` (bool도 허용 — `true`=locked)
 - **커맨드**: `lock`, `unlock`, `open` (`params.code`가 있으면 포함)
 - **주의**: `code`는 **절대 로그에 남기지 말 것.**
@@ -365,11 +365,11 @@ class WsBridgeCompositeEntity(WsBridgeEntity):
 - **선언**: 추가 필드 없음
 - **상태**: ISO 8601 문자열 (`"2026-08-13"` / `"07:30:00"` / `"2026-08-13T07:30:00+09:00"`)
 - **커맨드**: `set_value` + `value` (동일 ISO 형식 문자열)
-- **구현 노트**: `homeassistant.util.dt`의 `parse_date` / `parse_datetime`을 쓴다(이미 `sensor.py`에서 사용 중인 패턴). `time`은 `datetime.time.fromisoformat`. **파싱 실패 시 예외를 던지지 말고 `None`을 반환**한다. `datetime`은 tz-naive면 `dt_util.as_local()`로 보정한다(`sensor.py:_parse_value` 참조).
+- **구현 노트**: `homeassistant.util.dt`의 `parse_date` / `parse_datetime`을 쓴다(이미 `sensor.py`에서 사용 중인 패턴). `time`은 `datetime.time.fromisoformat`. **파싱 실패 시 예외를 던지지 말고 `None`을 반환**한다. `datetime`이 tz-naive면 **`dt.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)`** 로 로컬 tz를 붙인다 — `dt_util.as_local()`은 naive를 UTC로 간주하므로 **쓰지 말 것**(서울 게이트웨이가 `"2026-08-13T07:30:00"`을 보내면 16:30으로 밀린다). (`sensor.py` timestamp에도 같은 구식 패턴이 남아 있을 수 있으나 별도 이슈.)
 
 #### 4.7 `event` → HA `event`
 
-- **선언**: `event_types`(`[str]`, **필수**), `device_class`(`button`/`motion`/`doorbell`)
+- **선언**: `event_types`(`[str]`, **필수·비어 있으면 거절**), `device_class`(`button`/`motion`/`doorbell`)
 - **상태**: 문자열(event_type) 또는 dict `{"event_type": "...", "attributes": {...}}`
 - **커맨드**: 없음(읽기 전용)
 - **구현 노트 — 중요**
@@ -377,13 +377,14 @@ class WsBridgeCompositeEntity(WsBridgeEntity):
   - `_on_value`에서 `self._trigger_event(event_type, attributes)` 후 `async_write_ha_state()`를 호출한다.
   - `event_types`에 없는 값이 오면 **무시하고 경고 로그**만 남긴다(HA가 예외를 던진다).
   - `handle_state`가 `_states`에 저장해 디스크에 남는 것은 무해하나, 엔티티 생성 시 초기값으로 쓰지 않는다.
+  - **`handle_state`의 dict 얕은 병합을 `event`만 건너뛴다.** 병합하면 이전 `attributes`가 다음 이벤트로 샌다.
 
 #### 4.8 `valve` → HA `valve`
 
 - **선언**: `features` (`open`, `close`, `stop`, `set_position`), `reports_position`(bool, 기본 `true`)
 - **상태** (dict): `state`(`"open"`/`"closed"`/`"opening"`/`"closing"`), `position`(0–100)
 - **커맨드**: `open_valve`, `close_valve`, `stop_valve`, `set_valve_position`(`params.position`)
-- **구현 노트**: `ValveEntity`는 `reports_position`이 `False`면 `is_closed`를, `True`면 `current_valve_position`을 요구한다. **둘을 섞으면 HA가 에러를 낸다.** 선언값에 따라 분기할 것.
+- **구현 노트**: `ValveEntity`는 `reports_position`이 `False`면 `is_closed`를, `True`면 `current_valve_position`을 요구한다. **둘을 섞으면 HA가 에러를 낸다.** 선언값에 따라 분기할 것. `features` 생략 시 기본값은 `reports_position`이 `true`면 SET_POSITION 포함, `false`면 제외. `reports_position=false`인데 `set_position`이 features에 있으면 무시한다.
 
 ---
 

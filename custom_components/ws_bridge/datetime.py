@@ -31,7 +31,8 @@ def _parse_datetime(value: Any) -> datetime | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        return dt_util.as_local(dt)
+        # as_local() treats naive as UTC — attach HA local tz so "07:30:00" stays 07:30 local.
+        return dt.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
     return dt
 
 
