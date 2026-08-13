@@ -124,6 +124,8 @@ class WsBridgeFan(WsBridgeCompositeEntity, FanEntity):
         self._state["percentage"] = percentage
         if percentage > 0:
             self._state["state"] = "on"
+        else:
+            self._state["state"] = "off"
         self._apply_state()
         self.async_write_ha_state()
 

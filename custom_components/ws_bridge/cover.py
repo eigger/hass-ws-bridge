@@ -83,6 +83,14 @@ class WsBridgeCover(WsBridgeCompositeEntity, CoverEntity):
             return None
         return str(state).lower() == "closed"
 
+    @property
+    def is_opening(self) -> bool:
+        return str(self._state.get("state") or "").lower() == "opening"
+
+    @property
+    def is_closing(self) -> bool:
+        return str(self._state.get("state") or "").lower() == "closing"
+
     async def async_open_cover(self, **kwargs: Any) -> None:
         self._bridge.send_command(self._attr_unique_id, "open_cover")
         self._state["state"] = "opening"

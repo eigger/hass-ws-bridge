@@ -240,6 +240,8 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 
 - `state`(`"on"`/`"off"` 또는 bool), `brightness`(0–255), `color_mode`, `color_temp_kelvin`, `hs_color`(`[h, s]`), `rgb_color` / `rgbw_color` / `rgbww_color`(리스트), `effect`.
 - 색상은 JSON을 위해 **반드시 리스트**로 보냅니다.
+- `supported_color_modes`는 HA 규칙을 따릅니다: `onoff`/`brightness`를 `rgb`·`color_temp` 등 색 모드와 **함께 넣지 마세요** — 둘 다 선언되면 통합이 standalone 모드를 제거합니다.
+- `color_mode`를 생략하면, 존재하는 색상 키(및 지원 모드)로 추론합니다.
 
 #### `cover` 상태 (객체 `value`)
 
@@ -249,6 +251,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 
 - `state`(`"open"`/`"closed"`/`"opening"`/`"closing"`), `position`(0–100, **0=완전 닫힘, 100=완전 열림**), `tilt_position`(0–100).
 - HA `is_closed`는 `position`이 있으면 `position == 0`, 없으면 `state == "closed"`. **둘 다 없으면 unknown**(열린 것으로 표시하지 않음).
+- `opening` / `closing`은 `is_opening` / `is_closing`을 세워, `position`이 아직 `0`/`100`이어도 UI에 동작 중임을 표시합니다.
 
 #### `fan` 상태 (객체 `value`)
 

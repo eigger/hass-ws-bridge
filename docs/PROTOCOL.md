@@ -242,6 +242,8 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 
 - `state` (`"on"`/`"off"` or bool), `brightness` (0–255), `color_mode`, `color_temp_kelvin`, `hs_color` (`[h, s]`), `rgb_color` / `rgbw_color` / `rgbww_color` (lists), `effect`.
 - Colors **must** be lists (not tuples) for JSON.
+- `supported_color_modes` must follow HA rules: do **not** mix `onoff`/`brightness` with color modes (`rgb`, `color_temp`, …) — the integration drops the standalone modes if both are declared.
+- If `color_mode` is omitted, the integration infers it from which color keys are present (and supported).
 
 #### `cover` state (object `value`)
 
@@ -251,6 +253,7 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 
 - `state` (`"open"`/`"closed"`/`"opening"`/`"closing"`), `position` (0–100, **0 = fully closed, 100 = fully open**), `tilt_position` (0–100).
 - HA `is_closed` uses `position == 0` when present; otherwise `state == "closed"`; if both are absent, the cover is **unknown** (not shown as open).
+- `opening` / `closing` set `is_opening` / `is_closing` so the UI can show motion even while `position` is still `0` or `100`.
 
 #### `fan` state (object `value`)
 

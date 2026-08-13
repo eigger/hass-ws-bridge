@@ -28,6 +28,20 @@ _COLOR_MODE_MAP = {
     "white": ColorMode.WHITE,
 }
 
+# HA: ONOFF/BRIGHTNESS 는 다른 색상 모드와 함께 쓸 수 없다.
+_STANDALONE_MODES = {ColorMode.ONOFF, ColorMode.BRIGHTNESS}
+
+# color_mode 생략 시 상태 키로 추론 (우선순위: 더 구체적인 색 모드 먼저)
+_INFER_COLOR_MODE = (
+    ("rgbww_color", ColorMode.RGBWW),
+    ("rgbw_color", ColorMode.RGBW),
+    ("rgb_color", ColorMode.RGB),
+    ("hs_color", ColorMode.HS),
+    ("color_temp_kelvin", ColorMode.COLOR_TEMP),
+    ("white", ColorMode.WHITE),
+    ("brightness", ColorMode.BRIGHTNESS),
+)
+
 _FEATURE_MAP = {
     "transition": LightEntityFeature.TRANSITION,
     "flash": LightEntityFeature.FLASH,
@@ -56,11 +70,33 @@ async def async_setup_entry(
     bridge.register_platform(PLATFORM_LIGHT, async_add_entities, WsBridgeLight)
 
 
+def _as_int(value: Any, *, minimum: int | None = None, maximum: int | None = None) -> int | None:
+    """형제 플랫폼의 _as_position / _coerce_float 과 동일 — 파싱 실패 시 None."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    if minimum is not None:
+        number = max(minimum, number)
+    if maximum is not None:
+        number = min(maximum, number)
+    return number
+
+
 def _color_modes(names: list[str] | None) -> set[ColorMode]:
     modes: set[ColorMode] = set()
     for name in names or ():
         if (mode := _COLOR_MODE_MAP.get(name)) is not None:
             modes.add(mode)
+    if not modes:
+        return {ColorMode.ONOFF}
+    # 색상 모드가 하나라도 있으면 ONOFF/BRIGHTNESS 를 제거 (HA 배타 규칙)
+    if modes - _STANDALONE_MODES:
+        modes -= _STANDALONE_MODES
+    elif ColorMode.ONOFF in modes and ColorMode.BRIGHTNESS in modes:
+        modes = {ColorMode.BRIGHTNESS}
     return modes or {ColorMode.ONOFF}
 
 
@@ -80,6 +116,16 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
+def _infer_color_mode(state: dict[str, Any], supported: set[ColorMode] | None) -> ColorMode | None:
+    supported = supported or set()
+    for key, mode in _INFER_COLOR_MODE:
+        if state.get(key) is not None and mode in supported:
+            return mode
+    if len(supported) == 1:
+        return next(iter(supported))
+    return None
+
+
 class WsBridgeLight(WsBridgeCompositeEntity, LightEntity):
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
@@ -93,10 +139,10 @@ class WsBridgeLight(WsBridgeCompositeEntity, LightEntity):
         self._attr_supported_features = _features(
             defn.get("features"), has_effects=bool(self._attr_effect_list)
         )
-        if (v := defn.get("min_color_temp_kelvin")) is not None:
-            self._attr_min_color_temp_kelvin = int(v)
-        if (v := defn.get("max_color_temp_kelvin")) is not None:
-            self._attr_max_color_temp_kelvin = int(v)
+        if (v := _as_int(defn.get("min_color_temp_kelvin"))) is not None:
+            self._attr_min_color_temp_kelvin = v
+        if (v := _as_int(defn.get("max_color_temp_kelvin"))) is not None:
+            self._attr_max_color_temp_kelvin = v
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._configure_from_defn(defn)
@@ -104,17 +150,19 @@ class WsBridgeLight(WsBridgeCompositeEntity, LightEntity):
     @callback
     def _apply_state(self) -> None:
         self._attr_is_on = parse_bool(self._state.get("state"))
-        brightness = self._state.get("brightness")
-        self._attr_brightness = int(brightness) if brightness is not None else None
+        self._attr_brightness = _as_int(
+            self._state.get("brightness"), minimum=0, maximum=255
+        )
         color_mode = self._state.get("color_mode")
         if isinstance(color_mode, str) and color_mode in _COLOR_MODE_MAP:
-            self._attr_color_mode = _COLOR_MODE_MAP[color_mode]
-        elif len(self._attr_supported_color_modes or ()) == 1:
-            self._attr_color_mode = next(iter(self._attr_supported_color_modes))
+            mapped = _COLOR_MODE_MAP[color_mode]
+            supported = self._attr_supported_color_modes or set()
+            self._attr_color_mode = mapped if mapped in supported else None
         else:
-            self._attr_color_mode = None
-        kelvin = self._state.get("color_temp_kelvin")
-        self._attr_color_temp_kelvin = int(kelvin) if kelvin is not None else None
+            self._attr_color_mode = _infer_color_mode(
+                self._state, self._attr_supported_color_modes
+            )
+        self._attr_color_temp_kelvin = _as_int(self._state.get("color_temp_kelvin"))
         self._attr_hs_color = self._tuple_or_none(self._state.get("hs_color"), 2)
         self._attr_rgb_color = self._tuple_or_none(self._state.get("rgb_color"), 3)
         self._attr_rgbw_color = self._tuple_or_none(self._state.get("rgbw_color"), 4)
