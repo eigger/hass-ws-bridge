@@ -25,7 +25,8 @@
    - 전송: `{"id": <n>, "type": "ws_bridge/connect", "gateway_id": "<고유_ID>", "name": "<표시_이름>"}`
    - `gateway_id` (String, 필수): 클라이언트를 고유하게 식별할 ID입니다. HA에 **게이트웨이 디바이스**로 등록되고, 생성되는 장치/엔티티의 네임스페이스 접두어로 사용됩니다.
    - `name` (String, 선택): 게이트웨이 기기의 표시 이름입니다. 통합 설정 화면의 게이트웨이 Subentry 제목으로도 사용됩니다.
-   - `app_version` (String, 선택): 클라이언트의 펌웨어 또는 앱 버전입니다. 등록된 게이트웨이 기기의 `sw_version` 속성에 반영됩니다.
+   - `sw_version` (String, 선택): 펌웨어 또는 앱 버전. 게이트웨이 기기의 `sw_version`에 반영됩니다.
+   - `app_version` (String, 선택, **deprecated**): `sw_version`의 별칭. `sw_version`이 없을 때만 사용하며, 이후 릴리스에서 삭제될 예정입니다.
    - `manufacturer` (String, 선택): 게이트웨이 기기 제조사. 생략 시 `ws_bridge`.
    - `model` (String, 선택): 게이트웨이 기기 모델. 생략 시 `Gateway`.
    - `hw_version` (String, 선택): 게이트웨이 하드웨어 버전. 생략 시 비움. 각 필드는 독립적이며, 있는 것만 보내면 됩니다.
