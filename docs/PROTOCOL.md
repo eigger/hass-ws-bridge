@@ -153,7 +153,7 @@ Updates states for one or more entities in batch. If a state update arrives befo
       - For `sensor` with `device_class` of `"timestamp"` or `"date"`, string values are automatically parsed into datetime/date objects.
       - For `device_tracker`, see the object form below.
       - For `update`, see the object form below.
-      - **Object (dict) values — shallow merge**: When both the previous stored state and the new `value` are objects, the integration **shallow-merges** them (`{...prev, ...value}`). Sending `{"progress": 50}` or `{"brightness": 200}` preserves other keys. Any other type change (scalar → object, object → scalar, or first write of an object) **replaces** the stored state. The full merged result is what entities receive.
+      - **Object (dict) values — shallow merge**: When both the previous stored state and the new `value` are objects, the integration **shallow-merges** them (`{...prev, ...value}`). Sending `{"progress": 50}` or `{"brightness": 200}` preserves other keys. To **clear** a previously reported key, send JSON `null` for that key (omitting the key does **not** clear it). Any other type change (scalar → object, object → scalar, or first write of an object) **replaces** the stored state. The full merged result is what entities receive.
       - Values must be JSON-serializable (no `bytes`/tuples). Colors must be sent as lists.
   - `ts` (Number, Optional): Timestamp of the state update (currently accepted by the schema but ignored by the backend).
 
@@ -172,8 +172,15 @@ Updates states for one or more entities in batch. If a state update arrives befo
 }
 ```
 
-- `latitude`, `longitude` (Float, Required together): The position. **Both must be present and numeric** — if either is missing or unparseable, the position is treated as unknown rather than half-applied, since a lone coordinate would place the device somewhere meaningless.
+- `latitude`, `longitude` (Float, Required together): The position. **Both must be present and numeric** — if either is missing, `null`, or unparseable, the position is treated as unknown rather than half-applied, since a lone coordinate would place the device somewhere meaningless.
 - `gps_accuracy` (Integer, Optional, default `0`): Accuracy radius in meters. Home Assistant uses it when deciding whether the device is inside a zone.
+
+Because object states are **shallow-merged**, a GPS-loss update that only sends `{"gps_accuracy": 9999}` keeps the previous coordinates. To mark the location unknown, send:
+
+```json
+{"latitude": null, "longitude": null}
+```
+
 Home Assistant derives the entity state (`home` / `not_home` / a zone name) from the coordinates, so no separate state string is needed. (There is deliberately no field to override this directly — `TrackerEntity.location_name` is deprecated in Home Assistant and scheduled for removal in 2027.7.)
 
 > **Battery**: don't put `battery_level` here. Home Assistant has deprecated `battery_level` on `device_tracker` in favour of a separate battery entity — declare a normal `sensor` with `"device_class": "battery"` instead.
@@ -205,7 +212,12 @@ Home Assistant derives the entity state (`home` / `not_home` / a zone name) from
 - `progress` (Number, Optional, 0–100): Percent complete; only meaningful while `in_progress` is `true`.
 - `title`, `summary`, `release_url` (String, Optional): Shown on the update card / release-notes dialog.
 
-Omit empty optional keys rather than sending `""`. Sending the string `"unknown"` (or a non-object) clears the version fields.
+Object states are **shallow-merged**. Omit a key to keep the previous value; send JSON `null` to clear it. Examples:
+
+- Starting an install: `{"in_progress": true, "progress": null}` (or `0`) — otherwise a previous `progress` can resurface.
+- After install, dropping release notes: include `"summary": null` / `"release_url": null` if those keys were reported before.
+
+Sending the string `"unknown"` (or a non-object) clears the version fields entirely (replace, not merge).
 
 * **Response**
   ```json

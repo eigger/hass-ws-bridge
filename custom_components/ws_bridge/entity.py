@@ -109,15 +109,20 @@ class WsBridgeEntity(Entity):
 
 
 class WsBridgeCompositeEntity(WsBridgeEntity):
-    """상태가 여러 속성으로 구성되는 플랫폼(light/cover/climate 등)의 베이스."""
+    """상태가 여러 속성으로 구성되는 플랫폼(light/cover/climate 등)의 베이스.
+
+    `__init__` 에서는 `_state` 만 준비하고 `_apply_state` 는 호출하지 않는다 —
+    서브클래스가 자기 필드를 대입한 뒤 직접 호출하거나, `async_added_to_hass` 에서
+    반영한다.
+    """
 
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
         self._state: dict[str, Any] = as_dict(bridge.last_state(self._attr_unique_id))
-        self._apply_state()
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        self._apply_state()
         self._subscribe_state(self._on_value)
 
     @callback

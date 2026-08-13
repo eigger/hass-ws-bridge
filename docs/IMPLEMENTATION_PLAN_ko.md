@@ -85,8 +85,10 @@
 **병합(merge) 규칙 — 반드시 이 규칙으로 구현할 것:**
 
 - 이전 상태와 새 값이 **둘 다 dict**면 **얕은 병합(shallow merge)** 한다. 클라이언트가 `{"brightness": 200}`만 보내도 `state`, `rgb_color` 등 나머지가 보존된다.
+- **키를 지우려면 JSON `null`을 보낸다.** 키 생략 ≠ 삭제. (`device_tracker` GPS 유실: `{"latitude": null, "longitude": null}`)
 - 그 외에는 **교체**한다 (스칼라 → dict, dict → 스칼라 포함).
 - 병합 **결과 전체**를 dispatcher로 내보낸다. 엔티티는 항상 완전한 상태를 받는다.
+- `device_tracker` / `update`도 동일 규칙(복합 상태 + `WsBridgeCompositeEntity`). 기존에 "부분 객체 = 전체 교체"로 동작하던 클라이언트는 **브레이킹** — `null`로 지우는 쪽으로 맞춰야 한다.
 
 `custom_components/ws_bridge/bridge.py`:
 
@@ -237,15 +239,19 @@ def as_dict(value: Any) -> dict[str, Any]:
 
 ```python
 class WsBridgeCompositeEntity(WsBridgeEntity):
-    """상태가 여러 속성으로 구성되는 플랫폼(light/cover/climate 등)의 베이스."""
+    """상태가 여러 속성으로 구성되는 플랫폼(light/cover/climate 등)의 베이스.
+
+    `__init__` 에서는 `_state` 만 준비한다. `_apply_state()` 는 서브클래스가
+    자기 필드를 대입한 뒤 호출하거나, `async_added_to_hass` 에서 반영한다.
+    """
 
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
         self._state: dict[str, Any] = as_dict(bridge.last_state(self._attr_unique_id))
-        self._apply_state()
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        self._apply_state()
         self._subscribe_state(self._on_value)
 
     @callback
@@ -554,7 +560,7 @@ def test_all_platforms_are_forwarded():
 | 변경 | 하위 호환 여부 | 근거 |
 |:---|:---:|:---|
 | `ws_state`의 `value`에 `dict` 허용 | ✅ | `vol.Any(...)`에 타입을 **추가**만 함. 기존 스칼라는 그대로 통과 |
-| `handle_state` 얕은 병합 | ✅ | 병합 분기는 `isinstance(value, dict)`일 때만 탄다. 기존 클라이언트는 dict를 보낼 수 없었으므로(스키마가 거절) 진입 불가 |
+| `handle_state` 얕은 병합 | ⚠️ | dict 플랫폼 **전부**에 적용. `device_tracker`/`update`는 의도적 브레이킹(부분 객체=교체 → 병합+`null` 삭제). 스칼라 7종은 불변 |
 | command 이벤트의 `params` 필드 | ✅ | 기존 7종 플랫폼은 계속 `value`만 쓴다. `params`는 신규 플랫폼 엔티티에만 실린다 — 기존 클라이언트는 자기가 선언한 적 없는 엔티티의 커맨드를 받지 않는다 |
 | `ws_entity`의 `features` 필드 | ✅ | `vol.Optional`. 안 보내면 각 플랫폼 기본값 |
 | `ALL_PLATFORMS` / `PLATFORMS` 항목 추가 | ✅ | 순수 추가. 기존 7종의 등록 경로 불변 |

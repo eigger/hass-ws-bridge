@@ -12,6 +12,11 @@
         "release_url": "https://..."
     }
 
+객체 상태는 bridge 에서 **얕은 병합**된다. 키를 생략하면 이전 값이 유지되고,
+지우려면 JSON `null` 을 보낸다 (예: 설치 시작 시
+`{"in_progress": true, "progress": null}`, 설치 완료 후 노트 제거 시
+`"release_url": null` / `"summary": null`).
+
 실제 다운로드/플래시는 클라이언트가 한다 (ESPHome이면 `update: platform: http_request`).
 """
 from __future__ import annotations
@@ -31,7 +36,7 @@ from homeassistant.util.enum import try_parse_enum
 
 from .bridge import WsBridge
 from .const import DOMAIN, PLATFORM_UPDATE
-from .entity import WsBridgeEntity, safe_write_ha_state
+from .entity import WsBridgeCompositeEntity
 
 
 async def async_setup_entry(
@@ -108,7 +113,7 @@ def _parse_update_state(value: Any) -> dict[str, Any]:
     }
 
 
-class WsBridgeUpdate(WsBridgeEntity, UpdateEntity):
+class WsBridgeUpdate(WsBridgeCompositeEntity, UpdateEntity):
     _attr_supported_features = (
         UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
     )
@@ -119,7 +124,7 @@ class WsBridgeUpdate(WsBridgeEntity, UpdateEntity):
             try_parse_enum(UpdateDeviceClass, defn.get("device_class"))
             or UpdateDeviceClass.FIRMWARE
         )
-        self._apply(bridge.last_state(self._attr_unique_id))
+        self._apply_state()
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._attr_device_class = (
@@ -133,18 +138,9 @@ class WsBridgeUpdate(WsBridgeEntity, UpdateEntity):
             _strip_build_suffix(installed_version),
         )
 
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        self._subscribe_state(self._on_value)
-
     @callback
-    def _on_value(self, value: Any) -> None:
-        self._apply(value)
-        safe_write_ha_state(self)
-
-    @callback
-    def _apply(self, value: Any) -> None:
-        parsed = _parse_update_state(value)
+    def _apply_state(self) -> None:
+        parsed = _parse_update_state(self._state)
         self._attr_installed_version = parsed["installed_version"]
         self._attr_latest_version = parsed["latest_version"]
         self._attr_in_progress = parsed["in_progress"]

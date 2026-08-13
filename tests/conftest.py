@@ -52,9 +52,15 @@ class Platform:
     TODO = "todo"
 
 
-class EntityCategory:
-    CONFIG = "config"
-    DIAGNOSTIC = "diagnostic"
+class EntityCategory(str):
+    """HA EntityCategory stand-in — callable like the real enum (`EntityCategory(cat)`)."""
+
+    def __new__(cls, value: str = ""):
+        return str.__new__(cls, value)
+
+
+EntityCategory.CONFIG = EntityCategory("config")
+EntityCategory.DIAGNOSTIC = EntityCategory("diagnostic")
 
 
 # Set up core mocks

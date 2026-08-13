@@ -35,7 +35,11 @@ def parse_locked(value: Any) -> bool | None:
 
 
 def as_dict(value: Any) -> dict[str, Any]:
-    """복합 상태 정규화. 스칼라가 오면 {'state': value} 로 승격."""
+    """복합 상태 정규화. 스칼라가 오면 {'state': value} 로 승격.
+
+    입력 dict 는 **복사**한다 — 엔티티가 self._state 를 정규화해도
+    bridge._states 영속 객체를 오염시키지 않게.
+    """
     if isinstance(value, dict):
-        return value
+        return dict(value)
     return {} if is_unknown(value) else {"state": value}

@@ -428,6 +428,16 @@ def test_parse_location_rejects_partial_or_non_dict():
     assert _parse_location(37.5) == (None, None, 0)
 
 
+def test_parse_location_null_clears_coordinates():
+    """JSON null 은 좌표 없음(unknown)으로 취급 — 얕은 병합 후 GPS 유실 경로."""
+    assert _parse_location(
+        {"latitude": None, "longitude": None, "gps_accuracy": 9999}
+    ) == (None, None, 9999)
+    assert _parse_location(
+        {"latitude": 37.5, "longitude": None}
+    ) == (None, None, 0)
+
+
 def test_all_platforms_includes_update():
     assert PLATFORM_UPDATE in ALL_PLATFORMS
     assert PLATFORM_UPDATE == "update"
@@ -506,6 +516,28 @@ def test_handle_state_shallow_merges_dicts():
 
     assert bridge._states["gw1__led"] == {"state": "on", "brightness": 200}
     assert send.call_args_list[-1].args[2] == {"state": "on", "brightness": 200}
+
+
+def test_handle_state_null_clears_merged_key():
+    """병합 후 JSON null 로 키를 지울 수 있다 (device_tracker GPS 유실 등)."""
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    with patch("custom_components.ws_bridge.bridge.async_dispatcher_send"):
+        bridge.handle_state(
+            "gw1", "car",
+            {"latitude": 37.5, "longitude": 127.0, "gps_accuracy": 8},
+        )
+        bridge.handle_state(
+            "gw1", "car",
+            {"latitude": None, "longitude": None, "gps_accuracy": 9999},
+        )
+
+    assert bridge._states["gw1__car"] == {
+        "latitude": None,
+        "longitude": None,
+        "gps_accuracy": 9999,
+    }
+    assert _parse_location(bridge._states["gw1__car"]) == (None, None, 9999)
 
 
 def test_handle_state_replaces_on_type_change():
@@ -589,10 +621,25 @@ def test_helpers_is_unknown_and_as_dict():
     assert is_unknown("on") is False
     assert is_unknown(0) is False
 
-    assert as_dict({"a": 1}) == {"a": 1}
+    src = {"a": 1}
+    out = as_dict(src)
+    assert out == {"a": 1}
+    assert out is not src
+    out["a"] = 2
+    assert src["a"] == 1
+
     assert as_dict("on") == {"state": "on"}
     assert as_dict(None) == {}
     assert as_dict("unknown") == {}
+
+
+def test_entity_category_standin_is_callable():
+    """entity.py 가 EntityCategory(cat) 생성자를 호출한다 — conftest 스탠드인이 맞아야 함."""
+    from homeassistant.const import EntityCategory
+
+    assert EntityCategory.CONFIG == "config"
+    assert EntityCategory("diagnostic") == EntityCategory.DIAGNOSTIC
+    assert "config" in (EntityCategory.CONFIG, EntityCategory.DIAGNOSTIC)
 
 
 def test_parse_locked_accepts_lock_vocabulary():
