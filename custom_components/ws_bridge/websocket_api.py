@@ -118,6 +118,19 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     vol.Optional("code_format"): vol.Any(str, None),              # lock (regex)
     vol.Optional("event_types"): vol.Any([str], None),            # event (required when platform=event)
     vol.Optional("reports_position"): vol.Any(bool, None),        # valve
+    vol.Optional("hvac_modes"): vol.Any([str], None),             # climate (required)
+    vol.Optional("fan_modes"): vol.Any([str], None),               # climate
+    vol.Optional("swing_modes"): vol.Any([str], None),             # climate
+    vol.Optional("min_temp"): vol.Any(vol.Coerce(float), None),    # climate / water_heater
+    vol.Optional("max_temp"): vol.Any(vol.Coerce(float), None),
+    vol.Optional("target_temp_step"): vol.Any(vol.Coerce(float), None),  # climate
+    vol.Optional("min_humidity"): vol.Any(vol.Coerce(float), None),  # climate / humidifier
+    vol.Optional("max_humidity"): vol.Any(vol.Coerce(float), None),
+    vol.Optional("temperature_unit"): vol.Any(str, None),          # climate
+    vol.Optional("available_modes"): vol.Any([str], None),         # humidifier
+    vol.Optional("operation_list"): vol.Any([str], None),          # water_heater
+    vol.Optional("available_tones"): vol.Any([str], None),         # siren
+    vol.Optional("code_arm_required"): vol.Any(bool, None),        # alarm_control_panel
 })
 @callback
 def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
@@ -129,6 +142,15 @@ def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
                 msg["id"],
                 "invalid_format",
                 "event_types is required for platform=event (non-empty list)",
+            )
+            return
+    if msg.get("platform") == "climate":
+        modes = msg.get("hvac_modes")
+        if not isinstance(modes, list) or not modes:
+            connection.send_error(
+                msg["id"],
+                "invalid_format",
+                "hvac_modes is required for platform=climate (non-empty list)",
             )
             return
     defn = {k: v for k, v in msg.items() if k != "id"}

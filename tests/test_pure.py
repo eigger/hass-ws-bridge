@@ -948,3 +948,200 @@ def test_valve_features_default():
     flags = valve_features(["open", "nope"])
     assert flags & ValveEntityFeature.OPEN
     assert not (flags & ValveEntityFeature.CLOSE)
+
+
+# ── Phase 3: climate / humidifier / water_heater / siren / alarm ─────────────
+
+def test_climate_hvac_modes_and_features():
+    from custom_components.ws_bridge.climate import _hvac_modes, _features
+    from homeassistant.components.climate import ClimateEntityFeature, HVACMode
+
+    assert _hvac_modes(None) == [HVACMode.OFF]
+    assert _hvac_modes(["heat", "nope", "cool"]) == [HVACMode.HEAT, HVACMode.COOL]
+    flags = _features(None, has_off=True)
+    assert flags & ClimateEntityFeature.TARGET_TEMPERATURE
+    assert flags & ClimateEntityFeature.TURN_ON
+    assert flags & ClimateEntityFeature.TURN_OFF
+    flags = _features(None, has_off=False)
+    assert not (flags & ClimateEntityFeature.TURN_OFF)
+    flags = _features(["turn_off", "target_temperature"], has_off=False)
+    assert not (flags & ClimateEntityFeature.TURN_OFF)
+
+
+def test_climate_apply_and_set_temperature():
+    from custom_components.ws_bridge.climate import WsBridgeClimate
+    from homeassistant.components.climate import HVACMode
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge.send_command = MagicMock(return_value=True)
+    entity = WsBridgeClimate(
+        bridge,
+        {
+            "unique_id": "gw1__ac",
+            "platform": "climate",
+            "name": "AC",
+            "hvac_modes": ["off", "cool", "heat"],
+            "features": ["target_temperature", "turn_on", "turn_off"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    entity.hass = MagicMock()
+    entity.async_write_ha_state = MagicMock()
+    entity._on_value(
+        {
+            "hvac_mode": "cool",
+            "hvac_action": "cooling",
+            "current_temperature": 28,
+            "target_temperature": 24,
+        }
+    )
+    assert entity._attr_hvac_mode == HVACMode.COOL
+    assert entity._attr_target_temperature == 24.0
+
+    asyncio.run(entity.async_set_temperature(temperature=22))
+    bridge.send_command.assert_called_with(
+        "gw1__ac", "set_temperature", params={"temperature": 22}
+    )
+    assert entity._attr_target_temperature == 22
+
+
+def test_humidifier_and_water_heater_basics():
+    from custom_components.ws_bridge.humidifier import WsBridgeHumidifier, _features as hum_features
+    from custom_components.ws_bridge.water_heater import (
+        WsBridgeWaterHeater,
+        _features as wh_features,
+    )
+    from homeassistant.components.humidifier import HumidifierAction, HumidifierEntityFeature
+    from homeassistant.components.water_heater import WaterHeaterEntityFeature
+    from homeassistant.const import UnitOfTemperature
+
+    assert not (hum_features(["modes"], has_modes=False) & HumidifierEntityFeature.MODES)
+    assert hum_features(None, has_modes=True) & HumidifierEntityFeature.MODES
+    assert not (
+        wh_features(None, has_operation_list=False) & WaterHeaterEntityFeature.OPERATION_MODE
+    )
+    assert (
+        wh_features(None, has_operation_list=True) & WaterHeaterEntityFeature.OPERATION_MODE
+    )
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge.send_command = MagicMock(return_value=True)
+    hum = WsBridgeHumidifier(
+        bridge,
+        {
+            "unique_id": "gw1__hum",
+            "platform": "humidifier",
+            "name": "Hum",
+            "available_modes": ["auto", "sleep"],
+            "features": ["modes"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    hum.hass = MagicMock()
+    hum.async_write_ha_state = MagicMock()
+    hum._on_value(
+        {"state": "on", "target_humidity": 45, "mode": "auto", "action": "humidifying"}
+    )
+    assert hum._attr_is_on is True
+    assert hum._attr_target_humidity == 45.0
+    assert hum._attr_action == HumidifierAction.HUMIDIFYING
+
+    wh = WsBridgeWaterHeater(
+        bridge,
+        {
+            "unique_id": "gw1__wh",
+            "platform": "water_heater",
+            "name": "WH",
+            "operation_list": ["eco", "performance", "off"],
+            "temperature_unit": "F",
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    wh.hass = MagicMock()
+    wh.async_write_ha_state = MagicMock()
+    assert wh._attr_temperature_unit == UnitOfTemperature.FAHRENHEIT
+    wh._on_value({"state": "eco", "target_temperature": 50, "away_mode": False})
+    assert wh._attr_current_operation == "eco"
+    assert wh._attr_is_away_mode_on is False
+
+
+def test_siren_and_alarm_control_panel():
+    from custom_components.ws_bridge.siren import WsBridgeSiren, _features as siren_features
+    from custom_components.ws_bridge.alarm_control_panel import WsBridgeAlarmControlPanel
+    from homeassistant.components.alarm_control_panel import (
+        AlarmControlPanelState,
+        CodeFormat,
+    )
+    from homeassistant.components.siren import SirenEntityFeature
+    from homeassistant.exceptions import HomeAssistantError
+
+    assert not (siren_features(["tones"], has_tones=False) & SirenEntityFeature.TONES)
+    assert siren_features(None, has_tones=True) & SirenEntityFeature.TONES
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge.send_command = MagicMock(return_value=True)
+
+    siren = WsBridgeSiren(
+        bridge,
+        {
+            "unique_id": "gw1__siren",
+            "platform": "siren",
+            "name": "Siren",
+            "available_tones": ["alarm", "chime"],
+            "features": ["turn_on", "turn_off", "tones", "volume_set"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    siren.async_write_ha_state = MagicMock()
+    siren._apply(True)
+    assert siren._attr_is_on is True
+
+    alarm = WsBridgeAlarmControlPanel(
+        bridge,
+        {
+            "unique_id": "gw1__alarm",
+            "platform": "alarm_control_panel",
+            "name": "Alarm",
+            "code_format": "number",
+            "features": ["arm_home", "arm_away", "trigger"],
+            "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
+        },
+    )
+    alarm.async_write_ha_state = MagicMock()
+    assert alarm._attr_code_format == CodeFormat.NUMBER
+    alarm._apply("armed_away")
+    assert alarm._attr_alarm_state == AlarmControlPanelState.ARMED_AWAY
+    asyncio.run(alarm.async_alarm_disarm(code="1234"))
+    bridge.send_command.assert_called_with(
+        "gw1__alarm", "alarm_disarm", params={"code": "1234"}
+    )
+    assert alarm._attr_alarm_state == AlarmControlPanelState.DISARMED
+
+    bridge.send_command = MagicMock(return_value=False)
+    alarm._apply("armed_away")
+    try:
+        asyncio.run(alarm.async_alarm_disarm(code="1234"))
+        raise AssertionError("expected HomeAssistantError")
+    except HomeAssistantError:
+        pass
+    assert alarm._attr_alarm_state == AlarmControlPanelState.ARMED_AWAY
+
+
+def test_phase3_platforms_registered():
+    from custom_components.ws_bridge.const import (
+        PLATFORM_CLIMATE,
+        PLATFORM_HUMIDIFIER,
+        PLATFORM_WATER_HEATER,
+        PLATFORM_SIREN,
+        PLATFORM_ALARM_CONTROL_PANEL,
+        ALL_PLATFORMS,
+    )
+
+    for p in (
+        PLATFORM_CLIMATE,
+        PLATFORM_HUMIDIFIER,
+        PLATFORM_WATER_HEATER,
+        PLATFORM_SIREN,
+        PLATFORM_ALARM_CONTROL_PANEL,
+    ):
+        assert p in ALL_PLATFORMS

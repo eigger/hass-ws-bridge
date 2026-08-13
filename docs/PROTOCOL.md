@@ -9,7 +9,7 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
 ## 1. Role Definitions
 
 - **Client**: Responsible for **declaring** entities, **pushing** state updates, and executing control commands sent from Home Assistant.
-- **Integration**: Responsible for **creating** entities based on client declarations and **updating** their states. For control platforms (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`), it **relays** command requests from HA back to the originating client. It has no hardware-specific decoding logic.
+- **Integration**: Responsible for **creating** entities based on client declarations and **updating** their states. For control platforms (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`), it **relays** command requests from HA back to the originating client. It has no hardware-specific decoding logic.
 
 ---
 
@@ -82,7 +82,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
   }
   ```
   - `unique_id` (String, Required): Unique identifier within the client namespace.
-  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `event`, `valve`.
+  - `platform` (String, Required): Entity type. Must be one of: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `event`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`.
   - `name` (String, Required): Name of the entity.
   - `device` (Object, Optional): The sub-device this entity belongs to.
     - `id` (String, Required): Unique sub-device ID.
@@ -107,6 +107,11 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
     - **`date` / `time` / `datetime` platforms**: no extra declare fields — state is an ISO string (see §3.2).
     - **`event` platform**: `event_types` (List of String, Required, non-empty).
     - **`valve` platform**: `features` (`open`/`close`/`stop`/`set_position`), `reports_position` (Boolean, Optional, default `true`). When `reports_position` is `false`, omit `set_position` (default features exclude it).
+    - **`climate` platform**: `hvac_modes` (List of String, Required — `off`/`heat`/`cool`/`heat_cool`/`auto`/`dry`/`fan_only`), `fan_modes` / `swing_modes` / `preset_modes`, `min_temp` / `max_temp` / `target_temp_step`, `min_humidity` / `max_humidity`, `temperature_unit` (`"C"`/`"F"`, default `"C"`), `features` (`target_temperature`/`target_temperature_range`/`target_humidity`/`fan_mode`/`preset_mode`/`swing_mode`/`turn_on`/`turn_off`).
+    - **`humidifier` platform**: `device_class` (`humidifier`/`dehumidifier`), `min_humidity` / `max_humidity`, `available_modes` (non-empty list enables `modes` feature), `features` (`modes`).
+    - **`water_heater` platform**: `operation_list` (non-empty list enables `operation_mode` feature), `min_temp` / `max_temp`, `temperature_unit` (`"C"`/`"F"`, default `"C"`), `features` (`target_temperature`/`operation_mode`/`away_mode`/`on_off`).
+    - **`siren` platform**: `available_tones` (non-empty list enables `tones` feature), `features` (`turn_on`/`turn_off`/`tones`/`duration`/`volume_set`).
+    - **`alarm_control_panel` platform**: `code_arm_required` (Boolean, Optional, default `true`), `code_format` (`"number"`/`"text"`/omit — unlike lock, this is **not** a regex), `features` (`arm_home`/`arm_away`/`arm_night`/`arm_vacation`/`arm_custom_bypass`/`trigger`).
 
 * **Response**
   ```json
@@ -140,6 +145,11 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
 | `datetime` | Control | ISO datetime string | `set_value` (requires `value`) |
 | `event` | Read | event_type string or object | — |
 | `valve` | Control | Object (`state`/`position`, see §3.2) | `open_valve` / `close_valve` / `stop_valve` / `set_valve_position` |
+| `climate` | Control | Object (`hvac_mode`/temps/…, see §3.2) | `set_hvac_mode` / `set_temperature` / `set_fan_mode` / `set_swing_mode` / `set_preset_mode` / `set_humidity` / `turn_on` / `turn_off` |
+| `humidifier` | Control | Object (`state`/`humidity`/…) | `turn_on` / `turn_off` / `set_humidity` / `set_mode` |
+| `water_heater` | Control | Object (`state`/`temperature`/…) | `set_temperature` / `set_operation_mode` / `set_away_mode` / `turn_on` / `turn_off` |
+| `siren` | Control | Boolean | `turn_on` (`params`) / `turn_off` |
+| `alarm_control_panel` | Control | String | `alarm_disarm` / `alarm_arm_*` / `alarm_trigger` |
 
 ---
 
@@ -165,13 +175,13 @@ Updates states for one or more entities in batch. If a state update arrives befo
   ```
   - `states` (List, Required): List of entity state updates.
     - `unique_id` (String, Required): The original entity `unique_id` (without the gateway namespace prefix).
-    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (`device_tracker`, `update`, `light`, `cover`, `fan`, `valve`, …).
+    - `value` (Any, Required): New state. Type depends on the platform — a scalar for most, an **object** for platforms whose state isn't a single value (`device_tracker`, `update`, `light`, `cover`, `fan`, `valve`, `climate`, `humidifier`, `water_heater`, …).
       - Sending the string `"unknown"` (case-insensitive) for any platform will map to Home Assistant's `unavailable` (None) state.
       - For `binary_sensor`, values of `"1"`, `"true"`, `"on"`, `"yes"` (case-insensitive) or boolean `true` are mapped to the On state.
       - For `sensor` with `device_class` of `"timestamp"` or `"date"`, string values are automatically parsed into datetime/date objects.
       - For `device_tracker`, see the object form below.
       - For `update`, see the object form below.
-      - For `light` / `cover` / `fan` / `valve`, see the object forms below.
+      - For `light` / `cover` / `fan` / `valve` / `climate` / `humidifier` / `water_heater`, see the object forms below.
       - For `lock`, accept `"locked"`/`"unlocked"`/… or bool (`true` = locked).
       - For `date` / `time` / `datetime`, send ISO 8601 strings; parse failures become unknown (`None`). Tz-naive datetimes get HA's local timezone attached (not interpreted as UTC).
       - For `event`, send an event_type string or `{"event_type": "...", "attributes": {...}}`. Events are **not** restored from last state on restart.
@@ -300,6 +310,33 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 ```
 
 - `state` (`"open"`/`"closed"`/`"opening"`/`"closing"`), `position` (0–100). When `reports_position` is `false`, use `state`/`is_closed` semantics only — do not mix position reporting modes.
+
+#### `climate` state (object `value`)
+
+```json
+{"unique_id": "living_ac", "value": {"hvac_mode": "cool", "hvac_action": "cooling", "current_temperature": 28.0, "target_temperature": 24.0}}
+```
+
+- `hvac_mode`, `hvac_action`, `current_temperature`, `target_temperature`, `target_temp_low` / `target_temp_high`, `current_humidity`, `target_humidity`, `fan_mode`, `swing_mode`, `preset_mode`.
+- Default `features` include `turn_off` only when `hvac_modes` contains `"off"`. `turn_off` never writes `hvac_mode: off` unless that mode was declared.
+
+#### `humidifier` / `water_heater` state (object `value`)
+
+```json
+{"unique_id": "basement_hum", "value": {"state": "on", "target_humidity": 45, "mode": "auto", "action": "humidifying"}}
+```
+
+```json
+{"unique_id": "tank", "value": {"state": "eco", "target_temperature": 50, "away_mode": false}}
+```
+
+- **`humidifier`**: `state` (bool/on-off), `current_humidity`, `target_humidity`, `mode`, `action` (`humidifying`/`drying`/`idle`/`off` — mapped to HA `HumidifierAction`).
+- **`water_heater`**: `state` (current operation), `current_temperature`, `target_temperature`, `away_mode` (bool). Temperatures use the declared `temperature_unit`.
+
+#### `siren` / `alarm_control_panel` state
+
+- **`siren`**: boolean (or `{"state": true}`).
+- **`alarm_control_panel`**: `"disarmed"` / `"armed_home"` / `"armed_away"` / `"armed_night"` / `"armed_vacation"` / `"armed_custom_bypass"` / `"arming"` / `"pending"` / `"triggered"`.
 
 * **Response**
   ```json
@@ -449,7 +486,7 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 
 ## 4. Control Commands (Home Assistant → Client)
 
-When a controllable entity (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
+When a controllable entity (`switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`) is triggered in HA, a command event is pushed to the client connection registered under `ws_bridge/connect`.
 
 The client should listen for these events, perform the physical action, and then push the updated state back using a `ws_bridge/state` message.
 
@@ -524,6 +561,22 @@ Command events:
 {"kind": "command", "unique_id": "main_valve", "action": "set_valve_position", "params": {"position": 40}}
 ```
 
+### Phase 3 examples
+
+Declare (excerpt):
+
+```json
+{"unique_id": "living_ac", "platform": "climate", "name": "AC", "hvac_modes": ["off", "cool", "heat"], "features": ["target_temperature", "turn_on", "turn_off"]}
+{"unique_id": "alarm", "platform": "alarm_control_panel", "name": "Alarm", "code_format": "number", "features": ["arm_home", "arm_away", "trigger"]}
+```
+
+Command events:
+
+```json
+{"kind": "command", "unique_id": "living_ac", "action": "set_temperature", "params": {"temperature": 24}}
+{"kind": "command", "unique_id": "alarm", "action": "alarm_arm_away", "params": {"code": "1234"}}
+```
+
 
 ### `update` commands
 
@@ -545,7 +598,6 @@ These `platform` values are **not** accepted today — `ws_bridge/entity` reject
 
 | Order | Platform | Notes |
 |:---:|:---|:---|
-| 1 | `climate` (+ humidifier / water_heater / siren / alarm_control_panel) | Large object state + many actions. |
-| 2 | `media_player` / `image` / `camera` | Design decision first (see implementation plan). |
+| 1 | `media_player` / `image` / `camera` | Design decision first (see implementation plan). |
 
-Phase 1 (`light`/`cover`/`fan`) and Phase 2 (`text`/`lock`/`date`/`time`/`datetime`/`event`/`valve`) have shipped.
+Phase 1–3 have shipped (`light`/`cover`/`fan`, scalar Phase 2, and climate family).

@@ -37,6 +37,11 @@ PLATFORMS = [
     Platform.DATETIME,
     Platform.EVENT,
     Platform.VALVE,
+    Platform.CLIMATE,
+    Platform.HUMIDIFIER,
+    Platform.WATER_HEATER,
+    Platform.SIREN,
+    Platform.ALARM_CONTROL_PANEL,
 ]
 
 

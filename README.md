@@ -69,8 +69,13 @@ graph TD
 | `date` / `time` / `datetime` | Control | ISO string + `set_value` |
 | `event` | Read | `event_types` required (not restored on restart) |
 | `valve` | Control | Open/close/position |
+| `climate` | Control | HVAC mode / temp / humidity / fan / swing |
+| `humidifier` | Control | Humidity / mode |
+| `water_heater` | Control | Temp / operation / away |
+| `siren` | Control | `turn_on` / `turn_off` (+ tone/volume) |
+| `alarm_control_panel` | Control | arm/disarm/trigger |
 
-Planned (not accepted on the wire yet): `climate` family → `media_player` / `image` / `camera`. See [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms).
+Planned (not accepted on the wire yet): `media_player` / `image` / `camera`. See [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms).
 
 ---
 
