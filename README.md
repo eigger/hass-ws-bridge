@@ -21,7 +21,7 @@ A generic Home Assistant integration that enables **any authenticated WebSocket 
 - **No Additional Brokers/Ports**: Communicates directly using Home Assistant's standard WebSocket API (`/api/websocket`) and a Long-Lived Access Token. No need to run an MQTT broker or expose extra TCP ports.
 - **Dynamic Entity Provisioning**: Entities are created instantly in Home Assistant as soon as the client declares them via JSON messages over the WebSocket connection.
 - **Client-based Device Grouping**: Each client (identified by `gateway_id`) is registered as a parent device (Gateway) in Home Assistant. All devices/entities declared by that client are grouped as child devices (`via_device`) under it for clean organization.
-- **Bi-directional Command Routing**: Supports control components including `switch`, `number`, `select`, and `button`. Control events (`command`) triggered by the HA UI or automations are routed back exclusively to the originating client.
+- **Bi-directional Command Routing**: Supports control components including `switch`, `number`, `select`, `button`, and `update`. Control events (`command`) triggered by the HA UI or automations are routed back exclusively to the originating client.
 - **Connection State Tracking (LWT)**: If the client's WebSocket connection drops, all child devices and entities registered by that client are automatically set to `unavailable` to prevent stale states.
 - **Connected Clients Diagnostic Sensor**: Provides a diagnostic sensor that reports the number of currently connected WebSocket clients (`gateway_id`) in real time.
 
@@ -60,6 +60,7 @@ graph TD
 | `number` | Control | Range value control (`set_value`, `min`, `max`, `step`) |
 | `select` | Control | Option selection control (`select_option`, `options`) |
 | `button` | Control | Execution trigger (`press`, stateless) |
+| `update` | Control | Firmware update (`install` / `check`; `installed_version` / `latest_version`) |
 
 ---
 

@@ -36,6 +36,10 @@ class WsBridgeEntity(Entity):
                 self._attr_icon = platform_icon
         if (cat := defn.get("entity_category")) in (EntityCategory.CONFIG, EntityCategory.DIAGNOSTIC):
             self._attr_entity_category = EntityCategory(cat)
+        else:
+            # Explicit None so a platform class default (e.g. UpdateEntity's
+            # CONFIG) is not kept on first create then cleared on redeclare.
+            self._attr_entity_category = None
 
         dev = defn["_device"]                          # bridge가 주입
         self._ns_device_id = dev["ns_id"]

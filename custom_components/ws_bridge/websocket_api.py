@@ -6,6 +6,8 @@
  - ws_bridge/state        : 상태 갱신(배치)
  - ws_bridge/availability : sub-device 연결 상태
  - ws_bridge/remove       : 엔티티·장치·게이트웨이 삭제
+
+제어 플랫폼: switch, number, select, button, update.
 """
 from __future__ import annotations
 

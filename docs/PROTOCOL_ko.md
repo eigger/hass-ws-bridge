@@ -9,7 +9,7 @@
 ## 1. 역할 정의
 
 - **클라이언트**: 엔티티를 **선언**하고 **상태**를 push합니다. 또한 Home Assistant로부터 전달되는 제어 명령을 수신하여 장치를 제어합니다.
-- **통합구성요소(Integration)**: 클라이언트의 선언을 바탕으로 엔티티를 **생성**하고 상태에 맞춰 **갱신**합니다. 제어형 플랫폼(`switch`, `number`, `select`, `button`)에 대해서는 제어 명령을 **해당 클라이언트에만 중계**합니다. 컴포넌트 내부에는 하드웨어 디코딩/설정 정보가 존재하지 않습니다.
+- **통합구성요소(Integration)**: 클라이언트의 선언을 바탕으로 엔티티를 **생성**하고 상태에 맞춰 **갱신**합니다. 제어형 플랫폼(`switch`, `number`, `select`, `button`, `update`)에 대해서는 제어 명령을 **해당 클라이언트에만 중계**합니다. 컴포넌트 내부에는 하드웨어 디코딩/설정 정보가 존재하지 않습니다.
 
 ---
 
@@ -83,7 +83,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   }
   ```
   - `unique_id` (String, 필수): 게이트웨이 내에서 고유한 엔티티 식별자입니다. (HA 내부적으로는 `{gateway_id}__{unique_id}` 형태로 자동 변환됩니다.)
-  - `platform` (String, 필수): 엔티티 플랫폼 타입. 지원 목록: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`
+  - `platform` (String, 필수): 엔티티 플랫폼 타입. 지원 목록: `sensor`, `binary_sensor`, `text_sensor`, `device_tracker`, `switch`, `number`, `select`, `button`, `update`
   - `name` (String, 필수): 엔티티 이름.
   - `device` (Object, 옵션): 엔티티가 속한 하위 장치 정보.
     - `id` (String, 필수): 하위 장치 고유 ID.
@@ -98,6 +98,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
     - **`select` 플랫폼**: `options` (List of String, 필수) - 선택 가능한 옵션 목록.
     - **`number` 플랫폼**: `min`, `max`, `step` (Float, 옵션) - 입력 범위 및 단계값.
     - **`device_tracker` 플랫폼**: 선언 전용 필드 없음 — 위치는 상태(`value`) 객체로 전달합니다 (§3.2 참고).
+    - **`update` 플랫폼**: 선언 전용 필드 없음 — 버전 정보는 상태(`value`) 객체로 전달합니다 (§3.2 참고). `device_class`를 생략하면 HA 쪽에서 `firmware`로 기본 설정합니다.
 
 * **응답**
   ```json
@@ -120,6 +121,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 | `number` | 제어 | 숫자 | `set_value` (값 포함) |
 | `select` | 제어 | 문자열 (옵션값) | `select_option` (옵션값 포함) |
 | `button` | 제어 | — | `press` |
+| `update` | 제어 | 객체 (`installed_version`/`latest_version`, §3.2 참고) | `install` / `check` |
 
 ---
 
@@ -145,11 +147,12 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
   ```
   - `states` (List, 필수): 업데이트할 엔티티 정보 목록.
     - `unique_id` (String, 필수): 등록 시 사용했던 원본 `unique_id` (게이트웨이 네임스페이스 제외).
-    - `value` (Any, 필수): 새로운 상태 값. 대부분의 플랫폼은 스칼라이고, 상태가 단일 값이 아닌 플랫폼(현재 `device_tracker`)은 **객체**를 사용합니다.
+    - `value` (Any, 필수): 새로운 상태 값. 대부분의 플랫폼은 스칼라이고, 상태가 단일 값이 아닌 플랫폼(현재 `device_tracker`와 `update`)은 **객체**를 사용합니다.
       - 모든 플랫폼에 대해 문자열 `"unknown"`(대소문자 구분 없음)을 보내면 HA의 사용 불가(`None`) 상태로 매핑됩니다.
       - `binary_sensor` 플랫폼은 `"1"`, `"true"`, `"on"`, `"yes"` (대소문자 구분 없음) 또는 진위값 `true`를 On 상태로 매핑합니다.
       - `sensor` 플랫폼 중 `device_class`가 `"timestamp"`이거나 `"date"`인 경우, 문자열 값을 자동으로 날짜/시간 객체로 변환합니다.
       - `device_tracker` 플랫폼은 아래 객체 형식을 사용합니다.
+      - `update` 플랫폼은 아래 객체 형식을 사용합니다.
   - `ts` (Number, 선택): 상태 업데이트 타임스탬프 (현재 스키마에서는 허용되나 백엔드 로직에서는 무시됩니다).
 
 #### `device_tracker` 상태 (객체 `value`)
@@ -172,6 +175,35 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 엔티티 상태(`home` / `not_home` / 존 이름)는 HA가 좌표로부터 계산하므로 별도의 상태 문자열을 보낼 필요가 없습니다. (이걸 직접 지정하는 필드는 일부러 안 뒀습니다 — `TrackerEntity.location_name`이 HA에서 deprecated고 2027.7에 제거될 예정입니다.)
 
 > **배터리**: 여기에 `battery_level`을 넣지 마세요. HA가 `device_tracker`의 `battery_level`을 폐기(deprecate)하고 별도 배터리 엔티티를 권장합니다 — 일반 `sensor`를 `"device_class": "battery"`로 선언하세요.
+
+#### `update` 상태 (객체 `value`)
+
+```json
+{
+  "id": 5,
+  "type": "ws_bridge/state",
+  "states": [
+    {
+      "unique_id": "firmware",
+      "value": {
+        "installed_version": "1.0.0",
+        "latest_version": "1.0.1",
+        "in_progress": false,
+        "title": "Living Room",
+        "summary": "Bug fixes"
+      }
+    }
+  ]
+}
+```
+
+- `installed_version` (String, 옵션): 현재 실행 중인 펌웨어/앱 버전.
+- `latest_version` (String, 옵션): 매니페스트가 제공하는 버전. `installed_version`과 다르면 HA가 업데이트를 표시합니다.
+- `in_progress` (Boolean, 옵션, 기본값 `false`): 플래시가 진행 중이면 `true`.
+- `progress` (Number, 옵션, 0–100): 진행률. `in_progress`가 `true`일 때만 의미가 있습니다.
+- `title`, `summary`, `release_url` (String, 옵션): 업데이트 카드 / 릴리스 노트 대화상자에 표시됩니다.
+
+빈 옵션 키는 `""`로 보내지 말고 생략하세요. 문자열 `"unknown"`(또는 객체가 아닌 값)을 보내면 버전 필드를 비웁니다.
 
 * **응답**
   ```json
@@ -295,7 +327,7 @@ HA에 등록된 엔티티·하위 장치·게이트웨이를 **완전히 삭제*
   - `event` (Object): 제어 세부 정보.
     - `kind`: 항상 `"command"` 입니다.
     - `unique_id`: 제어 대상 엔티티의 원본 `unique_id` (게이트웨이 네임스페이스 제거됨).
-    - `action`: 수행할 제어 동작 (`turn_on`, `turn_off`, `press`, `set_value`, `select_option`).
+    - `action`: 수행할 제어 동작 (`turn_on`, `turn_off`, `press`, `set_value`, `select_option`, `install`, `check`).
     - `value` (Any, 옵션): 설정할 값 (예: `set_value` 시 대상 숫자, `select_option` 시 대상 문자열).
 
 ### 값 설정 예시
@@ -311,6 +343,11 @@ HA에 등록된 엔티티·하위 장치·게이트웨이를 **완전히 삭제*
   }
 }
 ```
+
+### `update` 명령
+
+- `install` — 현재 제공된 펌웨어 설치를 시작합니다 (`value` 없음). 클라이언트는 플래시가 끝날 때까지 `in_progress: true`(알고 있으면 `progress`도)를 push해야 합니다. 성공하면 보통 기기가 재부팅됩니다.
+- `check` — 업데이트 매니페스트를 다시 가져옵니다. HA가 이 엔티티에 `homeassistant.update_entity`를 호출할 때 전달됩니다.
 
 ---
 
