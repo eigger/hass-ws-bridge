@@ -31,14 +31,22 @@ async def async_setup_entry(
     bridge.register_platform(PLATFORM_SIREN, async_add_entities, WsBridgeSiren)
 
 
-def _features(names: list[str] | None) -> SirenEntityFeature:
+def _features(
+    names: list[str] | None, *, has_tones: bool
+) -> SirenEntityFeature:
     if not names:
-        return _DEFAULT_FEATURES
-    flags = SirenEntityFeature(0)
-    for name in names:
-        if (flag := _FEATURE_MAP.get(name)) is not None:
-            flags |= flag
-    return flags or _DEFAULT_FEATURES
+        flags = _DEFAULT_FEATURES
+    else:
+        flags = SirenEntityFeature(0)
+        for name in names:
+            if (flag := _FEATURE_MAP.get(name)) is not None:
+                flags |= flag
+        flags = flags or _DEFAULT_FEATURES
+    if has_tones:
+        flags |= SirenEntityFeature.TONES
+    else:
+        flags &= ~SirenEntityFeature.TONES
+    return flags
 
 
 class WsBridgeSiren(WsBridgeEntity, SirenEntity):
@@ -50,8 +58,9 @@ class WsBridgeSiren(WsBridgeEntity, SirenEntity):
     def _configure_from_defn(self, defn: dict[str, Any]) -> None:
         tones = defn.get("available_tones")
         self._attr_available_tones = list(tones) if tones else None
-        self._attr_supported_features = _features(defn.get("features"))
-
+        self._attr_supported_features = _features(
+            defn.get("features"), has_tones=bool(self._attr_available_tones)
+        )
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._configure_from_defn(defn)
 

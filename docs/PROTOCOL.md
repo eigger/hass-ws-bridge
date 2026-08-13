@@ -108,9 +108,9 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
     - **`event` platform**: `event_types` (List of String, Required, non-empty).
     - **`valve` platform**: `features` (`open`/`close`/`stop`/`set_position`), `reports_position` (Boolean, Optional, default `true`). When `reports_position` is `false`, omit `set_position` (default features exclude it).
     - **`climate` platform**: `hvac_modes` (List of String, Required — `off`/`heat`/`cool`/`heat_cool`/`auto`/`dry`/`fan_only`), `fan_modes` / `swing_modes` / `preset_modes`, `min_temp` / `max_temp` / `target_temp_step`, `min_humidity` / `max_humidity`, `temperature_unit` (`"C"`/`"F"`, default `"C"`), `features` (`target_temperature`/`target_temperature_range`/`target_humidity`/`fan_mode`/`preset_mode`/`swing_mode`/`turn_on`/`turn_off`).
-    - **`humidifier` platform**: `device_class` (`humidifier`/`dehumidifier`), `min_humidity` / `max_humidity`, `available_modes`, `features` (`modes`).
-    - **`water_heater` platform**: `operation_list`, `min_temp` / `max_temp`, `features` (`target_temperature`/`operation_mode`/`away_mode`/`on_off`).
-    - **`siren` platform**: `available_tones`, `features` (`turn_on`/`turn_off`/`tones`/`duration`/`volume_set`).
+    - **`humidifier` platform**: `device_class` (`humidifier`/`dehumidifier`), `min_humidity` / `max_humidity`, `available_modes` (non-empty list enables `modes` feature), `features` (`modes`).
+    - **`water_heater` platform**: `operation_list` (non-empty list enables `operation_mode` feature), `min_temp` / `max_temp`, `temperature_unit` (`"C"`/`"F"`, default `"C"`), `features` (`target_temperature`/`operation_mode`/`away_mode`/`on_off`).
+    - **`siren` platform**: `available_tones` (non-empty list enables `tones` feature), `features` (`turn_on`/`turn_off`/`tones`/`duration`/`volume_set`).
     - **`alarm_control_panel` platform**: `code_arm_required` (Boolean, Optional, default `true`), `code_format` (`"number"`/`"text"`/omit — unlike lock, this is **not** a regex), `features` (`arm_home`/`arm_away`/`arm_night`/`arm_vacation`/`arm_custom_bypass`/`trigger`).
 
 * **Response**
@@ -318,16 +318,20 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 ```
 
 - `hvac_mode`, `hvac_action`, `current_temperature`, `target_temperature`, `target_temp_low` / `target_temp_high`, `current_humidity`, `target_humidity`, `fan_mode`, `swing_mode`, `preset_mode`.
+- Default `features` include `turn_off` only when `hvac_modes` contains `"off"`. `turn_off` never writes `hvac_mode: off` unless that mode was declared.
 
 #### `humidifier` / `water_heater` state (object `value`)
 
 ```json
-{"unique_id": "basement_hum", "value": {"state": "on", "target_humidity": 45, "mode": "auto"}}
+{"unique_id": "basement_hum", "value": {"state": "on", "target_humidity": 45, "mode": "auto", "action": "humidifying"}}
 ```
 
 ```json
 {"unique_id": "tank", "value": {"state": "eco", "target_temperature": 50, "away_mode": false}}
 ```
+
+- **`humidifier`**: `state` (bool/on-off), `current_humidity`, `target_humidity`, `mode`, `action` (`humidifying`/`drying`/`idle`/`off` — mapped to HA `HumidifierAction`).
+- **`water_heater`**: `state` (current operation), `current_temperature`, `target_temperature`, `away_mode` (bool). Temperatures use the declared `temperature_unit`.
 
 #### `siren` / `alarm_control_panel` state
 

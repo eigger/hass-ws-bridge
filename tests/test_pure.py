@@ -958,9 +958,14 @@ def test_climate_hvac_modes_and_features():
 
     assert _hvac_modes(None) == [HVACMode.OFF]
     assert _hvac_modes(["heat", "nope", "cool"]) == [HVACMode.HEAT, HVACMode.COOL]
-    flags = _features(None)
+    flags = _features(None, has_off=True)
     assert flags & ClimateEntityFeature.TARGET_TEMPERATURE
     assert flags & ClimateEntityFeature.TURN_ON
+    assert flags & ClimateEntityFeature.TURN_OFF
+    flags = _features(None, has_off=False)
+    assert not (flags & ClimateEntityFeature.TURN_OFF)
+    flags = _features(["turn_off", "target_temperature"], has_off=False)
+    assert not (flags & ClimateEntityFeature.TURN_OFF)
 
 
 def test_climate_apply_and_set_temperature():
@@ -1001,8 +1006,23 @@ def test_climate_apply_and_set_temperature():
 
 
 def test_humidifier_and_water_heater_basics():
-    from custom_components.ws_bridge.humidifier import WsBridgeHumidifier
-    from custom_components.ws_bridge.water_heater import WsBridgeWaterHeater
+    from custom_components.ws_bridge.humidifier import WsBridgeHumidifier, _features as hum_features
+    from custom_components.ws_bridge.water_heater import (
+        WsBridgeWaterHeater,
+        _features as wh_features,
+    )
+    from homeassistant.components.humidifier import HumidifierAction, HumidifierEntityFeature
+    from homeassistant.components.water_heater import WaterHeaterEntityFeature
+    from homeassistant.const import UnitOfTemperature
+
+    assert not (hum_features(["modes"], has_modes=False) & HumidifierEntityFeature.MODES)
+    assert hum_features(None, has_modes=True) & HumidifierEntityFeature.MODES
+    assert not (
+        wh_features(None, has_operation_list=False) & WaterHeaterEntityFeature.OPERATION_MODE
+    )
+    assert (
+        wh_features(None, has_operation_list=True) & WaterHeaterEntityFeature.OPERATION_MODE
+    )
 
     bridge = WsBridge(MagicMock(), "entry1")
     bridge.send_command = MagicMock(return_value=True)
@@ -1019,9 +1039,12 @@ def test_humidifier_and_water_heater_basics():
     )
     hum.hass = MagicMock()
     hum.async_write_ha_state = MagicMock()
-    hum._on_value({"state": "on", "target_humidity": 45, "mode": "auto"})
+    hum._on_value(
+        {"state": "on", "target_humidity": 45, "mode": "auto", "action": "humidifying"}
+    )
     assert hum._attr_is_on is True
     assert hum._attr_target_humidity == 45.0
+    assert hum._attr_action == HumidifierAction.HUMIDIFYING
 
     wh = WsBridgeWaterHeater(
         bridge,
@@ -1030,23 +1053,30 @@ def test_humidifier_and_water_heater_basics():
             "platform": "water_heater",
             "name": "WH",
             "operation_list": ["eco", "performance", "off"],
+            "temperature_unit": "F",
             "_device": {"ns_id": "gw1", "gateway_id": "gw1", "is_gateway": True},
         },
     )
     wh.hass = MagicMock()
     wh.async_write_ha_state = MagicMock()
+    assert wh._attr_temperature_unit == UnitOfTemperature.FAHRENHEIT
     wh._on_value({"state": "eco", "target_temperature": 50, "away_mode": False})
     assert wh._attr_current_operation == "eco"
     assert wh._attr_is_away_mode_on is False
 
 
 def test_siren_and_alarm_control_panel():
-    from custom_components.ws_bridge.siren import WsBridgeSiren
+    from custom_components.ws_bridge.siren import WsBridgeSiren, _features as siren_features
     from custom_components.ws_bridge.alarm_control_panel import WsBridgeAlarmControlPanel
     from homeassistant.components.alarm_control_panel import (
         AlarmControlPanelState,
         CodeFormat,
     )
+    from homeassistant.components.siren import SirenEntityFeature
+    from homeassistant.exceptions import HomeAssistantError
+
+    assert not (siren_features(["tones"], has_tones=False) & SirenEntityFeature.TONES)
+    assert siren_features(None, has_tones=True) & SirenEntityFeature.TONES
 
     bridge = WsBridge(MagicMock(), "entry1")
     bridge.send_command = MagicMock(return_value=True)
@@ -1086,6 +1116,15 @@ def test_siren_and_alarm_control_panel():
         "gw1__alarm", "alarm_disarm", params={"code": "1234"}
     )
     assert alarm._attr_alarm_state == AlarmControlPanelState.DISARMED
+
+    bridge.send_command = MagicMock(return_value=False)
+    alarm._apply("armed_away")
+    try:
+        asyncio.run(alarm.async_alarm_disarm(code="1234"))
+        raise AssertionError("expected HomeAssistantError")
+    except HomeAssistantError:
+        pass
+    assert alarm._attr_alarm_state == AlarmControlPanelState.ARMED_AWAY
 
 
 def test_phase3_platforms_registered():

@@ -11,6 +11,7 @@ from homeassistant.components.alarm_control_panel import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .bridge import WsBridge
@@ -113,53 +114,43 @@ class WsBridgeAlarmControlPanel(WsBridgeEntity, AlarmControlPanelEntity):
             return None
         return {"code": code}
 
+    def _send(self, action: str, code: str | None) -> None:
+        if not self._bridge.send_command(
+            self._attr_unique_id, action, params=self._code_params(code)
+        ):
+            raise HomeAssistantError("Gateway is not connected")
+
     async def async_alarm_disarm(self, code: str | None = None) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "alarm_disarm", params=self._code_params(code)
-        )
+        self._send("alarm_disarm", code)
         self._attr_alarm_state = AlarmControlPanelState.DISARMED
         self.async_write_ha_state()
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "alarm_arm_home", params=self._code_params(code)
-        )
+        self._send("alarm_arm_home", code)
         self._attr_alarm_state = AlarmControlPanelState.ARMED_HOME
         self.async_write_ha_state()
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "alarm_arm_away", params=self._code_params(code)
-        )
+        self._send("alarm_arm_away", code)
         self._attr_alarm_state = AlarmControlPanelState.ARMED_AWAY
         self.async_write_ha_state()
 
     async def async_alarm_arm_night(self, code: str | None = None) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "alarm_arm_night", params=self._code_params(code)
-        )
+        self._send("alarm_arm_night", code)
         self._attr_alarm_state = AlarmControlPanelState.ARMED_NIGHT
         self.async_write_ha_state()
 
     async def async_alarm_arm_vacation(self, code: str | None = None) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "alarm_arm_vacation", params=self._code_params(code)
-        )
+        self._send("alarm_arm_vacation", code)
         self._attr_alarm_state = AlarmControlPanelState.ARMED_VACATION
         self.async_write_ha_state()
 
     async def async_alarm_arm_custom_bypass(self, code: str | None = None) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id,
-            "alarm_arm_custom_bypass",
-            params=self._code_params(code),
-        )
+        self._send("alarm_arm_custom_bypass", code)
         self._attr_alarm_state = AlarmControlPanelState.ARMED_CUSTOM_BYPASS
         self.async_write_ha_state()
 
     async def async_alarm_trigger(self, code: str | None = None) -> None:
-        self._bridge.send_command(
-            self._attr_unique_id, "alarm_trigger", params=self._code_params(code)
-        )
+        self._send("alarm_trigger", code)
         self._attr_alarm_state = AlarmControlPanelState.TRIGGERED
         self.async_write_ha_state()

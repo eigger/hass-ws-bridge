@@ -51,9 +51,7 @@ _FEATURE_MAP = {
 }
 
 _DEFAULT_FEATURES = (
-    ClimateEntityFeature.TARGET_TEMPERATURE
-    | ClimateEntityFeature.TURN_ON
-    | ClimateEntityFeature.TURN_OFF
+    ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TURN_ON
 )
 
 
@@ -72,15 +70,23 @@ def _hvac_modes(names: list[str] | None) -> list[HVACMode]:
     return modes or [HVACMode.OFF]
 
 
-def _features(names: list[str] | None) -> ClimateEntityFeature:
+def _features(
+    names: list[str] | None, *, has_off: bool
+) -> ClimateEntityFeature:
     if not names:
-        return _DEFAULT_FEATURES
+        flags = _DEFAULT_FEATURES
+        if has_off:
+            flags |= ClimateEntityFeature.TURN_OFF
+        return flags
     flags = ClimateEntityFeature(0)
     for name in names:
         if (flag := _FEATURE_MAP.get(name)) is not None:
             flags |= flag
-    return flags or _DEFAULT_FEATURES
-
+    if not has_off:
+        flags &= ~ClimateEntityFeature.TURN_OFF
+    return flags or (
+        _DEFAULT_FEATURES | (ClimateEntityFeature.TURN_OFF if has_off else 0)
+    )
 
 def _as_float(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
@@ -121,8 +127,10 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
             self._attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
         else:
             self._attr_temperature_unit = UnitOfTemperature.CELSIUS
-        self._attr_supported_features = _features(defn.get("features"))
-
+        self._attr_supported_features = _features(
+            defn.get("features"),
+            has_off=HVACMode.OFF in self._attr_hvac_modes,
+        )
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._configure_from_defn(defn)
 
@@ -229,6 +237,8 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
 
     async def async_turn_off(self) -> None:
         self._bridge.send_command(self._attr_unique_id, "turn_off")
-        self._state["hvac_mode"] = HVACMode.OFF
-        self._apply_state()
-        self.async_write_ha_state()
+        # Only advertise OFF locally when the client listed it in hvac_modes.
+        if HVACMode.OFF in self._attr_hvac_modes:
+            self._state["hvac_mode"] = HVACMode.OFF
+            self._apply_state()
+            self.async_write_ha_state()

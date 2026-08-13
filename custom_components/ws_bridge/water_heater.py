@@ -24,10 +24,8 @@ _FEATURE_MAP = {
     "on_off": WaterHeaterEntityFeature.ON_OFF,
 }
 
-_DEFAULT_FEATURES = (
-    WaterHeaterEntityFeature.TARGET_TEMPERATURE
-    | WaterHeaterEntityFeature.OPERATION_MODE
-    | WaterHeaterEntityFeature.ON_OFF
+_DEFAULT_BASE = (
+    WaterHeaterEntityFeature.TARGET_TEMPERATURE | WaterHeaterEntityFeature.ON_OFF
 )
 
 
@@ -40,14 +38,30 @@ async def async_setup_entry(
     )
 
 
-def _features(names: list[str] | None) -> WaterHeaterEntityFeature:
+def _features(
+    names: list[str] | None, *, has_operation_list: bool
+) -> WaterHeaterEntityFeature:
     if not names:
-        return _DEFAULT_FEATURES
+        flags = _DEFAULT_BASE
+        if has_operation_list:
+            flags |= WaterHeaterEntityFeature.OPERATION_MODE
+        return flags
     flags = WaterHeaterEntityFeature(0)
     for name in names:
         if (flag := _FEATURE_MAP.get(name)) is not None:
             flags |= flag
-    return flags or _DEFAULT_FEATURES
+    if has_operation_list:
+        flags |= WaterHeaterEntityFeature.OPERATION_MODE
+    else:
+        flags &= ~WaterHeaterEntityFeature.OPERATION_MODE
+    return flags or (
+        _DEFAULT_BASE
+        | (
+            WaterHeaterEntityFeature.OPERATION_MODE
+            if has_operation_list
+            else WaterHeaterEntityFeature(0)
+        )
+    )
 
 
 def _as_float(value: Any) -> float | None:
@@ -72,9 +86,15 @@ class WsBridgeWaterHeater(WsBridgeCompositeEntity, WaterHeaterEntity):
             self._attr_min_temp = float(min_temp)
         if (max_temp := defn.get("max_temp")) is not None:
             self._attr_max_temp = float(max_temp)
-        self._attr_temperature_unit = UnitOfTemperature.CELSIUS
-        self._attr_supported_features = _features(defn.get("features"))
-
+        unit = str(defn.get("temperature_unit") or "").upper()
+        if unit in ("F", "°F", "FAHRENHEIT"):
+            self._attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
+        else:
+            self._attr_temperature_unit = UnitOfTemperature.CELSIUS
+        self._attr_supported_features = _features(
+            defn.get("features"),
+            has_operation_list=bool(self._attr_operation_list),
+        )
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._configure_from_defn(defn)
 

@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.humidifier import HumidifierEntity, HumidifierEntityFeature
+from homeassistant.components.humidifier import (
+    HumidifierAction,
+    HumidifierEntity,
+    HumidifierEntityFeature,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -13,6 +17,13 @@ from .const import DOMAIN, PLATFORM_HUMIDIFIER
 from .entity import WsBridgeCompositeEntity
 from .helpers import parse_bool
 
+_ACTION_MAP = {
+    "humidifying": HumidifierAction.HUMIDIFYING,
+    "drying": HumidifierAction.DRYING,
+    "idle": HumidifierAction.IDLE,
+    "off": HumidifierAction.OFF,
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -21,11 +32,17 @@ async def async_setup_entry(
     bridge.register_platform(PLATFORM_HUMIDIFIER, async_add_entities, WsBridgeHumidifier)
 
 
-def _features(names: list[str] | None) -> HumidifierEntityFeature:
+def _features(
+    names: list[str] | None, *, has_modes: bool
+) -> HumidifierEntityFeature:
     flags = HumidifierEntityFeature(0)
     for name in names or ():
         if name == "modes":
             flags |= HumidifierEntityFeature.MODES
+    if has_modes:
+        flags |= HumidifierEntityFeature.MODES
+    else:
+        flags &= ~HumidifierEntityFeature.MODES
     return flags
 
 
@@ -52,7 +69,9 @@ class WsBridgeHumidifier(WsBridgeCompositeEntity, HumidifierEntity):
             self._attr_max_humidity = float(max_hum)
         modes = defn.get("available_modes")
         self._attr_available_modes = list(modes) if modes else None
-        self._attr_supported_features = _features(defn.get("features"))
+        self._attr_supported_features = _features(
+            defn.get("features"), has_modes=bool(self._attr_available_modes)
+        )
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._configure_from_defn(defn)
@@ -65,8 +84,9 @@ class WsBridgeHumidifier(WsBridgeCompositeEntity, HumidifierEntity):
         mode = self._state.get("mode")
         self._attr_mode = str(mode) if mode is not None else None
         action = self._state.get("action")
-        self._attr_action = str(action) if action is not None else None
-
+        self._attr_action = (
+            _ACTION_MAP.get(str(action).lower()) if action is not None else None
+        )
     async def async_turn_on(self, **kwargs: Any) -> None:
         self._bridge.send_command(self._attr_unique_id, "turn_on")
         self._state["state"] = "on"

@@ -109,9 +109,9 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
     - **`event` 플랫폼**: `event_types`(문자열 리스트, 필수, 비어 있으면 안 됨).
     - **`valve` 플랫폼**: `features`(`open`/`close`/`stop`/`set_position`), `reports_position`(bool, 옵션, 기본 `true`). `reports_position`이 `false`이면 `set_position`을 넣지 마세요(기본 features에서도 제외).
     - **`climate` 플랫폼**: `hvac_modes`(문자열 리스트, 필수 — `off`/`heat`/`cool`/`heat_cool`/`auto`/`dry`/`fan_only`), `fan_modes` / `swing_modes` / `preset_modes`, `min_temp` / `max_temp` / `target_temp_step`, `min_humidity` / `max_humidity`, `temperature_unit`(`"C"`/`"F"`, 기본 `"C"`), `features`(`target_temperature`/`target_temperature_range`/`target_humidity`/`fan_mode`/`preset_mode`/`swing_mode`/`turn_on`/`turn_off`).
-    - **`humidifier` 플랫폼**: `device_class`(`humidifier`/`dehumidifier`), `min_humidity` / `max_humidity`, `available_modes`, `features`(`modes`).
-    - **`water_heater` 플랫폼**: `operation_list`, `min_temp` / `max_temp`, `features`(`target_temperature`/`operation_mode`/`away_mode`/`on_off`).
-    - **`siren` 플랫폼**: `available_tones`, `features`(`turn_on`/`turn_off`/`tones`/`duration`/`volume_set`).
+    - **`humidifier` 플랫폼**: `device_class`(`humidifier`/`dehumidifier`), `min_humidity` / `max_humidity`, `available_modes`(비어 있지 않으면 `modes` feature 활성), `features`(`modes`).
+    - **`water_heater` 플랫폼**: `operation_list`(비어 있지 않으면 `operation_mode` feature 활성), `min_temp` / `max_temp`, `temperature_unit`(`"C"`/`"F"`, 기본 `"C"`), `features`(`target_temperature`/`operation_mode`/`away_mode`/`on_off`).
+    - **`siren` 플랫폼**: `available_tones`(비어 있지 않으면 `tones` feature 활성), `features`(`turn_on`/`turn_off`/`tones`/`duration`/`volume_set`).
     - **`alarm_control_panel` 플랫폼**: `code_arm_required`(bool, 기본 `true`), `code_format`(`"number"`/`"text"`/생략 — lock과 달리 **정규식 아님**), `features`(`arm_home`/`arm_away`/`arm_night`/`arm_vacation`/`arm_custom_bypass`/`trigger`).
 
 * **응답**
@@ -319,16 +319,20 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 ```
 
 - `hvac_mode`, `hvac_action`, `current_temperature`, `target_temperature`, `target_temp_low` / `target_temp_high`, `current_humidity`, `target_humidity`, `fan_mode`, `swing_mode`, `preset_mode`.
+- 기본 `features`의 `turn_off`는 `hvac_modes`에 `"off"`가 있을 때만 포함됩니다. `turn_off`는 선언되지 않은 `hvac_mode: off`를 로컬에 쓰지 않습니다.
 
 #### `humidifier` / `water_heater` 상태 (객체 `value`)
 
 ```json
-{"unique_id": "basement_hum", "value": {"state": "on", "target_humidity": 45, "mode": "auto"}}
+{"unique_id": "basement_hum", "value": {"state": "on", "target_humidity": 45, "mode": "auto", "action": "humidifying"}}
 ```
 
 ```json
 {"unique_id": "tank", "value": {"state": "eco", "target_temperature": 50, "away_mode": false}}
 ```
+
+- **`humidifier`**: `state`(bool/on-off), `current_humidity`, `target_humidity`, `mode`, `action`(`humidifying`/`drying`/`idle`/`off` — HA `HumidifierAction`으로 매핑).
+- **`water_heater`**: `state`(현재 operation), `current_temperature`, `target_temperature`, `away_mode`(bool). 온도는 선언한 `temperature_unit`을 따릅니다.
 
 #### `siren` / `alarm_control_panel` 상태
 

@@ -148,6 +148,13 @@ class HumidifierEntityFeature(IntFlag):
     MODES = 1
 
 
+class HumidifierAction:
+    HUMIDIFYING = "humidifying"
+    DRYING = "drying"
+    IDLE = "idle"
+    OFF = "off"
+
+
 class WaterHeaterEntityFeature(IntFlag):
     TARGET_TEMPERATURE = 1
     OPERATION_MODE = 2
@@ -321,6 +328,7 @@ mock_climate.HVACAction = HVACAction
 mock_humidifier = sys.modules["homeassistant.components.humidifier"]
 mock_humidifier.HumidifierEntity = MockBase
 mock_humidifier.HumidifierEntityFeature = HumidifierEntityFeature
+mock_humidifier.HumidifierAction = HumidifierAction
 
 mock_water = sys.modules["homeassistant.components.water_heater"]
 mock_water.WaterHeaterEntity = MockBase
