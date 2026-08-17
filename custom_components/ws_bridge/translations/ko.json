@@ -10,11 +10,6 @@
       "already_configured": "이미 설정되어 있습니다."
     }
   },
-  "config_subentries": {
-    "gateway": {
-      "entry_type": "게이트웨이"
-    }
-  },
   "entity": {
     "sensor": {
       "connected_clients": {
@@ -23,3 +18,4 @@
     }
   }
 }
+
