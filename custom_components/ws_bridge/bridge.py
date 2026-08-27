@@ -2,7 +2,7 @@
 
 연결된 클라이언트(gateway_id로 식별)별로:
  - HA에 클라이언트 디바이스를 만들고
- - 그 클라이언트가 선언한 (sub)디바이스/엔티티를 via_device로 묶고
+ - 그 클라이언트가 선언한 (sub)디바이스/엔티티를 via_device_id로 묶고
  - gateway_id로 unique_id를 네임스페이스해 충돌을 막고
  - 명령(command)을 그 클라이언트에만 라우팅한다.
 형식(BLE 등) 지식 없음 — 프로토콜만 안다. config entry 당 1개.
@@ -378,6 +378,16 @@ class WsBridge:
         async_dispatcher_send(
             self.hass, signal_clients(self.entry_id), self.connected_client_count
         )
+
+    @callback
+    def get_gateway_device_id(self, gateway_id: str) -> str | None:
+        """게이트웨이의 HA Device Registry ID(via_device_id)를 반환."""
+        try:
+            return dr.async_get_device_id_by_identifier(
+                self.hass, (DOMAIN, gateway_id), config_entry_id=self.entry_id
+            )
+        except ValueError:
+            return None
 
     # ── 클라이언트 → HA ──────────────────────────────────────────────────────
     @callback

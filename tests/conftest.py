@@ -277,6 +277,7 @@ sys.modules["homeassistant.config_entries"] = mock_config_entries
 # Mock homeassistant.helpers.entity
 mock_entity = MagicMock()
 mock_entity.Entity = MockBase
+mock_entity.DeviceInfo = dict
 sys.modules["homeassistant.helpers.entity"] = mock_entity
 
 # Mock homeassistant.helpers.storage

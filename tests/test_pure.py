@@ -1503,3 +1503,98 @@ def test_update_refresh_hook_is_silent_when_disconnected():
     bridge._clients.clear()   # 게이트웨이 끊김
 
     asyncio.run(entity.async_update())   # 예외 없이 통과해야 한다
+
+
+def test_entity_device_info_via_device_id():
+    """하위 디바이스 엔티티는 via_device 대신 via_device_id를 DeviceInfo에 lazy하게 설정해야 한다."""
+    from custom_components.ws_bridge.entity import WsBridgeEntity
+
+    bridge = WsBridge(MagicMock(), "entry1")
+    bridge.get_gateway_device_id = MagicMock(return_value="ha_dev_gw1")
+
+    # 게이트웨이 자신 엔티티
+    gw_defn = {
+        "unique_id": "gw1__diag",
+        "platform": "sensor",
+        "name": "Diag",
+        "_device": {
+            "ns_id": "gw1",
+            "gateway_id": "gw1",
+            "is_gateway": True,
+            "name": "GW1",
+        },
+    }
+    gw_entity = WsBridgeEntity(bridge, gw_defn)
+    assert gw_entity._attr_device_info["identifiers"] == {("ws_bridge", "gw1")}
+    assert "via_device" not in gw_entity._attr_device_info
+    assert "via_device_id" not in gw_entity._attr_device_info
+
+    # 서브 디바이스 엔티티 (게이트웨이 ID가 정상 조회될 때)
+    sub_defn = {
+        "unique_id": "gw1__sub_temp",
+        "platform": "sensor",
+        "name": "Temp",
+        "_device": {
+            "ns_id": "gw1:sub1",
+            "gateway_id": "gw1",
+            "is_gateway": False,
+            "name": "GW1 Sub1",
+        },
+    }
+    sub_entity = WsBridgeEntity(bridge, sub_defn)
+    assert sub_entity._attr_device_info["identifiers"] == {("ws_bridge", "gw1:sub1")}
+    assert "via_device" not in sub_entity._attr_device_info
+    assert sub_entity._attr_device_info.get("via_device_id") == "ha_dev_gw1"
+    bridge.get_gateway_device_id.assert_called_with("gw1")
+
+    # 서브 디바이스 엔티티 (게이트웨이가 레지스트리에 없을 때 None 반환)
+    bridge.get_gateway_device_id.return_value = None
+    sub_entity2 = WsBridgeEntity(bridge, sub_defn)
+    assert "via_device" not in sub_entity2._attr_device_info
+    assert "via_device_id" not in sub_entity2._attr_device_info
+
+
+def test_get_gateway_device_id_lookups():
+    """get_gateway_device_id는 dr.async_get_device_id_by_identifier를 호출하고 ValueError 시 None을 반환한다."""
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+
+    with patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+        # 1. 디바이스가 존재하는 경우
+        mock_dr.async_get_device_id_by_identifier.return_value = "ha_gw1_id"
+        assert bridge.get_gateway_device_id("gw1") == "ha_gw1_id"
+        mock_dr.async_get_device_id_by_identifier.assert_called_once_with(
+            hass, ("ws_bridge", "gw1"), config_entry_id="entry1"
+        )
+
+        # 2. 디바이스가 삭제되었거나 존재하지 않아 ValueError가 발생하는 경우
+        mock_dr.async_get_device_id_by_identifier.side_effect = ValueError("Device not found")
+        assert bridge.get_gateway_device_id("gw1") is None
+
+
+def test_handle_entity_subdevice_does_not_persist_via_device_id():
+    """handle_entity 는 _device 에 via_device_id를 주입하지 않아 디스크에 저장되지 않아야 한다."""
+    hass = MagicMock()
+    bridge = WsBridge(hass, "entry1")
+    bridge._clients["gw1"] = _Client("gw1", "GW1", MagicMock())
+    bridge._keep_last["gw1"] = True
+
+    sub_defn = {
+        "unique_id": "sensor1",
+        "platform": "sensor",
+        "name": "Temperature",
+        "device": {"id": "room1", "name": "Room 1"},
+    }
+    bridge.handle_entity("gw1", sub_defn)
+
+    # _pending 확인
+    pending = bridge._pending["sensor"]
+    assert len(pending) == 1
+    assert "via_device_id" not in pending[0]["_device"]
+    assert "via_device" not in pending[0]["_device"]
+
+    # _defns (스토리지 저장 대상) 확인
+    stored_defn = bridge._defns["gw1__sensor1"]
+    assert "via_device_id" not in stored_defn["_device"]
+    assert "via_device" not in stored_defn["_device"]
+
