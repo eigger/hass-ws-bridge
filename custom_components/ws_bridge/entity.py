@@ -1,6 +1,6 @@
 """공통 엔티티 베이스: 클라이언트가 선언한 정의로 구성 + 디바이스 계층 + availability.
 
-디바이스 계층: 클라이언트(게이트웨이) 디바이스 ← sub-device(via_device) ← 엔티티.
+디바이스 계층: 클라이언트(게이트웨이) 디바이스 ← sub-device(via_device_id) ← 엔티티.
 """
 from __future__ import annotations
 
@@ -55,11 +55,13 @@ class WsBridgeEntity(Entity):
                 hw_version=dev.get("hw_version"),
             )
         else:
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, dev["ns_id"])},
-                name=dev.get("name"),
-                via_device=(DOMAIN, dev["gateway_id"]),    # 클라이언트(게이트웨이) 아래로 묶임
-            )
+            device_info_kwargs: dict[str, Any] = {
+                "identifiers": {(DOMAIN, dev["ns_id"])},
+                "name": dev.get("name"),
+            }
+            if via_device_id := bridge.get_gateway_device_id(dev["gateway_id"]):
+                device_info_kwargs["via_device_id"] = via_device_id
+            self._attr_device_info = DeviceInfo(**device_info_kwargs)
         self._attr_available = True
 
     def _send_command(
