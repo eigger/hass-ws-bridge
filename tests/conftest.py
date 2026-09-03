@@ -413,8 +413,6 @@ mock_const.UnitOfTemperature = UnitOfTemperature
 
 # homeassistant.util 을 MagicMock 으로 두면 `from homeassistant.util import dt` 가
 # sys.modules['homeassistant.util.dt'] 가 아니라 MagicMock 자식을 돌려준다.
-import types
-
 _util_mod = types.ModuleType("homeassistant.util")
 _dt_mod = types.ModuleType("homeassistant.util.dt")
 _dt_mod.as_local = lambda dt: dt
