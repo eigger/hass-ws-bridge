@@ -1,4 +1,5 @@
 """siren 플랫폼: turn_on/turn_off(+tone/duration/volume) 를 클라이언트에 중계."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -31,9 +32,7 @@ async def async_setup_entry(
     bridge.register_platform(PLATFORM_SIREN, async_add_entities, WsBridgeSiren)
 
 
-def _features(
-    names: list[str] | None, *, has_tones: bool
-) -> SirenEntityFeature:
+def _features(names: list[str] | None, *, has_tones: bool) -> SirenEntityFeature:
     if not names:
         flags = _DEFAULT_FEATURES
     else:
@@ -61,6 +60,7 @@ class WsBridgeSiren(WsBridgeEntity, SirenEntity):
         self._attr_supported_features = _features(
             defn.get("features"), has_tones=bool(self._attr_available_tones)
         )
+
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._configure_from_defn(defn)
 
@@ -88,9 +88,7 @@ class WsBridgeSiren(WsBridgeEntity, SirenEntity):
         for key in ("tone", "duration", "volume_level"):
             if key in kwargs and kwargs[key] is not None:
                 params[key] = kwargs[key]
-        self._send_command(
-            "turn_on", params=params or None
-        )
+        self._send_command("turn_on", params=params or None)
         self._attr_is_on = True
         self.async_write_ha_state()
 

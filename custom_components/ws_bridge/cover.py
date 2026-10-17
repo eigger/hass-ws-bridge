@@ -1,4 +1,5 @@
 """cover 플랫폼: 개폐/위치/틸트 → open/close/stop/set_* 를 클라이언트에 중계."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -110,9 +111,7 @@ class WsBridgeCover(WsBridgeCompositeEntity, CoverEntity):
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         position = kwargs.get("position")
-        self._send_command(
-            "set_cover_position", params={"position": position}
-        )
+        self._send_command("set_cover_position", params={"position": position})
         self._state["position"] = position
         self._publish_state()
 

@@ -1,40 +1,24 @@
+# Shared standards: eigger/hass-repo-standards@ba9f3fad8b635c163fb44a4e91b1833cc4ab47b4
 name: Tests
-
-on:
+'on':
   push:
-    branches: [main, master]
-  pull_request:
-
+    branches:
+    - main
+  pull_request: null
+  workflow_dispatch: null
+permissions:
+  contents: read
 concurrency:
-  group: tests-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
+# Existing tests use mocked HA modules (unit profile); real-HA migration is tracked
+# as an exception in STANDARDS.md. This does not change the declared minimum HA.
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13", "3.14"]
-    steps:
-      - uses: actions/checkout@v5
-      
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-          
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install pytest voluptuous
-          if [ -f custom_components/ws_bridge/manifest.json ]; then
-            python -c "import json; reqs = json.load(open('custom_components/ws_bridge/manifest.json')).get('requirements', []); print('\n'.join(reqs))" > requirements.txt
-            if [ -s requirements.txt ]; then
-              pip install -r requirements.txt
-            fi
-          fi
-          
-      - name: Run tests
-        run: |
-          python -m pytest tests/
+  current:
+    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@ba9f3fad8b635c163fb44a4e91b1833cc4ab47b4
+    with:
+      domain: ws_bridge
+      python-versions: '["3.14"]'
+      requirements: requirements_test.txt
+      test-profile: unit
+      pytest-args: tests/ -v

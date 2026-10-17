@@ -1,4 +1,5 @@
 """button 플랫폼: 누르면 press 의도를 클라이언트에 중계 (상태 없음)."""
+
 from __future__ import annotations
 
 from typing import Any

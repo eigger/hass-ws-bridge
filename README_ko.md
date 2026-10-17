@@ -1,9 +1,14 @@
 # WebSocket Bridge (`ws_bridge`) for Home Assistant
 
-[![GitHub Release](https://img.shields.io/github/v/release/eigger/hass-ws-bridge?style=flat-square)](https://github.com/eigger/hass-ws-bridge/releases)
+<!-- hass-standards:badges:start -->
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?style=flat-square)](#-설치)
+[![Release](https://img.shields.io/github/v/release/eigger/hass-ws-bridge?style=flat-square)](https://github.com/eigger/hass-ws-bridge/releases)
+[![Home Assistant minimum](https://img.shields.io/badge/HA-%E2%89%A5%202026.9.0-41BDF5?style=flat-square)](hacs.json)
+[![Tests](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/tests.yml?branch=main&style=flat-square&label=Tests)](https://github.com/eigger/hass-ws-bridge/actions/workflows/tests.yml)
+[![Validate](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/validate.yml?branch=main&style=flat-square&label=Validate)](https://github.com/eigger/hass-ws-bridge/actions/workflows/validate.yml)
 [![License](https://img.shields.io/github/license/eigger/hass-ws-bridge?style=flat-square)](LICENSE)
-[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-![integration usage](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=usage&suffix=%20installs&cacheSeconds=15600&query=%24.ws_bridge.total&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json)
+[![Analytics reporting installs](https://img.shields.io/badge/dynamic/json?style=flat-square&color=41BDF5&label=Usage&query=%24.ws_bridge.total&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json)](https://analytics.home-assistant.io/)
+<!-- hass-standards:badges:end -->
 
 인증된 **WebSocket 클라이언트**가 엔티티를 동적으로 생성·갱신할 수 있게 해 주는 범용 Home Assistant 통합구성요소입니다. BLE, Zigbee 등 특정 하드웨어나 프로토콜에 묶이지 않으며, 정의된 통신 규약만 따르면 바로 사용할 수 있습니다.
 

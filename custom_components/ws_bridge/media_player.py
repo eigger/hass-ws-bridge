@@ -2,6 +2,7 @@
 
 browse_media / play_media / grouping 등은 범위 밖 — 추후 Phase.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -126,13 +127,9 @@ class WsBridgeMediaPlayer(WsBridgeCompositeEntity, MediaPlayerEntity):
     @callback
     def _apply_state(self) -> None:
         raw = self._state.get("state")
-        self._attr_state = (
-            _STATE_MAP.get(str(raw).lower()) if raw is not None else None
-        )
+        self._attr_state = _STATE_MAP.get(str(raw).lower()) if raw is not None else None
         vol = _as_float(self._state.get("volume_level"))
-        self._attr_volume_level = (
-            max(0.0, min(1.0, vol)) if vol is not None else None
-        )
+        self._attr_volume_level = max(0.0, min(1.0, vol)) if vol is not None else None
         muted = self._state.get("is_volume_muted")
         if muted is None:
             self._attr_is_volume_muted = None
@@ -178,16 +175,12 @@ class WsBridgeMediaPlayer(WsBridgeCompositeEntity, MediaPlayerEntity):
         self._send_command("media_previous_track")
 
     async def async_set_volume_level(self, volume: float) -> None:
-        self._send_command(
-            "volume_set", params={"volume_level": volume}
-        )
+        self._send_command("volume_set", params={"volume_level": volume})
         self._state["volume_level"] = volume
         self._publish_state()
 
     async def async_mute_volume(self, mute: bool) -> None:
-        self._send_command(
-            "volume_mute", params={"is_volume_muted": mute}
-        )
+        self._send_command("volume_mute", params={"is_volume_muted": mute})
         self._state["is_volume_muted"] = mute
         self._publish_state()
 
@@ -208,8 +201,6 @@ class WsBridgeMediaPlayer(WsBridgeCompositeEntity, MediaPlayerEntity):
         self._publish_state()
 
     async def async_select_source(self, source: str) -> None:
-        self._send_command(
-            "select_source", params={"source": source}
-        )
+        self._send_command("select_source", params={"source": source})
         self._state["source"] = source
         self._publish_state()

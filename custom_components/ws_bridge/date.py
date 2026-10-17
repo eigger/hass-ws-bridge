@@ -1,4 +1,5 @@
 """date 플랫폼: ISO 날짜 문자열 ↔ HA date 엔티티."""
+
 from __future__ import annotations
 
 from datetime import date

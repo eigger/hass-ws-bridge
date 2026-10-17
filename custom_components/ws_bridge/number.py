@@ -1,4 +1,5 @@
 """number 플랫폼: 값 설정 → set_value 의도를 클라이언트에 중계."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -32,7 +33,9 @@ class WsBridgeNumber(WsBridgeEntity, NumberEntity):
             self._attr_native_step = v
         self._attr_native_unit_of_measurement = defn.get("unit_of_measurement")
         last = bridge.last_state(self._attr_unique_id)
-        self._attr_native_value = last if not (isinstance(last, str) and last.lower() == "unknown") else None
+        self._attr_native_value = (
+            last if not (isinstance(last, str) and last.lower() == "unknown") else None
+        )
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._attr_device_class = defn.get("device_class")
@@ -51,7 +54,11 @@ class WsBridgeNumber(WsBridgeEntity, NumberEntity):
 
     @callback
     def _on_value(self, value: Any) -> None:
-        self._attr_native_value = value if not (isinstance(value, str) and value.lower() == "unknown") else None
+        self._attr_native_value = (
+            value
+            if not (isinstance(value, str) and value.lower() == "unknown")
+            else None
+        )
         safe_write_ha_state(self)
 
     async def async_set_native_value(self, value: float) -> None:

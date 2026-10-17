@@ -1,4 +1,5 @@
 """climate 플랫폼: HVAC 모드/온도/습도/팬/스윙 → set_* 를 클라이언트에 중계."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -70,9 +71,7 @@ def _hvac_modes(names: list[str] | None) -> list[HVACMode]:
     return modes or [HVACMode.OFF]
 
 
-def _features(
-    names: list[str] | None, *, has_off: bool
-) -> ClimateEntityFeature:
+def _features(names: list[str] | None, *, has_off: bool) -> ClimateEntityFeature:
     if not names:
         flags = _DEFAULT_FEATURES
         if has_off:
@@ -87,6 +86,7 @@ def _features(
     return flags or (
         _DEFAULT_FEATURES | (ClimateEntityFeature.TURN_OFF if has_off else 0)
     )
+
 
 def _as_float(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
@@ -105,7 +105,9 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
 
     def _configure_from_defn(self, defn: dict[str, Any]) -> None:
         self._attr_hvac_modes = _hvac_modes(defn.get("hvac_modes"))
-        self._attr_fan_modes = list(defn["fan_modes"]) if defn.get("fan_modes") else None
+        self._attr_fan_modes = (
+            list(defn["fan_modes"]) if defn.get("fan_modes") else None
+        )
         self._attr_swing_modes = (
             list(defn["swing_modes"]) if defn.get("swing_modes") else None
         )
@@ -131,6 +133,7 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
             defn.get("features"),
             has_off=HVACMode.OFF in self._attr_hvac_modes,
         )
+
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._configure_from_defn(defn)
 
@@ -148,7 +151,9 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
             self._state.get("current_temperature")
         )
         self._attr_target_temperature = _as_float(self._state.get("target_temperature"))
-        self._attr_target_temperature_low = _as_float(self._state.get("target_temp_low"))
+        self._attr_target_temperature_low = _as_float(
+            self._state.get("target_temp_low")
+        )
         self._attr_target_temperature_high = _as_float(
             self._state.get("target_temp_high")
         )
@@ -177,9 +182,7 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
             params["target_temp_low"] = kwargs["target_temp_low"]
         if "target_temp_high" in kwargs:
             params["target_temp_high"] = kwargs["target_temp_high"]
-        self._send_command(
-            "set_temperature", params=params or None
-        )
+        self._send_command("set_temperature", params=params or None)
         if "temperature" in params:
             self._state["target_temperature"] = params["temperature"]
         if "target_temp_low" in params:
@@ -189,16 +192,12 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
         self._publish_state()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
-        self._send_command(
-            "set_fan_mode", params={"fan_mode": fan_mode}
-        )
+        self._send_command("set_fan_mode", params={"fan_mode": fan_mode})
         self._state["fan_mode"] = fan_mode
         self._publish_state()
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
-        self._send_command(
-            "set_swing_mode", params={"swing_mode": swing_mode}
-        )
+        self._send_command("set_swing_mode", params={"swing_mode": swing_mode})
         self._state["swing_mode"] = swing_mode
         self._publish_state()
 
@@ -211,9 +210,7 @@ class WsBridgeClimate(WsBridgeCompositeEntity, ClimateEntity):
         self._publish_state()
 
     async def async_set_humidity(self, humidity: float) -> None:
-        self._send_command(
-            "set_humidity", params={"humidity": humidity}
-        )
+        self._send_command("set_humidity", params={"humidity": humidity})
         self._state["target_humidity"] = humidity
         self._publish_state()
 

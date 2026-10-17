@@ -16,6 +16,7 @@
 TrackerEntity.location_name이 HA 2027.7에서 제거 예정인 deprecated 프로퍼티라서,
 좌표로부터 자동 계산되는 상태만 쓴다.
 """
+
 from __future__ import annotations
 
 from typing import Any

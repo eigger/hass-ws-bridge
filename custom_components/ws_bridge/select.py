@@ -1,4 +1,5 @@
 """select 플랫폼: 옵션 선택 → select_option 의도를 클라이언트에 중계."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -26,7 +27,12 @@ class WsBridgeSelect(WsBridgeEntity, SelectEntity):
         self._attr_device_class = defn.get("device_class")
         self._attr_options = list(defn.get("options") or [])
         last = bridge.last_state(self._attr_unique_id)
-        self._attr_current_option = str(last) if last is not None and not (isinstance(last, str) and last.lower() == "unknown") else None
+        self._attr_current_option = (
+            str(last)
+            if last is not None
+            and not (isinstance(last, str) and last.lower() == "unknown")
+            else None
+        )
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._attr_device_class = defn.get("device_class")
@@ -39,7 +45,12 @@ class WsBridgeSelect(WsBridgeEntity, SelectEntity):
 
     @callback
     def _on_value(self, value: Any) -> None:
-        self._attr_current_option = str(value) if value is not None and not (isinstance(value, str) and value.lower() == "unknown") else None
+        self._attr_current_option = (
+            str(value)
+            if value is not None
+            and not (isinstance(value, str) and value.lower() == "unknown")
+            else None
+        )
         safe_write_ha_state(self)
 
     async def async_select_option(self, option: str) -> None:

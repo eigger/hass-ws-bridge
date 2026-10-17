@@ -1,4 +1,5 @@
 """camera 플랫폼: still/stream URL 기반 (바이트·base64 전송 없음)."""
+
 from __future__ import annotations
 
 import logging

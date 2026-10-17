@@ -1,4 +1,5 @@
 """valve 플랫폼: 개폐/위치 → open/close/stop/set_valve_position 중계."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -26,9 +27,7 @@ _DEFAULT_FEATURES_POSITION = (
     | ValveEntityFeature.SET_POSITION
 )
 _DEFAULT_FEATURES_NO_POSITION = (
-    ValveEntityFeature.OPEN
-    | ValveEntityFeature.CLOSE
-    | ValveEntityFeature.STOP
+    ValveEntityFeature.OPEN | ValveEntityFeature.CLOSE | ValveEntityFeature.STOP
 )
 
 
@@ -43,7 +42,9 @@ def _features(
     names: list[str] | None, *, reports_position: bool = True
 ) -> ValveEntityFeature:
     default = (
-        _DEFAULT_FEATURES_POSITION if reports_position else _DEFAULT_FEATURES_NO_POSITION
+        _DEFAULT_FEATURES_POSITION
+        if reports_position
+        else _DEFAULT_FEATURES_NO_POSITION
     )
     if not names:
         return default
@@ -89,7 +90,9 @@ class WsBridgeValve(WsBridgeCompositeEntity, ValveEntity):
     @callback
     def _apply_state(self) -> None:
         if self._attr_reports_position:
-            self._attr_current_valve_position = _as_position(self._state.get("position"))
+            self._attr_current_valve_position = _as_position(
+                self._state.get("position")
+            )
         else:
             self._attr_current_valve_position = None
 
@@ -126,8 +129,6 @@ class WsBridgeValve(WsBridgeCompositeEntity, ValveEntity):
         self._send_command("stop_valve")
 
     async def async_set_valve_position(self, position: int) -> None:
-        self._send_command(
-            "set_valve_position", params={"position": position}
-        )
+        self._send_command("set_valve_position", params={"position": position})
         self._state["position"] = position
         self._publish_state()

@@ -7,11 +7,13 @@
  - 명령(command)을 그 클라이언트에만 라우팅한다.
 형식(BLE 등) 지식 없음 — 프로토콜만 안다. config entry 당 1개.
 """
+
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant, callback
@@ -62,7 +64,7 @@ class _Client:
     send_event: Callable[[dict[str, Any]], None]
     sw_version: str | None = None
     keep_last_state_on_disconnect: bool = False  # 클라이언트가 connect 시 선언
-    device_ids: set[str] = field(default_factory=set)   # 네임스페이스된 sub-device id
+    device_ids: set[str] = field(default_factory=set)  # 네임스페이스된 sub-device id
     manufacturer: str | None = None
     model: str | None = None
     hw_version: str | None = None
@@ -80,16 +82,18 @@ class WsBridge:
         self.entry_id = entry_id
         self._platforms: dict[str, _PlatformReg] = {}
         self._pending: dict[str, list[dict[str, Any]]] = {}
-        self._created: set[str] = set()                 # 네임스페이스된 unique_id
+        self._created: set[str] = set()  # 네임스페이스된 unique_id
         self._states: dict[str, Any] = {}
-        self._defns: dict[str, dict[str, Any]] = {}      # ns unique_id → 마지막 엔티티 정의
-        self._keep_last: dict[str, bool] = {}            # gateway_id → keep_last_state_on_disconnect
-        self._clients: dict[str, _Client] = {}          # gateway_id → ctx
-        self._conn_client: dict[Any, str] = {}          # connection → gateway_id
-        self._entity_client: dict[str, str] = {}        # ns unique_id → gateway_id
-        self._entity_device: dict[str, str] = {}        # ns unique_id → ns device id
-        self._entities: dict[str, Entity] = {}          # ns unique_id → live entity
-        self._connections: set[Any] = set()            # active connections
+        self._defns: dict[str, dict[str, Any]] = {}  # ns unique_id → 마지막 엔티티 정의
+        self._keep_last: dict[
+            str, bool
+        ] = {}  # gateway_id → keep_last_state_on_disconnect
+        self._clients: dict[str, _Client] = {}  # gateway_id → ctx
+        self._conn_client: dict[Any, str] = {}  # connection → gateway_id
+        self._entity_client: dict[str, str] = {}  # ns unique_id → gateway_id
+        self._entity_device: dict[str, str] = {}  # ns unique_id → ns device id
+        self._entities: dict[str, Entity] = {}  # ns unique_id → live entity
+        self._connections: set[Any] = set()  # active connections
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}.states")
         self._save_unsub: Callable[[], None] | None = None
 
@@ -104,11 +108,13 @@ class WsBridge:
         self._seed_restorable_entities()
 
     async def async_save(self) -> None:
-        await self._store.async_save({
-            "states": self._states,
-            "entities": self._defns,
-            "keep_last": self._keep_last,
-        })
+        await self._store.async_save(
+            {
+                "states": self._states,
+                "entities": self._defns,
+                "keep_last": self._keep_last,
+            }
+        )
 
     async def async_flush_save(self) -> None:
         """대기 중인 debounce를 취소하고 즉시 저장."""
@@ -134,7 +140,8 @@ class WsBridge:
         if orphan_states or orphan_defns:
             _LOGGER.debug(
                 "Pruned %d orphaned state(s), %d orphaned entity defn(s) from store",
-                len(orphan_states), len(orphan_defns),
+                len(orphan_states),
+                len(orphan_defns),
             )
         return bool(orphan_states) or bool(orphan_defns)
 
@@ -168,8 +175,9 @@ class WsBridge:
 
     # ── 플랫폼 등록 ──────────────────────────────────────────────────────────
     @callback
-    def register_platform(self, platform: str, add_entities: Callable,
-                          factory: Callable[..., Any]) -> None:
+    def register_platform(
+        self, platform: str, add_entities: Callable, factory: Callable[..., Any]
+    ) -> None:
         self._platforms[platform] = _PlatformReg(add_entities, factory)
         for defn in self._pending.pop(platform, []):
             self._create(defn)
@@ -215,9 +223,7 @@ class WsBridge:
             title=display_name,
         )
         self.hass.config_entries.async_add_subentry(config_entry, subentry)
-        _LOGGER.info(
-            "Auto-created gateway subentry: %s (%s)", display_name, gateway_id
-        )
+        _LOGGER.info("Auto-created gateway subentry: %s (%s)", display_name, gateway_id)
         return subentry.subentry_id
 
     # ── 클라이언트 연결 ──────────────────────────────────────────────────────
@@ -242,7 +248,10 @@ class WsBridge:
         client = self._clients.get(gateway_id)
         if client is None:
             client = self._clients[gateway_id] = _Client(
-                gateway_id, name or gateway_id, send_event, sw_version,
+                gateway_id,
+                name or gateway_id,
+                send_event,
+                sw_version,
                 keep_last_state_on_disconnect,
                 manufacturer=manufacturer,
                 model=model,
@@ -291,7 +300,11 @@ class WsBridge:
                 for identifier in d_entry.identifiers:
                     if identifier[0] == DOMAIN:
                         gid = identifier[1]
-                        if ":" not in gid and gid != gateway_id and gid not in self._conn_client.values():
+                        if (
+                            ":" not in gid
+                            and gid != gateway_id
+                            and gid not in self._conn_client.values()
+                        ):
                             gids_to_remove.add(gid)
 
         if gids_to_remove:
@@ -300,11 +313,17 @@ class WsBridge:
                 for identifier in d_entry.identifiers:
                     if identifier[0] == DOMAIN:
                         val = identifier[1]
-                        if val in gids_to_remove or any(val.startswith(f"{rgid}:") for rgid in gids_to_remove):
+                        if val in gids_to_remove or any(
+                            val.startswith(f"{rgid}:") for rgid in gids_to_remove
+                        ):
                             should_remove = True
                             break
                 if should_remove:
-                    _LOGGER.info("Removing duplicate/offline device: %s (%s)", d_entry.name, d_entry.identifiers)
+                    _LOGGER.info(
+                        "Removing duplicate/offline device: %s (%s)",
+                        d_entry.name,
+                        d_entry.identifiers,
+                    )
                     dev_reg.async_remove_device(d_entry.id)
 
         manufacturer = client.manufacturer or "ws_bridge"
@@ -349,9 +368,16 @@ class WsBridge:
         def _disconnect() -> None:
             self._connections.discard(connection)
             self._conn_client.pop(connection, None)
-            if gateway_id not in self._conn_client.values() and not client.keep_last_state_on_disconnect:
-                for ns_dev in client.device_ids:   # 끊김 → 해당 클라이언트 엔티티 unavailable
-                    async_dispatcher_send(self.hass, signal_avail(self.entry_id, ns_dev), False)
+            if (
+                gateway_id not in self._conn_client.values()
+                and not client.keep_last_state_on_disconnect
+            ):
+                for (
+                    ns_dev
+                ) in client.device_ids:  # 끊김 → 해당 클라이언트 엔티티 unavailable
+                    async_dispatcher_send(
+                        self.hass, signal_avail(self.entry_id, ns_dev), False
+                    )
             self._notify_clients_changed()
 
         return _disconnect
@@ -362,7 +388,7 @@ class WsBridge:
         for conn in list(self._connections):
             try:
                 conn.close()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 _LOGGER.warning("Error closing client connection: %s", e)
 
     @callback
@@ -420,10 +446,9 @@ class WsBridge:
             gw_prefix_lower = gw_prefix.lower()
             gateway_id_lower = gateway_id.lower()
 
-            if (
-                not dev_name_lower.startswith(gw_prefix_lower)
-                and not dev_name_lower.startswith(gateway_id_lower)
-            ):
+            if not dev_name_lower.startswith(
+                gw_prefix_lower
+            ) and not dev_name_lower.startswith(gateway_id_lower):
                 full_device_name = f"{gw_prefix} {dev_name}"
             else:
                 full_device_name = dev_name
@@ -459,7 +484,6 @@ class WsBridge:
 
         self._create(ns)
 
-
     @callback
     def _create(self, defn: dict[str, Any]) -> None:
         uid = defn["unique_id"]
@@ -493,7 +517,9 @@ class WsBridge:
 
         known: set[str] = set()
         entity_reg = er.async_get(self.hass)
-        for entity_entry in er.async_entries_for_config_entry(entity_reg, self.entry_id):
+        for entity_entry in er.async_entries_for_config_entry(
+            entity_reg, self.entry_id
+        ):
             uid = entity_entry.unique_id
             if uid and uid.startswith(prefix):
                 known.add(uid)
@@ -508,8 +534,7 @@ class WsBridge:
         )
         # 통합 진단 센서는 게이트웨이 소유가 아니므로 절대 대조 대상이 아니다
         known = {
-            uid for uid in known
-            if not uid.endswith(f"_{CONNECTED_CLIENTS_UNIQUE_ID}")
+            uid for uid in known if not uid.endswith(f"_{CONNECTED_CLIENTS_UNIQUE_ID}")
         }
 
         stale = sorted(known - keep)
@@ -524,7 +549,9 @@ class WsBridge:
         removed = [self._strip(gateway_id, uid) for uid in stale]
         _LOGGER.info(
             "Sync removed %d stale entity/entities for gateway %s: %s",
-            len(removed), gateway_id, ", ".join(removed),
+            len(removed),
+            gateway_id,
+            ", ".join(removed),
         )
         return removed
 
@@ -564,7 +591,9 @@ class WsBridge:
 
         entity_reg = er.async_get(self.hass)
         to_remove: set[str] = set()
-        for entity_entry in er.async_entries_for_config_entry(entity_reg, self.entry_id):
+        for entity_entry in er.async_entries_for_config_entry(
+            entity_reg, self.entry_id
+        ):
             uid = entity_entry.unique_id
             if not uid:
                 continue
@@ -583,7 +612,9 @@ class WsBridge:
         if to_remove:
             _LOGGER.info(
                 "Removed %d entity/entities matching prefix %s (gateway %s): %s",
-                len(to_remove), unique_id, gateway_id,
+                len(to_remove),
+                unique_id,
+                gateway_id,
                 ", ".join(sorted(self._strip(gateway_id, uid) for uid in to_remove)),
             )
 
@@ -607,15 +638,23 @@ class WsBridge:
                     break
 
         for device_registry_id in devices_to_remove:
-            for entity_entry in list(er.async_entries_for_device(entity_reg, device_registry_id)):
-                if entity_entry.config_entry_id == self.entry_id and entity_entry.unique_id:
+            for entity_entry in list(
+                er.async_entries_for_device(entity_reg, device_registry_id)
+            ):
+                if (
+                    entity_entry.config_entry_id == self.entry_id
+                    and entity_entry.unique_id
+                ):
                     await self._remove_entity_ns(entity_entry.unique_id)
             dev_reg.async_remove_device(device_registry_id)
 
         if devices_to_remove:
             _LOGGER.info(
                 "Removed %d sub-device(s) and their entities for %s=%s (gateway %s)",
-                len(devices_to_remove), mode, device_id, gateway_id,
+                len(devices_to_remove),
+                mode,
+                device_id,
+                gateway_id,
             )
 
         if client := self._clients.get(gateway_id):
@@ -632,7 +671,9 @@ class WsBridge:
         prefix = f"{gateway_id}__"
         entity_reg = er.async_get(self.hass)
 
-        for entity_entry in list(er.async_entries_for_config_entry(entity_reg, self.entry_id)):
+        for entity_entry in list(
+            er.async_entries_for_config_entry(entity_reg, self.entry_id)
+        ):
             uid = entity_entry.unique_id
             if not uid or uid.endswith(f"_{CONNECTED_CLIENTS_UNIQUE_ID}"):
                 continue
@@ -669,7 +710,9 @@ class WsBridge:
             await entity.async_remove()
         else:
             entity_reg = er.async_get(self.hass)
-            for entity_entry in er.async_entries_for_config_entry(entity_reg, self.entry_id):
+            for entity_entry in er.async_entries_for_config_entry(
+                entity_reg, self.entry_id
+            ):
                 if entity_entry.unique_id == ns_uid:
                     entity_reg.async_remove(entity_entry.entity_id)
                     break
@@ -744,9 +787,10 @@ class WsBridge:
     @callback
     def handle_state(self, gateway_id: str, unique_id: str, value: Any) -> None:
         ns_uid = self._ns_uid(gateway_id, unique_id)
-        if (client := self._clients.get(gateway_id)) is not None:
-            if (ns_dev := self._entity_device.get(ns_uid)) is not None:
-                self._touch_device(client, ns_dev)
+        if (client := self._clients.get(gateway_id)) is not None and (
+            ns_dev := self._entity_device.get(ns_uid)
+        ) is not None:
+            self._touch_device(client, ns_dev)
         is_event = self._entity_platform(ns_uid) == PLATFORM_EVENT
         if isinstance(value, dict):
             # event 는 fire-and-forget — 얕은 병합하면 이전 attributes 가 다음 이벤트로 샌다.
@@ -764,11 +808,15 @@ class WsBridge:
         async_dispatcher_send(self.hass, signal_value(self.entry_id, ns_uid), value)
 
     @callback
-    def handle_availability(self, gateway_id: str, device_id: str, online: bool) -> None:
-        ns_dev = gateway_id if device_id == gateway_id else self._ns_dev(gateway_id, device_id)
-        async_dispatcher_send(
-            self.hass, signal_avail(self.entry_id, ns_dev), online
+    def handle_availability(
+        self, gateway_id: str, device_id: str, online: bool
+    ) -> None:
+        ns_dev = (
+            gateway_id
+            if device_id == gateway_id
+            else self._ns_dev(gateway_id, device_id)
         )
+        async_dispatcher_send(self.hass, signal_avail(self.entry_id, ns_dev), online)
 
     @callback
     def last_state(self, unique_id: str) -> Any:
@@ -789,8 +837,11 @@ class WsBridge:
     # ── HA → 클라이언트 (해당 클라이언트로만 라우팅) ─────────────────────────
     @callback
     def send_command(
-        self, unique_id: str, action: str,
-        value: Any = None, params: dict[str, Any] | None = None,
+        self,
+        unique_id: str,
+        action: str,
+        value: Any = None,
+        params: dict[str, Any] | None = None,
     ) -> bool:
         gateway_id = self._entity_client.get(unique_id)
         client = self._clients.get(gateway_id) if gateway_id else None
@@ -798,7 +849,7 @@ class WsBridge:
             return False
         event: dict[str, Any] = {
             "kind": "command",
-            "unique_id": self._strip(gateway_id, unique_id),   # 원래 unique_id로 복원
+            "unique_id": self._strip(gateway_id, unique_id),  # 원래 unique_id로 복원
             "action": action,
         }
         if value is not None:
@@ -835,4 +886,4 @@ class WsBridge:
     @staticmethod
     def _strip(gateway_id: str, ns_uid: str) -> str:
         prefix = f"{gateway_id}__"
-        return ns_uid[len(prefix):] if ns_uid.startswith(prefix) else ns_uid
+        return ns_uid.removeprefix(prefix)

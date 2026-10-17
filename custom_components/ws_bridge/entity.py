@@ -2,6 +2,7 @@
 
 디바이스 계층: 클라이언트(게이트웨이) 디바이스 ← sub-device(via_device_id) ← 엔티티.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -29,21 +30,25 @@ class WsBridgeEntity(Entity):
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         self._bridge = bridge
         self._defn = defn
-        self._attr_unique_id = defn["unique_id"]      # 이미 클라이언트 네임스페이스됨
+        self._attr_unique_id = defn["unique_id"]  # 이미 클라이언트 네임스페이스됨
         self._attr_name = defn.get("name")
         if icon := defn.get("icon"):
             self._attr_icon = icon
-        elif not defn.get("device_class"):
-            if platform_icon := DEFAULT_PLATFORM_ICONS.get(defn.get("platform", "")):
-                self._attr_icon = platform_icon
-        if (cat := defn.get("entity_category")) in (EntityCategory.CONFIG, EntityCategory.DIAGNOSTIC):
+        elif not defn.get("device_class") and (
+            platform_icon := DEFAULT_PLATFORM_ICONS.get(defn.get("platform", ""))
+        ):
+            self._attr_icon = platform_icon
+        if (cat := defn.get("entity_category")) in (
+            EntityCategory.CONFIG,
+            EntityCategory.DIAGNOSTIC,
+        ):
             self._attr_entity_category = EntityCategory(cat)
         else:
             # Explicit None so a platform class default (e.g. UpdateEntity's
             # CONFIG) is not kept on first create then cleared on redeclare.
             self._attr_entity_category = None
 
-        dev = defn["_device"]                          # bridge가 주입
+        dev = defn["_device"]  # bridge가 주입
         self._ns_device_id = dev["ns_id"]
         if dev.get("is_gateway"):
             self._attr_device_info = DeviceInfo(
@@ -84,7 +89,7 @@ class WsBridgeEntity(Entity):
         """클라이언트가 엔티티 정의를 다시 보냈을 때(재연결/설정 갱신 등) 동적으로 메타데이터 업데이트."""
         self._defn = defn
         self._attr_name = defn.get("name")
-        
+
         # 아이콘 업데이트
         if icon := defn.get("icon"):
             self._attr_icon = icon
@@ -94,7 +99,10 @@ class WsBridgeEntity(Entity):
         else:
             self._attr_icon = None
 
-        if (cat := defn.get("entity_category")) in (EntityCategory.CONFIG, EntityCategory.DIAGNOSTIC):
+        if (cat := defn.get("entity_category")) in (
+            EntityCategory.CONFIG,
+            EntityCategory.DIAGNOSTIC,
+        ):
             self._attr_entity_category = EntityCategory(cat)
         else:
             self._attr_entity_category = None
@@ -162,9 +170,7 @@ class WsBridgeCompositeEntity(WsBridgeEntity):
         opening/in_progress 같은 전이 마커까지 저장하면 클라이언트가 확인을
         못 보낸 채 HA 가 재시작될 때 그 상태로 영구히 고착된다.
         """
-        self._bridge.set_local_state(
-            self._attr_unique_id, self._persistable_state()
-        )
+        self._bridge.set_local_state(self._attr_unique_id, self._persistable_state())
         self._apply_state()
         self.async_write_ha_state()
 

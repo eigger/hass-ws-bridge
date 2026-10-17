@@ -1,4 +1,5 @@
 """sensor 플랫폼: 클라이언트가 선언하면 동적 생성 + 통합 진단 센서."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -31,7 +32,9 @@ async def async_setup_entry(
     bridge.register_platform(PLATFORM_SENSOR, async_add_entities, WsBridgeSensor)
     # HA has no separate "text_sensor" domain — string-state entities are just
     # sensor entities too, so route them through the same sensor platform setup.
-    bridge.register_platform(PLATFORM_TEXT_SENSOR, async_add_entities, WsBridgeTextSensor)
+    bridge.register_platform(
+        PLATFORM_TEXT_SENSOR, async_add_entities, WsBridgeTextSensor
+    )
     async_add_entities([WsBridgeConnectedClientsSensor(bridge, entry)])
 
 
@@ -64,12 +67,18 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
     def _parse_value(self, value: Any) -> Any:
         if value is None or (isinstance(value, str) and value.lower() == "unknown"):
             return None
-        if self._attr_device_class == "timestamp" and isinstance(value, str):
-            if (dt := dt_util.parse_datetime(value)) is not None:
-                return dt_util.as_local(dt) if dt.tzinfo is None else dt
-        if self._attr_device_class == "date" and isinstance(value, str):
-            if (d := dt_util.parse_date(value)) is not None:
-                return d
+        if (
+            self._attr_device_class == "timestamp"
+            and isinstance(value, str)
+            and (dt := dt_util.parse_datetime(value)) is not None
+        ):
+            return dt_util.as_local(dt) if dt.tzinfo is None else dt
+        if (
+            self._attr_device_class == "date"
+            and isinstance(value, str)
+            and (d := dt_util.parse_date(value)) is not None
+        ):
+            return d
         return value
 
 

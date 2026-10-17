@@ -10,6 +10,7 @@
 
 제어 플랫폼: switch, number, select, button, update.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -57,22 +58,28 @@ def resolve_connect_sw_version(msg: dict[str, Any]) -> str | None:
     return None
 
 
-@websocket_api.websocket_command({
-    vol.Required("type"): WS_CONNECT,
-    vol.Required("gateway_id"): str,
-    vol.Optional("name"): vol.Any(str, None),
-    vol.Optional("sw_version"): vol.Any(str, None),
-    vol.Optional("app_version"): vol.Any(str, None),  # deprecated alias of sw_version
-    vol.Optional("manufacturer"): vol.Any(str, None),
-    vol.Optional("model"): vol.Any(str, None),
-    vol.Optional("hw_version"): vol.Any(str, None),
-    vol.Optional(
-        CONF_KEEP_LAST_STATE_ON_DISCONNECT, default=DEFAULT_KEEP_LAST_STATE_ON_DISCONNECT
-    ): bool,
-})
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_CONNECT,
+        vol.Required("gateway_id"): str,
+        vol.Optional("name"): vol.Any(str, None),
+        vol.Optional("sw_version"): vol.Any(str, None),
+        vol.Optional("app_version"): vol.Any(
+            str, None
+        ),  # deprecated alias of sw_version
+        vol.Optional("manufacturer"): vol.Any(str, None),
+        vol.Optional("model"): vol.Any(str, None),
+        vol.Optional("hw_version"): vol.Any(str, None),
+        vol.Optional(
+            CONF_KEEP_LAST_STATE_ON_DISCONNECT,
+            default=DEFAULT_KEEP_LAST_STATE_ON_DISCONNECT,
+        ): bool,
+    }
+)
 @websocket_api.async_response
-async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
-                     msg: dict[str, Any]) -> None:
+async def ws_connect(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
     @callback
     def _send_event(event: dict[str, Any]) -> None:
         connection.send_message(websocket_api.event_message(msg["id"], event))
@@ -100,60 +107,73 @@ async def ws_connect(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     connection.send_result(msg["id"])
 
 
-@websocket_api.websocket_command({
-    vol.Required("type"): WS_ENTITY,
-    vol.Required("unique_id"): str,
-    vol.Required("platform"): vol.In(ALL_PLATFORMS),
-    vol.Required("name"): str,
-    vol.Optional("device"): vol.Any(
-        vol.Schema({
-            vol.Required("id"): str,
-            vol.Optional("name"): vol.Any(str, None),
-        }),
-        None,
-    ),
-    vol.Optional("device_class"): vol.Any(str, None),
-    vol.Optional("unit_of_measurement"): vol.Any(str, None),
-    vol.Optional("state_class"): vol.Any(str, None),
-    vol.Optional("suggested_display_precision"): vol.Any(vol.Coerce(int), None),
-    vol.Optional("icon"): vol.Any(str, None),
-    vol.Optional("entity_category"): vol.Any(vol.In(["config", "diagnostic"]), None),
-    vol.Optional("options"): vol.Any([str], None),          # select
-    vol.Optional("min"): vol.Any(vol.Coerce(float), None),  # number / text(length)
-    vol.Optional("max"): vol.Any(vol.Coerce(float), None),
-    vol.Optional("step"): vol.Any(vol.Coerce(float), None),
-    vol.Optional("features"): vol.Any([str], None),
-    vol.Optional("supported_color_modes"): vol.Any([str], None),  # light
-    vol.Optional("effect_list"): vol.Any([str], None),            # light
-    vol.Optional("min_color_temp_kelvin"): vol.Any(vol.Coerce(int), None),  # light
-    vol.Optional("max_color_temp_kelvin"): vol.Any(vol.Coerce(int), None),  # light
-    vol.Optional("speed_count"): vol.Any(vol.Coerce(int), None),  # fan
-    vol.Optional("preset_modes"): vol.Any([str], None),           # fan
-    vol.Optional("pattern"): vol.Any(str, None),                  # text
-    vol.Optional("mode"): vol.Any(str, None),                     # text
-    vol.Optional("code_format"): vol.Any(str, None),              # lock (regex)
-    vol.Optional("event_types"): vol.Any([str], None),            # event (required when platform=event)
-    vol.Optional("reports_position"): vol.Any(bool, None),        # valve
-    vol.Optional("hvac_modes"): vol.Any([str], None),             # climate (required)
-    vol.Optional("fan_modes"): vol.Any([str], None),               # climate
-    vol.Optional("swing_modes"): vol.Any([str], None),             # climate
-    vol.Optional("min_temp"): vol.Any(vol.Coerce(float), None),    # climate / water_heater
-    vol.Optional("max_temp"): vol.Any(vol.Coerce(float), None),
-    vol.Optional("target_temp_step"): vol.Any(vol.Coerce(float), None),  # climate
-    vol.Optional("min_humidity"): vol.Any(vol.Coerce(float), None),  # climate / humidifier
-    vol.Optional("max_humidity"): vol.Any(vol.Coerce(float), None),
-    vol.Optional("temperature_unit"): vol.Any(str, None),          # climate
-    vol.Optional("available_modes"): vol.Any([str], None),         # humidifier
-    vol.Optional("operation_list"): vol.Any([str], None),          # water_heater
-    vol.Optional("available_tones"): vol.Any([str], None),         # siren
-    vol.Optional("code_arm_required"): vol.Any(bool, None),        # alarm_control_panel
-    vol.Optional("source_list"): vol.Any([str], None),             # media_player
-    vol.Optional("brand"): vol.Any(str, None),                     # camera
-    vol.Optional("model"): vol.Any(str, None),                     # camera
-})
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_ENTITY,
+        vol.Required("unique_id"): str,
+        vol.Required("platform"): vol.In(ALL_PLATFORMS),
+        vol.Required("name"): str,
+        vol.Optional("device"): vol.Any(
+            vol.Schema(
+                {
+                    vol.Required("id"): str,
+                    vol.Optional("name"): vol.Any(str, None),
+                }
+            ),
+            None,
+        ),
+        vol.Optional("device_class"): vol.Any(str, None),
+        vol.Optional("unit_of_measurement"): vol.Any(str, None),
+        vol.Optional("state_class"): vol.Any(str, None),
+        vol.Optional("suggested_display_precision"): vol.Any(vol.Coerce(int), None),
+        vol.Optional("icon"): vol.Any(str, None),
+        vol.Optional("entity_category"): vol.Any(
+            vol.In(["config", "diagnostic"]), None
+        ),
+        vol.Optional("options"): vol.Any([str], None),  # select
+        vol.Optional("min"): vol.Any(vol.Coerce(float), None),  # number / text(length)
+        vol.Optional("max"): vol.Any(vol.Coerce(float), None),
+        vol.Optional("step"): vol.Any(vol.Coerce(float), None),
+        vol.Optional("features"): vol.Any([str], None),
+        vol.Optional("supported_color_modes"): vol.Any([str], None),  # light
+        vol.Optional("effect_list"): vol.Any([str], None),  # light
+        vol.Optional("min_color_temp_kelvin"): vol.Any(vol.Coerce(int), None),  # light
+        vol.Optional("max_color_temp_kelvin"): vol.Any(vol.Coerce(int), None),  # light
+        vol.Optional("speed_count"): vol.Any(vol.Coerce(int), None),  # fan
+        vol.Optional("preset_modes"): vol.Any([str], None),  # fan
+        vol.Optional("pattern"): vol.Any(str, None),  # text
+        vol.Optional("mode"): vol.Any(str, None),  # text
+        vol.Optional("code_format"): vol.Any(str, None),  # lock (regex)
+        vol.Optional("event_types"): vol.Any(
+            [str], None
+        ),  # event (required when platform=event)
+        vol.Optional("reports_position"): vol.Any(bool, None),  # valve
+        vol.Optional("hvac_modes"): vol.Any([str], None),  # climate (required)
+        vol.Optional("fan_modes"): vol.Any([str], None),  # climate
+        vol.Optional("swing_modes"): vol.Any([str], None),  # climate
+        vol.Optional("min_temp"): vol.Any(
+            vol.Coerce(float), None
+        ),  # climate / water_heater
+        vol.Optional("max_temp"): vol.Any(vol.Coerce(float), None),
+        vol.Optional("target_temp_step"): vol.Any(vol.Coerce(float), None),  # climate
+        vol.Optional("min_humidity"): vol.Any(
+            vol.Coerce(float), None
+        ),  # climate / humidifier
+        vol.Optional("max_humidity"): vol.Any(vol.Coerce(float), None),
+        vol.Optional("temperature_unit"): vol.Any(str, None),  # climate
+        vol.Optional("available_modes"): vol.Any([str], None),  # humidifier
+        vol.Optional("operation_list"): vol.Any([str], None),  # water_heater
+        vol.Optional("available_tones"): vol.Any([str], None),  # siren
+        vol.Optional("code_arm_required"): vol.Any(bool, None),  # alarm_control_panel
+        vol.Optional("source_list"): vol.Any([str], None),  # media_player
+        vol.Optional("brand"): vol.Any(str, None),  # camera
+        vol.Optional("model"): vol.Any(str, None),  # camera
+    }
+)
 @callback
-def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
-              msg: dict[str, Any]) -> None:
+def ws_entity(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
     if msg.get("platform") == "event":
         types = msg.get("event_types")
         if not isinstance(types, list) or not types:
@@ -182,17 +202,22 @@ def ws_entity(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
 # `value` accepts an object as well as a scalar: platforms whose state is not a
 # single number/string (device_tracker needs latitude+longitude together) carry
 # it as a dict. Scalar senders are unaffected.
-@websocket_api.websocket_command({
-    vol.Required("type"): WS_STATE,
-    vol.Required("states"): [{
-        vol.Required("unique_id"): str,
-        vol.Required("value"): vol.Any(int, float, str, bool, dict, None),
-    }],
-    vol.Optional("ts"): vol.Any(int, float),
-})
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_STATE,
+        vol.Required("states"): [
+            {
+                vol.Required("unique_id"): str,
+                vol.Required("value"): vol.Any(int, float, str, bool, dict, None),
+            }
+        ],
+        vol.Optional("ts"): vol.Any(int, float),
+    }
+)
 @callback
-def ws_state(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
-             msg: dict[str, Any]) -> None:
+def ws_state(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
     for b in _bridges(hass):
         if (gid := b.client_for(connection)) is None:
             continue
@@ -201,29 +226,35 @@ def ws_state(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
     connection.send_result(msg["id"])
 
 
-@websocket_api.websocket_command({
-    vol.Required("type"): WS_AVAILABILITY,
-    vol.Required("device_id"): str,
-    vol.Required("online"): bool,
-})
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_AVAILABILITY,
+        vol.Required("device_id"): str,
+        vol.Required("online"): bool,
+    }
+)
 @callback
-def ws_availability(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
-                    msg: dict[str, Any]) -> None:
+def ws_availability(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
     for b in _bridges(hass):
         if (gid := b.client_for(connection)) is not None:
             b.handle_availability(gid, msg["device_id"], msg["online"])
     connection.send_result(msg["id"])
 
 
-@websocket_api.websocket_command({
-    vol.Required("type"): WS_REMOVE,
-    vol.Optional("unique_id"): str,
-    vol.Optional("device_id"): str,
-    vol.Optional("mode"): vol.In(REMOVE_MODES),
-})
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_REMOVE,
+        vol.Optional("unique_id"): str,
+        vol.Optional("device_id"): str,
+        vol.Optional("mode"): vol.In(REMOVE_MODES),
+    }
+)
 @websocket_api.async_response
-async def ws_remove(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
-                    msg: dict[str, Any]) -> None:
+async def ws_remove(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
     """엔티티·sub-device·게이트웨이(전체) 삭제. 대상 미지정 시 연결된 게이트웨이 전체."""
     mode = msg.get("mode", "exact")
     for b in _bridges(hass):
@@ -237,18 +268,23 @@ async def ws_remove(hass: HomeAssistant, connection: websocket_api.ActiveConnect
             await b.async_remove_gateway(gid)
         connection.send_result(msg["id"])
         return
-    connection.send_error(msg["id"], "not_connected", "No ws_bridge session for this connection")
+    connection.send_error(
+        msg["id"], "not_connected", "No ws_bridge session for this connection"
+    )
 
 
 # 빈 목록은 스키마에서 거부한다 — 설정을 못 읽었거나 부분 부팅한 클라이언트가
 # 실수로 전체를 날리는 사고를 막기 위해서다. 전체 삭제는 ws_bridge/remove(대상 생략).
-@websocket_api.websocket_command({
-    vol.Required("type"): WS_SYNC,
-    vol.Required("unique_ids"): vol.All([str], vol.Length(min=1)),
-})
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_SYNC,
+        vol.Required("unique_ids"): vol.All([str], vol.Length(min=1)),
+    }
+)
 @websocket_api.async_response
-async def ws_sync(hass: HomeAssistant, connection: websocket_api.ActiveConnection,
-                  msg: dict[str, Any]) -> None:
+async def ws_sync(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
     """선언 전체 목록과 대조해, 이제는 없는 엔티티만 제거한다 (PROTOCOL.md §3.5)."""
     for b in _bridges(hass):
         if (gid := b.client_for(connection)) is None:
@@ -256,4 +292,6 @@ async def ws_sync(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
         removed = await b.async_sync_entities(gid, msg["unique_ids"])
         connection.send_result(msg["id"], {"removed": removed})
         return
-    connection.send_error(msg["id"], "not_connected", "No ws_bridge session for this connection")
+    connection.send_error(
+        msg["id"], "not_connected", "No ws_bridge session for this connection"
+    )
