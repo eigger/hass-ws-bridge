@@ -30,7 +30,6 @@
 |---|---|---|---|
 | GOV-01, GOV-02 | `STANDARDS.md`에 표준 SHA·profile·실제 기본 브랜치·예외 기록, workflow/action은 검토 SHA로 고정 | PASS | STANDARDS.md(SHA·profile·브랜치·예외), tests.yml/validate.yml이 `@ba9f3fa…` 전체 SHA로 고정 |
 | GOV-03 | 새 표준 채택 변경의 영향·이관 방법과 명시적 채택 PR 확인. 규칙 자체를 변경하면 공통 CHANGELOG 기록 | PASS | 이 PR이 명시적 채택 PR. 규칙 리포가 아니므로 공통 CHANGELOG 변경 없음 |
-| CI-04/12 | 후속 PR CI 통과 후 위 PASS 근거(run 링크) 기록 | @eigger | CI run 링크 |
 | GOV-04 | 중앙 표에 작업 시작·단계 변경·종료 상태, 담당·적용 내용·검증/리뷰 근거·남은 작업 갱신, 타 리포 기록 보존 | TODO | 중앙 adoption-status.md는 별도 리포 PR 필요, 이번 PR에서 미반영 |
 | GOV-05 | 구현과 독립 리뷰·검증을 별도 서브 에이전트에게 위임, 지적 수정·재검증 및 결과 취합 | EXCEPTION | PR #52는 메인 에이전트가 구현(사후 Opus 리뷰), 이번 PR은 Opus 구현 서브 에이전트 + 별도 Opus 리뷰어가 수행하고 지적 수정·재검증함. PR #52분 예외는 [STANDARDS.md 예외](STANDARDS.md#예외) |
 | HA-01, HA-13 | `custom_components/<domain>/`와 domain 일치, 필요한 모듈·공개 API·생명주기는 Core 대응 구조 | PASS | `custom_components/ws_bridge/`가 manifest domain `ws_bridge`와 일치. 라이프사이클 상세 검토는 HA-05 행 |
@@ -75,7 +74,7 @@
 | HACS-06 (권장) | description·topics·issue 경로·brands 및 사용하는 HACS 필드 지원 확인 | PASS | GitHub 저장소 description·topics(hacs, homeassistant, …)·Issues/Discussions 활성(gh repo view) |
 | CI-01, CI-02 | Validate/Python Tests 공통화, 확장 job 유지, PR·실제 기본 브랜치 push·dispatch 및 필요한 schedule | PASS | 공통 python-tests/validate-integration 호출, PR·main push·dispatch, validate는 주간 schedule |
 | CI-03, CI-05, CI-08 | 최소 권한·checkout 자격증명 비보존·timeout·concurrency, full SHA·갱신 관리, 비신뢰 입력·secrets 경계 | PASS | permissions contents: read, concurrency 설정, 공통 workflow는 full SHA 고정, dependabot github-actions 활성 |
-| CI-04, CI-07, CI-12 | 실패를 숨기지 않는 실제 `ha` 필수 테스트, 버전별 환경·cache·Ruff 설정과 required checks 이름 확인 | TODO | ha 프로필 필수 테스트·current/minimum-ha·Ruff 고정은 구성됨. 새 job의 원격 CI 실행 결과와 required checks 이름 확정은 PR CI 후 기록(PR #52의 unit job 결과는 재사용하지 않음) |
+| CI-04, CI-07, CI-12 | 실패를 숨기지 않는 실제 `ha` 필수 테스트, 버전별 환경·cache·Ruff 설정과 required checks 이름 확인 | PASS | ha 프로필 필수 테스트, current·minimum-ha, Ruff 고정. PR #55 원격 CI SUCCESS: [current ha](https://github.com/eigger/hass-ws-bridge/actions/runs/39098317420/job/117589245571), [minimum-ha ha](https://github.com/eigger/hass-ws-bridge/actions/runs/39098317420/job/117589245634), [lint](https://github.com/eigger/hass-ws-bridge/actions/runs/39098317420/job/117589245766), [hacs](https://github.com/eigger/hass-ws-bridge/actions/runs/39098317417/job/117589245430), [hassfest](https://github.com/eigger/hass-ws-bridge/actions/runs/39098317417/job/117589245612). required checks 설정은 별도 남은 작업 |
 | DEP-03, DEP-04, CI-09 | updater의 선택 package·연산자/extras/marker 보존, 안정 버전·major 정책, 실제 기본 브랜치·단일 bot branch·PR만 제안 | EXCEPTION | update_dependencies 미도입 — [STANDARDS.md 예외](STANDARDS.md#예외) |
 | CI-09, CI-10, DEP-08 | 변경 tree의 새 하한·실제 HA 검증 후 PR 동기화, 실패 시 중단·변경 없음 시 기존 PR 정리, 후속 required checks 충족 방식 확인 | EXCEPTION | 위와 동일 — [STANDARDS.md 예외](STANDARDS.md#예외) |
 
@@ -103,7 +102,7 @@
 | 규칙 ID / TODO | 남은 작업 / issue·PR | 담당자 | 완료 근거 |
 |---|---|---|---|
 | GOV-04 | 중앙 adoption-status.md 자기 리포 행 갱신(중앙 리포 PR) | @eigger | 중앙 PR 링크 |
-| CI-04/12 | required checks(`current / lint`, `current / Python 3.14 / ha / current`, `minimum-ha / …`, `validate / hacs`, `validate / hassfest`) 저장소 설정 반영 — 이름은 CI 실행 후 확인 | @eigger | branch protection 설정 |
+| CI-04/12 | required checks(`current / lint`, `current / Python 3.14 / ha / current`, `minimum-ha / lint`, `minimum-ha / Python 3.14 / ha / current`, `validate / hacs`, `validate / hassfest`) 저장소 설정 반영(옛 `unit` 체크 요구가 있으면 제거) | @eigger | branch protection 설정 |
 | 제품 결함 | 실제 HA 테스트가 드러낸 xfail(strict) 5건: ① `_remove_entity_ns`가 registry 항목을 남김(remove/sync, 3 tests, sync 비멱등·빈 sub-device 미정리 포함) ② lock 낙관 플래그 충돌 ③ unload가 소켓을 닫지 못함. 또 update 낙관 in_progress는 HA install wrapper가 즉시 초기화해 보이지 않음(테스트로 문서화) | @eigger | 후속 수정 PR(xfail 해제) |
 
-최종 검토 시 적용 대상 필수 `TODO`는 GOV-04, HA-05/06(소켓 정리), CI-04/12(원격 CI 근거)이며 CI 성공만으로 실물 기기 검증을 주장하지 않습니다. 이 통합은 특정 기기에 묶이지 않아 실물 검증 해당 없음입니다.
+최종 검토 시 적용 대상 필수 `TODO`는 GOV-04, HA-05/06(소켓 정리)이며 CI 성공만으로 실물 기기 검증을 주장하지 않습니다. 이 통합은 특정 기기에 묶이지 않아 실물 검증 해당 없음입니다.
