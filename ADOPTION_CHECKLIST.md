@@ -12,6 +12,7 @@
 | 검토한 표준 전체 커밋 SHA | ba9f3fad8b635c163fb44a4e91b1833cc4ab47b4 |
 | 검토일 / 조율 담당 | 2026-10-18 / 메인 에이전트 |
 | 구현 서브 에이전트 / 독립 리뷰·검증 서브 에이전트 | 없음(GOV-05 예외) / Opus 서브 에이전트(agent a5591016d6844dc22) |
+| 원격 CI(PR #52) | Tests(lint, Python 3.14 unit)·Validate(hacs, hassfest) 4개 SUCCESS |
 | 중앙 현황표 반영일 / 기록 | 미반영 — 중앙 리포 PR 필요(GOV-04 TODO) |
 | 변경 전 지원 최소 HA / 근거 파일 | 2026.9.0 / hacs.json |
 | 유지·변경할 지원 최소 / 변경 시 실제 비호환 근거·명시적 승인 | 2026.9.0 유지, 변경 없음 |
@@ -60,7 +61,7 @@
 
 | 검증 축 / 상태 | 통합 커밋 | Python / HA / 플러그인 실제 버전 | 대상 패키지 실제 버전·extras·marker | 명령·테스트 결과·pip check / CI run·job | skip·제외·미검증 범위 |
 |---|---|---|---|---|---|
-| 현재 환경(unit, HA 미설치) / PASS | 작업 트리(a7640f6+변경, origin/main d22912f 기준) | Python 3.14 venv / HA 없음 / 플러그인 없음 | pytest 8.4.2, voluptuous 0.15.2 | 리뷰어 venv: `pip check` 정상, `pytest tests` 69 passed. 원격 CI는 PR 후 확인 | 실제 HA 기반 검증 아님 |
+| 현재 환경(unit, HA 미설치) / PASS | 작업 트리(a7640f6+변경, origin/main d22912f 기준) | Python 3.14 venv / HA 없음 / 플러그인 없음 | pytest 8.4.2, voluptuous 0.15.2 | 리뷰어 venv: `pip check` 정상, 69 passed. 원격 CI [unit job](https://github.com/eigger/hass-ws-bridge/actions/runs/39079552754/job/117533536124) / [lint](https://github.com/eigger/hass-ws-bridge/actions/runs/39079552754/job/117533536272) SUCCESS | 실제 HA 기반 검증 아님 |
 | 정확한 최소 HA 2026.9.0 / EXCEPTION | — | — | — | 미실행 | 실제 HA 테스트 도입 전까지 예외 |
 | 정확한 최소 라이브러리 / N/A | — | — | requirements 없음 | — | 대상 package 없음 |
 
@@ -69,7 +70,7 @@
 | 규칙 ID | 확인 항목 | 상태 | 근거 / 남은 작업 |
 |---|---|---|---|
 | HACS-01, HACS-02 | 루트 README/LICENSE/hacs.json, 검증한 최소 HA, 실제 배포 구조와 필요한 옵션 일치 | PASS | 루트 README.md/LICENSE/hacs.json 존재, hacs.json `homeassistant: 2026.9.0` 변경 없음. HACS 실행은 HACS-03 행 |
-| HACS-03, HACS-05 | Default 여부는 목록 근거로 확인, [로컬 brand/icon.png 또는 원격 brands 근거](https://github.com/eigger/hass-repo-standards/blob/main/docs/hacs.md)와 HACS/Hassfest 실제 실행, ignore는 이유·해제 조건 기록 | TODO | `custom_components/ws_bridge/brand/icon.png` 존재. HACS/Hassfest 실제 실행 결과는 PR CI 확인 후 기록 |
+| HACS-03, HACS-05 | Default 여부는 목록 근거로 확인, [로컬 brand/icon.png 또는 원격 brands 근거](https://github.com/eigger/hass-repo-standards/blob/main/docs/hacs.md)와 HACS/Hassfest 실제 실행, ignore는 이유·해제 조건 기록 | PASS | `custom_components/ws_bridge/brand/icon.png` 존재. HACS·Hassfest 실제 실행 SUCCESS: [hacs](https://github.com/eigger/hass-ws-bridge/actions/runs/39079552654/job/117533535663), [hassfest](https://github.com/eigger/hass-ws-bridge/actions/runs/39079552654/job/117533535682) |
 | HACS-06 (권장) | description·topics·issue 경로·brands 및 사용하는 HACS 필드 지원 확인 | PASS | GitHub 저장소 description·topics(hacs, homeassistant, …)·Issues/Discussions 활성(gh repo view) |
 | CI-01, CI-02 | Validate/Python Tests 공통화, 확장 job 유지, PR·실제 기본 브랜치 push·dispatch 및 필요한 schedule | PASS | 공통 python-tests/validate-integration 호출, PR·main push·dispatch, validate는 주간 schedule |
 | CI-03, CI-05, CI-08 | 최소 권한·checkout 자격증명 비보존·timeout·concurrency, full SHA·갱신 관리, 비신뢰 입력·secrets 경계 | PASS | permissions contents: read, concurrency 설정, 공통 workflow는 full SHA 고정, dependabot github-actions 활성 |
@@ -101,7 +102,7 @@
 | 규칙 ID / TODO | 남은 작업 / issue·PR | 담당자 | 완료 근거 |
 |---|---|---|---|
 | GOV-04 | 중앙 adoption-status.md 자기 리포 행 갱신(중앙 리포 PR) | @eigger | 중앙 PR 링크 |
-| HACS-03/05, CI | 이 PR의 원격 CI(HACS·Hassfest·Tests) 결과 확인 후 기록, required checks 설정 | @eigger | CI run 링크 |
+| CI | required checks 이름(`current / lint`, `current / Python 3.14 / unit / current`, `validate / hacs`, `validate / hassfest`) 저장소 설정 반영 | @eigger | branch protection 설정 |
 | HA-02/03/04/05/06/07/08/11/12, TEST-01/06/07 | 코드 수준 검토(manifest, options/reauth, unload·복구, diagnostics 등) | @eigger | 후속 PR |
 | TEST-08/02/03/09/04 | 실제 HA 기반 테스트 이관 + 최소 HA 2026.9.0 job | @eigger | tests/components/ws_bridge/ |
 | DOC-01/02/06 | README.ko.md 이름 변경, README 분량 정리, CONTRIBUTING/docs 작성 | @eigger | 문서 PR |
