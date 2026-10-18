@@ -8,6 +8,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # The exact minimum-HA environment stays fixed; it changes only with a
+    # reviewed support-policy change (hacs.json / STANDARDS.md).
+    exclude-paths:
+      - requirements_test_min.txt
     groups:
       home-assistant-tests:
         patterns:

@@ -3,7 +3,7 @@
   "default_branch": "main",
   "readmes": [
     "README.md",
-    "README_ko.md"
+    "README.ko.md"
   ],
   "hacs": "custom",
   "release": true,
@@ -13,6 +13,6 @@
   "validate_workflow": "validate.yml",
   "installation_links": {
     "README.md": "#-installation",
-    "README_ko.md": "#-설치"
+    "README.ko.md": "#-설치"
   }
 }
