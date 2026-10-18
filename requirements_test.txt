@@ -1,2 +1,2 @@
-pytest==8.4.2
+pytest==9.1.1
 voluptuous==0.15.2
