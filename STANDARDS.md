@@ -7,7 +7,7 @@
 - 적용 점검표: [ADOPTION_CHECKLIST.md](ADOPTION_CHECKLIST.md)
 - 중앙 현황표: https://github.com/eigger/hass-repo-standards/blob/main/docs/adoption-status.md
 - 조율 / 구현 / 독립 리뷰·검증 담당: 메인 에이전트 / 구현 서브 에이전트(Opus) / 별도 리뷰 서브 에이전트(Opus)
-- 중앙 현황 갱신일: 미등록 (중앙 리포 PR 별도, 남은 작업)
+- 중앙 현황 갱신일: 2026-10-18 ([중앙 커밋](https://github.com/eigger/hass-repo-standards/commit/645184b))
 - 실제 기본 브랜치: main
 - 테스트 경로: tests/components/ws_bridge/
 - 변경 전 지원 최소 HA / 선언 근거: 2026.9.0 / hacs.json
