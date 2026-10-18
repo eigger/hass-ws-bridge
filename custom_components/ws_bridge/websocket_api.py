@@ -19,6 +19,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_call_later
 
 from .bridge import WsBridge
 from .const import (
@@ -89,6 +90,16 @@ def _reject_if_not_allowed(
     connection.send_error(
         msg["id"], "not_allowed", "Token owner is not allowed for ws_bridge"
     )
+    # Permission lost outside the options flow (admin revoked, user deactivated):
+    # drop the already-registered subscription once the error has been flushed.
+    for bridge in _bridges(hass):
+        if bridge.client_for(connection) is not None:
+
+            @callback
+            def _close(_now: Any, b: WsBridge = bridge) -> None:
+                b.close_connections(lambda c: c is connection)
+
+            async_call_later(hass, 1, _close)
     return True
 
 

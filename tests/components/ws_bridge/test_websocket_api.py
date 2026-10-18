@@ -1,6 +1,7 @@
 """ws_bridge/* protocol over the real HA WebSocket API (PROTOCOL.md §2-§3)."""
 
 import asyncio
+from datetime import timedelta
 
 import pytest
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
@@ -8,7 +9,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.ws_bridge.const import CONF_ALLOWED_USER_IDS, DOMAIN
 
@@ -665,6 +670,23 @@ async def test_connection_closed_when_owner_removed_from_allowlist(
     )
     await hass.async_block_till_done()
     bridge = hass.data[DOMAIN][client.entry.entry_id]
+    for _ in range(200):
+        await asyncio.sleep(0.01)
+        await hass.async_block_till_done()
+        if not bridge._conn_client:
+            break
+    assert not bridge._conn_client
+
+
+async def test_connection_closed_after_command_rejected_for_lost_admin(
+    hass: HomeAssistant, client: BridgeClient, hass_admin_user
+) -> None:
+    """Losing admin rights (no options change) closes the gateway on its next command."""
+    await hass.auth.async_update_user(hass_admin_user, group_ids=["system-read-only"])
+    msg = await client.send("state", states=[{"unique_id": "s1", "value": 1}])
+    assert msg["error"]["code"] == "not_allowed"
+    bridge = hass.data[DOMAIN][client.entry.entry_id]
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=2))
     for _ in range(200):
         await asyncio.sleep(0.01)
         await hass.async_block_till_done()
