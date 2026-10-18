@@ -73,18 +73,41 @@ async def test_connect_sw_version_prefers_sw_over_deprecated_app_version(
 async def test_connect_keeps_offline_device_with_same_name(
     hass: HomeAssistant, bridge_client_factory
 ) -> None:
-    """A gateway with the same name does not remove an offline device (match is on gateway_id)."""
+    """Offline gateways and entities with the same name are not removed."""
     old = await bridge_client_factory()
     await old.connect("old_gw", "Kitchen")
     await old.entity("t", "sensor", "T", device={"id": "probe"})
+    await old.state("t", 21)
+    assert get_device(hass, "old_gw") is not None
     assert get_device(hass, "old_gw:probe") is not None
+    assert entity_id_for(hass, "sensor", "t", "old_gw") is not None
     await old.close()
 
     new = await bridge_client_factory()
     await new.connect("new_gw", "Kitchen")
+    await new.entity("h", "sensor", "H")
+    await new.state("h", 55)
+
     assert get_device(hass, "old_gw") is not None
     assert get_device(hass, "old_gw:probe") is not None
+    assert entity_id_for(hass, "sensor", "t", "old_gw") is not None
     assert get_device(hass, "new_gw") is not None
+    assert entity_id_for(hass, "sensor", "h", "new_gw") is not None
+
+
+async def test_connect_client_named_websocket_bridge_does_not_remove_service_device(
+    hass: HomeAssistant, bridge_client_factory
+) -> None:
+    """A client naming itself 'WebSocket Bridge' does not remove the service device."""
+    client = await bridge_client_factory()
+    entry = client.entry
+    assert get_device(hass, entry.entry_id) is not None
+
+    imposter = await bridge_client_factory()
+    await imposter.connect("gw_imposter", "WebSocket Bridge")
+
+    assert get_device(hass, entry.entry_id) is not None
+    assert get_device(hass, "gw_imposter") is not None
 
 
 async def test_connect_keeps_online_device_with_same_name(
