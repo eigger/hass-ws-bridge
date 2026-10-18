@@ -37,7 +37,7 @@
 | HA-03 (권장) | 공통 상수·설정·갱신·플랫폼 역할 및 프로토콜 경계에 맞게 모듈 구성 | PASS | const/entity/bridge/websocket_api/플랫폼 모듈 분리 구조 유지, 변경 없음 |
 | HA-04, HA-08 | UI 설정·중복·안정적 식별 및 기능별 options/reauth/reconfigure, entity 의미·registry 영향 확인 | PASS | config_flow: 단일 인스턴스 unique_id=DOMAIN, 중복 abort 테스트(test_config_flow). 저장 자격증명이 없어 options/reauth/reconfigure는 해당 없음 |
 | HA-01, HA-04, HA-08, REL-01, REL-03 | domain·unique ID·entry schema·상태/통계 계약 변경 시 migration 테스트와 사용자 조치 안내 | N/A | 이번 PR은 domain·unique ID·entry schema를 변경하지 않음(이 후속 PR은 테스트·문서·CI만 변경, custom_components 변경 없음) |
-| HA-05, HA-06 | setup 실패 구분, unload/reload·부분 실패의 task/listener/연결 정리, async·timeout·취소 처리 | TODO | test_init: setup/unload/reload·플랫폼/저장 정리는 PASS. 미충족: unload 시 클라이언트 소켓 미종료(xfail `test_unload_closes_client_connections`), 부분 setup 실패 정리 미검증 |
+| HA-05, HA-06 | setup 실패 구분, unload/reload·부분 실패의 task/listener/연결 정리, async·timeout·취소 처리 | TODO | test_init: setup/unload/reload·플랫폼/저장 정리는 PASS. unload 시 클라이언트 소켓 종료는 `test_unload_closes_client_connections`로 검증(비공개 `WebSocketHandler._cancel` 사용, HA 2026.9.0/2026.10.2 모두 확인). 미충족: 부분 setup 실패 정리 미검증 |
 | HA-07 | 중복 polling·property I/O 방지, push 보존, unavailable/unknown·실패 후 복구 | PASS | should_poll=False push 구조, unavailable/disconnect 복구·keep_last 테스트 |
 | HA-11, HA-12 | 번역·action/schema 일치, 로그/diagnostics/fixture 비식별화와 제공 시 redaction 테스트 | PASS | strings/translations(en, ko) 존재. diagnostics는 제공하지 않아 redaction 해당 없음, 테스트 fixture에 실제 토큰 없음 |
 
@@ -103,6 +103,6 @@
 |---|---|---|---|
 | GOV-04 | 중앙 adoption-status.md 자기 리포 행 갱신(중앙 리포 PR) | @eigger | 중앙 PR 링크 |
 | CI-04/12 | required checks(`current / lint`, `current / Python 3.14 / ha / current`, `minimum-ha / lint`, `minimum-ha / Python 3.14 / ha / current`, `validate / hacs`, `validate / hassfest`) 저장소 설정 반영(옛 `unit` 체크 요구가 있으면 제거) | @eigger | branch protection 설정 |
-| 제품 결함 | 실제 HA 테스트가 드러낸 xfail(strict) 5건: ① `_remove_entity_ns`가 registry 항목을 남김(remove/sync, 3 tests, sync 비멱등·빈 sub-device 미정리 포함) ② lock 낙관 플래그 충돌 ③ unload가 소켓을 닫지 못함. 또 update 낙관 in_progress는 HA install wrapper가 즉시 초기화해 보이지 않음(테스트로 문서화) | @eigger | 후속 수정 PR(xfail 해제) |
+| 제품 결함 | 수정 완료(xfail 5건 해제): ① `_remove_entity_ns`가 registry 항목까지 제거 ② lock 낙관 플래그 상호 배타 ③ unload가 클라이언트 소켓 종료. 남은 항목: update 낙관 in_progress는 HA install wrapper가 즉시 초기화해 보이지 않음(테스트로 문서화) | @eigger | 이 수정 PR |
 
-최종 검토 시 적용 대상 필수 `TODO`는 GOV-04, HA-05/06(소켓 정리)이며 CI 성공만으로 실물 기기 검증을 주장하지 않습니다. 이 통합은 특정 기기에 묶이지 않아 실물 검증 해당 없음입니다.
+최종 검토 시 적용 대상 필수 `TODO`는 GOV-04, HA-05/06(부분 setup 실패 정리 검증)이며 CI 성공만으로 실물 기기 검증을 주장하지 않습니다. 이 통합은 특정 기기에 묶이지 않아 실물 검증 해당 없음입니다.

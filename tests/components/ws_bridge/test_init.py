@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 
-import pytest
+from aiohttp import WSMsgType
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE, Platform
 from homeassistant.core import HomeAssistant
@@ -92,6 +92,7 @@ async def test_reload_restores_last_state_when_client_redeclares(
     hass_storage: dict,
     init_integration: MockConfigEntry,
     client: BridgeClient,
+    bridge_client_factory,
 ) -> None:
     """After a restart the persisted value is shown as soon as the entity is
     redeclared, before the client pushes a fresh state."""
@@ -104,7 +105,8 @@ async def test_reload_restores_last_state_when_client_redeclares(
     assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
     assert hass_storage[_store_key(init_integration)]["data"]["entities"] == {}
 
-    # The old socket is still open; the client re-registers on it.
+    # Unloading closed the old socket; the client reconnects on a new one.
+    client = await bridge_client_factory()
     await client.connect()
     await client.entity("temp", "sensor", "Temp")
     assert entity_id_for(hass, "sensor", "temp") == entity_id
@@ -308,11 +310,6 @@ async def test_commands_before_connect(
         assert msg["error"]["code"] == "not_connected"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="bridge.unload() calls ActiveConnection.close(), which does not exist; "
-    "client sockets stay open and a warning is logged (bridge.py unload)",
-)
 async def test_unload_closes_client_connections(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,
@@ -323,4 +320,5 @@ async def test_unload_closes_client_connections(
     assert await hass.config_entries.async_unload(init_integration.entry_id)
     await hass.async_block_till_done()
     assert "Error closing client connection" not in caplog.text
+    assert (await client.ws.receive(timeout=5)).type is WSMsgType.CLOSE
     assert client.ws.closed
