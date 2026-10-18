@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# Real-HA tests (pytest-homeassistant-custom-component); see STANDARDS.md.
+testpaths = ["tests/components/ws_bridge"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

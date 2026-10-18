@@ -11,8 +11,11 @@ permissions:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-# Existing tests use mocked HA modules (unit profile); real-HA migration is tracked
-# as an exception in STANDARDS.md. This does not change the declared minimum HA.
+# Real Home Assistant tests (ha profile). `current` tests the current HA; the
+# separate `minimum-ha` job tests the exact declared minimum (hacs.json 2026.9.0)
+# and does not raise or change minimum support.
+# ha-components installs requirements of the HA platforms the entry forwards
+# (e.g. camera → PyTurboJPEG) from the installed HA's own manifests.
 jobs:
   current:
     uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@ba9f3fad8b635c163fb44a4e91b1833cc4ab47b4
@@ -20,5 +23,25 @@ jobs:
       domain: ws_bridge
       python-versions: '["3.14"]'
       requirements: requirements_test.txt
-      test-profile: unit
-      pytest-args: tests/ -v
+      expected-ha-version: '2026.10.2'
+      test-profile: ha
+      ha-components: >-
+        websocket_api sensor binary_sensor device_tracker switch number select
+        button update light cover fan text lock date time datetime event valve
+        climate humidifier water_heater siren alarm_control_panel media_player
+        image camera
+      pytest-args: tests/components/ws_bridge/ -v
+  minimum-ha:
+    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@ba9f3fad8b635c163fb44a4e91b1833cc4ab47b4
+    with:
+      domain: ws_bridge
+      python-versions: '["3.14"]'
+      requirements: requirements_test_min.txt
+      expected-ha-version: '2026.9.0'
+      test-profile: ha
+      ha-components: >-
+        websocket_api sensor binary_sensor device_tracker switch number select
+        button update light cover fan text lock date time datetime event valve
+        climate humidifier water_heater siren alarm_control_panel media_player
+        image camera
+      pytest-args: tests/components/ws_bridge/ -v

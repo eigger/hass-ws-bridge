@@ -1,6 +1,6 @@
 # 공통 규칙 적용 체크리스트
 
-이 파일은 ws_bridge의 **부분 이관** 점검표입니다. 대부분 항목은 TODO이며 실제 HA 테스트 전환은 완료되지 않았습니다. 예외는 [STANDARDS.md](STANDARDS.md#예외)에 기록했습니다. [사용법과 판정 기준](https://github.com/eigger/hass-repo-standards/blob/ba9f3fad8b635c163fb44a4e91b1833cc4ab47b4/docs/checklist.md)을 읽고, 아래 규칙은 `STANDARDS.md`에 기록한 표준 커밋에서 확인합니다. 태그·릴리스 대신 `main`의 검토 커밋을 기준으로 하며, 위 사용법 링크의 `main`은 채택 시 검토한 커밋 SHA로 바꿉니다.
+이 파일은 ws_bridge의 적용 점검표입니다. 예외는 [STANDARDS.md](STANDARDS.md#예외)에 기록했습니다. [사용법과 판정 기준](https://github.com/eigger/hass-repo-standards/blob/ba9f3fad8b635c163fb44a4e91b1833cc4ab47b4/docs/checklist.md)을 읽고, 아래 규칙은 `STANDARDS.md`에 기록한 표준 커밋에서 확인합니다. 태그·릴리스 대신 `main`의 검토 커밋을 기준으로 하며, 위 사용법 링크의 `main`은 채택 시 검토한 커밋 SHA로 바꿉니다.
 
 ## 검토 대상
 
@@ -8,19 +8,19 @@
 |---|---|
 | 통합 리포 / 실제 기본 브랜치 | eigger/hass-ws-bridge / main |
 | domain / 구현 경로 | ws_bridge / custom_components/ws_bridge |
-| 검토 대상 통합 커밋 / 채택 PR | origin/main d22912f 위의 chore/adopt-hass-repo-standards / 이 PR |
+| 검토 대상 통합 커밋 / 채택 PR | main 1b7826c 위의 feat/real-ha-tests / 후속 PR(번호는 생성 후 기록) |
 | 검토한 표준 전체 커밋 SHA | ba9f3fad8b635c163fb44a4e91b1833cc4ab47b4 |
 | 검토일 / 조율 담당 | 2026-10-18 / 메인 에이전트 |
-| 구현 서브 에이전트 / 독립 리뷰·검증 서브 에이전트 | 없음(GOV-05 예외) / Opus 서브 에이전트(agent a5591016d6844dc22) |
+| 구현 서브 에이전트 / 독립 리뷰·검증 서브 에이전트 | Opus 구현 에이전트 / 별도 Opus 리뷰 에이전트 |
 | 원격 CI(PR #52) | Tests(lint, Python 3.14 unit)·Validate(hacs, hassfest) 4개 SUCCESS |
 | 중앙 현황표 반영일 / 기록 | 미반영 — 중앙 리포 PR 필요(GOV-04 TODO) |
 | 변경 전 지원 최소 HA / 근거 파일 | 2026.9.0 / hacs.json |
 | 유지·변경할 지원 최소 / 변경 시 실제 비호환 근거·명시적 승인 | 2026.9.0 유지, 변경 없음 |
-| current 테스트 HA / 호환 Python·플러그인 | HA 미설치 unit 환경 / Python 3.14, pytest 8.4.2, voluptuous 0.15.2 (로컬+CI 설정, 원격 CI 미확인) |
-| 최소 테스트 HA / 호환 Python·플러그인 | 미검증(예외) — 실제 HA 테스트 도입 후 2026.9.0 별도 job |
-| profile / 테스트 경로 | integration / unit (mock 기반), tests/ — 실제 HA 전환은 예외 |
+| current 테스트 HA / 호환 Python·플러그인 | HA 2026.10.2 / Python 3.14.5 / plugin 0.13.373 |
+| 최소 테스트 HA / 호환 Python·플러그인 | HA 2026.9.0 / Python 3.14.5 / plugin 0.13.363 |
+| profile / 테스트 경로 | integration / ha, tests/components/ws_bridge/ |
 | 이전 검토 기록 | 최초 검토 |
-| 채택 판정 | 부분 이관 — CI/린트/배지/표준 기록만 적용. 실제 HA 테스트 이관 TODO |
+| 채택 판정 | PR #52(표준·CI) + 후속 PR(실제 HA 테스트·문서) 적용. 남은 작업은 아래 표 |
 
 상태: `TODO` = 미확인·미충족, `PASS` = 근거로 확인, `EXCEPTION` = 적용 대상의 기록된 예외, `N/A` = 적용 조건에 해당 없음. `TODO`를 해당 없음으로 처리하지 않습니다. 묶은 규칙의 결과가 다르면 행을 나눕니다. 권장 항목은 별도로 표시했으며 미채택 이유를 기록합니다.
 
@@ -31,28 +31,28 @@
 | GOV-01, GOV-02 | `STANDARDS.md`에 표준 SHA·profile·실제 기본 브랜치·예외 기록, workflow/action은 검토 SHA로 고정 | PASS | STANDARDS.md(SHA·profile·브랜치·예외), tests.yml/validate.yml이 `@ba9f3fa…` 전체 SHA로 고정 |
 | GOV-03 | 새 표준 채택 변경의 영향·이관 방법과 명시적 채택 PR 확인. 규칙 자체를 변경하면 공통 CHANGELOG 기록 | PASS | 이 PR이 명시적 채택 PR. 규칙 리포가 아니므로 공통 CHANGELOG 변경 없음 |
 | GOV-04 | 중앙 표에 작업 시작·단계 변경·종료 상태, 담당·적용 내용·검증/리뷰 근거·남은 작업 갱신, 타 리포 기록 보존 | TODO | 중앙 adoption-status.md는 별도 리포 PR 필요, 이번 PR에서 미반영 |
-| GOV-05 | 구현과 독립 리뷰·검증을 별도 서브 에이전트에게 위임, 지적 수정·재검증 및 결과 취합 | EXCEPTION | 구현을 메인 에이전트가 수행, 독립 리뷰만 Opus 서브 에이전트(리뷰 지적 수정·재검증 완료). [STANDARDS.md 예외](STANDARDS.md#예외) |
+| GOV-05 | 구현과 독립 리뷰·검증을 별도 서브 에이전트에게 위임, 지적 수정·재검증 및 결과 취합 | EXCEPTION | PR #52는 메인 에이전트가 구현(사후 Opus 리뷰), 이번 PR은 Opus 구현 서브 에이전트 + 별도 Opus 리뷰어가 수행하고 지적 수정·재검증함. PR #52분 예외는 [STANDARDS.md 예외](STANDARDS.md#예외) |
 | HA-01, HA-13 | `custom_components/<domain>/`와 domain 일치, 필요한 모듈·공개 API·생명주기는 Core 대응 구조 | PASS | `custom_components/ws_bridge/`가 manifest domain `ws_bridge`와 일치. 라이프사이클 상세 검토는 HA-05 행 |
-| HA-02 | manifest 필드·정렬·동작 선언 확인, 공식 품질 등급 자가 표기 없음 | TODO | manifest 필드 정렬·선언 상세 미검토 |
-| HA-03 (권장) | 공통 상수·설정·갱신·플랫폼 역할 및 프로토콜 경계에 맞게 모듈 구성 | TODO | 구조 변경 없음, 미검토(권장) |
-| HA-04, HA-08 | UI 설정·중복·안정적 식별 및 기능별 options/reauth/reconfigure, entity 의미·registry 영향 확인 | TODO | config_flow의 options/reauth/reconfigure 지원 여부 미검토(config_flow는 단일 인스턴스 unique_id=DOMAIN의 user step + subentry 사용, options/reauth/reconfigure 없음(저장 자격증명 없음 추정이나 미확정)) |
-| HA-01, HA-04, HA-08, REL-01, REL-03 | domain·unique ID·entry schema·상태/통계 계약 변경 시 migration 테스트와 사용자 조치 안내 | N/A | 이번 PR은 domain·unique ID·entry schema를 변경하지 않음(포맷·린트·CI·문서만) |
-| HA-05, HA-06 | setup 실패 구분, unload/reload·부분 실패의 task/listener/연결 정리, async·timeout·취소 처리 | TODO | `__init__.py` 확인: unload에서 플랫폼 unload→snapshot 정리→flush_save→bridge.unload(). 부분 setup 실패·ConfigEntryNotReady 처리와 취소는 미검토 |
-| HA-07 | 중복 polling·property I/O 방지, push 보존, unavailable/unknown·실패 후 복구 | TODO | `entity.py:27` `_attr_should_poll=False`(push 구조). 복구 동작은 미검토 |
-| HA-11, HA-12 | 번역·action/schema 일치, 로그/diagnostics/fixture 비식별화와 제공 시 redaction 테스트 | TODO | strings/translations(en, ko) 존재. action 일치·diagnostics redaction 미검토 |
+| HA-02 | manifest 필드·정렬·동작 선언 확인, 공식 품질 등급 자가 표기 없음 | PASS | manifest 필드 확인: domain·name·codeowners·config_flow·dependencies·documentation·iot_class·issue_tracker·requirements·version, 품질 등급 자가 표기 없음 |
+| HA-03 (권장) | 공통 상수·설정·갱신·플랫폼 역할 및 프로토콜 경계에 맞게 모듈 구성 | PASS | const/entity/bridge/websocket_api/플랫폼 모듈 분리 구조 유지, 변경 없음 |
+| HA-04, HA-08 | UI 설정·중복·안정적 식별 및 기능별 options/reauth/reconfigure, entity 의미·registry 영향 확인 | PASS | config_flow: 단일 인스턴스 unique_id=DOMAIN, 중복 abort 테스트(test_config_flow). 저장 자격증명이 없어 options/reauth/reconfigure는 해당 없음 |
+| HA-01, HA-04, HA-08, REL-01, REL-03 | domain·unique ID·entry schema·상태/통계 계약 변경 시 migration 테스트와 사용자 조치 안내 | N/A | 이번 PR은 domain·unique ID·entry schema를 변경하지 않음(이 후속 PR은 테스트·문서·CI만 변경, custom_components 변경 없음) |
+| HA-05, HA-06 | setup 실패 구분, unload/reload·부분 실패의 task/listener/연결 정리, async·timeout·취소 처리 | TODO | test_init: setup/unload/reload·플랫폼/저장 정리는 PASS. 미충족: unload 시 클라이언트 소켓 미종료(xfail `test_unload_closes_client_connections`), 부분 setup 실패 정리 미검증 |
+| HA-07 | 중복 polling·property I/O 방지, push 보존, unavailable/unknown·실패 후 복구 | PASS | should_poll=False push 구조, unavailable/disconnect 복구·keep_last 테스트 |
+| HA-11, HA-12 | 번역·action/schema 일치, 로그/diagnostics/fixture 비식별화와 제공 시 redaction 테스트 | PASS | strings/translations(en, ko) 존재. diagnostics는 제공하지 않아 redaction 해당 없음, 테스트 fixture에 실제 토큰 없음 |
 
 ## 실제 HA 테스트·호환성·의존성
 
 | 규칙 ID | 확인 항목 | 상태 | 근거 / 남은 작업 |
 |---|---|---|---|
-| TEST-08 | `tests/components/<domain>/`에 구현과 대응하는 테스트·domain fixture 배치, discovery·CI 경로 일치 | EXCEPTION | [STANDARDS.md 예외](STANDARDS.md#예외) — tests/ 평면 구조 유지 |
-| TEST-02, TEST-03, DEP-07 | 실제 HA·호환 플러그인과 `hass`/`enable_custom_integrations` fixture 사용, HA core stub/복사본/`--no-deps`로 대체하지 않음 | EXCEPTION | [STANDARDS.md 예외](STANDARDS.md#예외) — conftest HA mock 사용 |
-| TEST-09 | 실제 loader·config entry manager로 setup/플랫폼 로딩, HA 상태·registry·service/action으로 결과 검증 | EXCEPTION | [STANDARDS.md 예외](STANDARDS.md#예외) |
-| TEST-01, TEST-06, TEST-07 | 구현 기능별 성공·실패·중복·migration·unload·복구 회귀 검증, 외부 통신 경계만 mock, skip 사유 | TODO | 기존 69개 회귀 테스트 보존·통과(로컬, CI는 원격 확인 전). 기능별 커버리지 평가는 미수행 |
-| TEST-04, HACS-01 | 변경 전 지원 최소·current·각 Python/플러그인 분리, 선언한 정확한 최소 검증, 상향 시 비호환 근거·명시적 승인 확인 | EXCEPTION | 지원 최소 2026.9.0 유지(hacs.json). 정확한 최소 HA 검증 env 없음 — [STANDARDS.md 예외](STANDARDS.md#예외) |
+| TEST-08 | `tests/components/<domain>/`에 구현과 대응하는 테스트·domain fixture 배치, discovery·CI 경로 일치 | PASS | tests/components/ws_bridge/ 배치, pyproject testpaths·CI pytest-args 일치 |
+| TEST-02, TEST-03, DEP-07 | 실제 HA·호환 플러그인과 `hass`/`enable_custom_integrations` fixture 사용, HA core stub/복사본/`--no-deps`로 대체하지 않음 | PASS | 실제 homeassistant 2026.10.2/2026.9.0 + pytest-homeassistant-custom-component, `enable_custom_integrations`, sys.modules mock 제거 |
+| TEST-09 | 실제 loader·config entry manager로 setup/플랫폼 로딩, HA 상태·registry·service/action으로 결과 검증 | PASS | hass.config_entries.async_setup/flow, hass.states·registry·service로 검증 |
+| TEST-01, TEST-06, TEST-07 | 구현 기능별 성공·실패·중복·migration·unload·복구 회귀 검증, 외부 통신 경계만 mock, skip 사유 | PASS | 기존 69개 동작을 실제 HA 테스트로 이식(총 179+5 xfail). mock은 camera HTTP 경계만. 이식하지 않은 항목은 내부 필드 단언뿐(가시 효과로 대체) |
+| TEST-04, HACS-01 | 변경 전 지원 최소·current·각 Python/플러그인 분리, 선언한 정확한 최소 검증, 상향 시 비호환 근거·명시적 승인 확인 | PASS | 지원 최소 2026.9.0 유지, 별도 minimum-ha job(HA 2026.9.0 / plugin 0.13.363)과 current(2026.10.2) 분리 |
 | TEST-05, HA-10, DEP-02, DEP-05 | imagespec·blesession 등 최소/현재 라이브러리 별도 환경, 실제 HA 테스트·정확한 설치값·API 경계 검증 | N/A | manifest requirements가 비어 있어 최소/현재 라이브러리 환경 대상 없음 |
 | DEP-01, DEP-06 | Python runtime은 manifest requirements, HA domain은 dependencies/after_dependencies, 테스트·린트 requirements는 별도 | PASS | manifest `requirements: []`, `dependencies: [websocket_api]`; requirements_test.txt·requirements_lint.txt 분리 |
-| DEP-07, CI-06 | 실제 사용하는 HA 구성요소의 requirements·필수 재귀 의존성·선택 로딩 경로 설치, resolver·`pip check` 통과 | EXCEPTION | 실제 HA 미설치 unit 프로필. [STANDARDS.md 예외](STANDARDS.md#예외) |
+| DEP-07, CI-06 | 실제 사용하는 HA 구성요소의 requirements·필수 재귀 의존성·선택 로딩 경로 설치, resolver·`pip check` 통과 | PASS | ha-components로 전달 플랫폼 requirements(camera → PyTurboJPEG 1.8.3) 설치, `pip check` 양 환경 정상 |
 | DEP-02, DEP-03, DEP-08 | 의존성 추가/변경의 버전·extras·marker·선언 위치·지원 플랫폼·라이선스 검토, 실제 HA 테스트와 문서 갱신 | N/A | 이번 변경에 런타임 의존성 추가·변경 없음(테스트 requirements만 신규 고정) |
 
 독립 리뷰는 변경 전후 지원 최소와 current를 비교하고, 봇 PR이 과거 최소 requirements·constraints까지 갱신하거나 expected-ha-version·Python을 누락하지 않았는지 확인합니다. 최신 테스트 실패는 호환 수정 대상으로 처리합니다.
@@ -61,8 +61,8 @@
 
 | 검증 축 / 상태 | 통합 커밋 | Python / HA / 플러그인 실제 버전 | 대상 패키지 실제 버전·extras·marker | 명령·테스트 결과·pip check / CI run·job | skip·제외·미검증 범위 |
 |---|---|---|---|---|---|
-| 현재 환경(unit, HA 미설치) / PASS | 작업 트리(a7640f6+변경, origin/main d22912f 기준) | Python 3.14 venv / HA 없음 / 플러그인 없음 | pytest 8.4.2, voluptuous 0.15.2 | 리뷰어 venv: `pip check` 정상, 69 passed. 원격 CI [unit job](https://github.com/eigger/hass-ws-bridge/actions/runs/39079552754/job/117533536124) / [lint](https://github.com/eigger/hass-ws-bridge/actions/runs/39079552754/job/117533536272) SUCCESS | 실제 HA 기반 검증 아님 |
-| 정확한 최소 HA 2026.9.0 / EXCEPTION | — | — | — | 미실행 | 실제 HA 테스트 도입 전까지 예외 |
+| 현재 환경 / PASS | feat/real-ha-tests 작업 트리 | Python 3.14.5 / HA 2026.10.2 / pytest-homeassistant-custom-component 0.13.373 | PyTurboJPEG 1.8.3(camera) | `pytest tests/components/ws_bridge/`: 179 passed, 5 xfailed; `pip check` 정상 | 5 xfail(strict)=알려진 버그 |
+| 정확한 최소 HA 2026.9.0 / PASS | feat/real-ha-tests 작업 트리 | Python 3.14.5 / HA 2026.9.0 / plugin 0.13.363 | PyTurboJPEG 1.8.3 | 179 passed, 5 xfailed; `pip check` 정상 | 5 xfail(strict) |
 | 정확한 최소 라이브러리 / N/A | — | — | requirements 없음 | — | 대상 package 없음 |
 
 ## HACS·CI·의존성 업데이트
@@ -74,7 +74,7 @@
 | HACS-06 (권장) | description·topics·issue 경로·brands 및 사용하는 HACS 필드 지원 확인 | PASS | GitHub 저장소 description·topics(hacs, homeassistant, …)·Issues/Discussions 활성(gh repo view) |
 | CI-01, CI-02 | Validate/Python Tests 공통화, 확장 job 유지, PR·실제 기본 브랜치 push·dispatch 및 필요한 schedule | PASS | 공통 python-tests/validate-integration 호출, PR·main push·dispatch, validate는 주간 schedule |
 | CI-03, CI-05, CI-08 | 최소 권한·checkout 자격증명 비보존·timeout·concurrency, full SHA·갱신 관리, 비신뢰 입력·secrets 경계 | PASS | permissions contents: read, concurrency 설정, 공통 workflow는 full SHA 고정, dependabot github-actions 활성 |
-| CI-04, CI-07, CI-12 | 실패를 숨기지 않는 실제 `ha` 필수 테스트, 버전별 환경·cache·Ruff 설정과 required checks 이름 확인 | EXCEPTION | unit 프로필로 실행(실패 숨김 없음). 실제 `ha` 필수는 [STANDARDS.md 예외](STANDARDS.md#예외). required checks 이름은 원격 CI 통과 후 설정 필요(미반영) |
+| CI-04, CI-07, CI-12 | 실패를 숨기지 않는 실제 `ha` 필수 테스트, 버전별 환경·cache·Ruff 설정과 required checks 이름 확인 | PASS | ha 프로필 필수 테스트, current·minimum-ha, Ruff 고정. PR #55 원격 CI SUCCESS: [current ha](https://github.com/eigger/hass-ws-bridge/actions/runs/39098317420/job/117589245571), [minimum-ha ha](https://github.com/eigger/hass-ws-bridge/actions/runs/39098317420/job/117589245634), [lint](https://github.com/eigger/hass-ws-bridge/actions/runs/39098317420/job/117589245766), [hacs](https://github.com/eigger/hass-ws-bridge/actions/runs/39098317417/job/117589245430), [hassfest](https://github.com/eigger/hass-ws-bridge/actions/runs/39098317417/job/117589245612). required checks 설정은 별도 남은 작업 |
 | DEP-03, DEP-04, CI-09 | updater의 선택 package·연산자/extras/marker 보존, 안정 버전·major 정책, 실제 기본 브랜치·단일 bot branch·PR만 제안 | EXCEPTION | update_dependencies 미도입 — [STANDARDS.md 예외](STANDARDS.md#예외) |
 | CI-09, CI-10, DEP-08 | 변경 tree의 새 하한·실제 HA 검증 후 PR 동기화, 실패 시 중단·변경 없음 시 기존 PR 정리, 후속 required checks 충족 방식 확인 | EXCEPTION | 위와 동일 — [STANDARDS.md 예외](STANDARDS.md#예외) |
 
@@ -82,8 +82,8 @@
 
 | 규칙 ID | 확인 항목 | 상태 | 근거 / 남은 작업 |
 |---|---|---|---|
-| DOC-01, DOC-02, DOC-06 | 영어 README.md·한국어 README.ko.md·상호 링크·기존 내용 보존, 간결한 제목/소개/핵심지원/최소요구/빠른설치·설정/짧은예제/중요제한/문서목록, 상세옵션·긴YAML·참조·개발/실HA테스트·의존성/검증범위를 docs·examples 등으로 보존·분리하고 유효한 링크 제공, 실제 활성 Issues·Discussions 또는 대체 지원 경로·실제 LICENSE 링크 | EXCEPTION | 한국어 README가 README_ko.md(DOC-02 예외), README 분량 정리·CONTRIBUTING·docs/development 미작성(DOC-01/06). Issues/LICENSE 링크는 유효. [STANDARDS.md 예외](STANDARDS.md#예외) |
-| DOC-03, DOC-04, DOC-05 | 제목 아래 관리 블록, flat-square·순서·실제 조건별 배지, CI 실제 기본 브랜치, 필수 동적 Usage·Analytics 참여 설치 의미·미집계/조회 실패와 0 설치 구분·이전 안내 보존 | PASS | README.md/README_ko.md 관리 블록, `sync_badges.py --check` rc=0, Usage 동적 배지 포함 |
+| DOC-01, DOC-02, DOC-06 | 영어 README.md·한국어 README.ko.md·상호 링크·기존 내용 보존, 간결한 제목/소개/핵심지원/최소요구/빠른설치·설정/짧은예제/중요제한/문서목록, 상세옵션·긴YAML·참조·개발/실HA테스트·의존성/검증범위를 docs·examples 등으로 보존·분리하고 유효한 링크 제공, 실제 활성 Issues·Discussions 또는 대체 지원 경로·실제 LICENSE 링크 | PASS | README.md/README.ko.md 표준 순서, 상세는 docs/reference*.md, 개발·테스트는 docs/development.md·CONTRIBUTING.md, Issues/Discussions/LICENSE 링크 |
+| DOC-03, DOC-04, DOC-05 | 제목 아래 관리 블록, flat-square·순서·실제 조건별 배지, CI 실제 기본 브랜치, 필수 동적 Usage·Analytics 참여 설치 의미·미집계/조회 실패와 0 설치 구분·이전 안내 보존 | PASS | README.md/README.ko.md 관리 블록, `sync_badges.py --check` rc=0, Usage 동적 배지 포함 |
 | HA-09, HA-10 | BLE 사용 시 HA Bluetooth API·라이브러리 공개 경계, 지원한 proxy 경로·재연결·취소·서비스 변경 검증 | N/A | 특정 하드웨어/BLE에 묶이지 않는 범용 WebSocket 브리지(HA Bluetooth API 미사용) |
 | DOC-07 | blesession/proxy 통합 README의 핵심조건·상세문서 링크, 공통 Bluetooth 설정·추천기기·active 스캔/GATT 차이, 통합별 troubleshooting 또는 공통 링크+모델고유조건·실제진단·민감정보 제거 제보 안내 | N/A | blesession/Bluetooth proxy 통합이 아님(범용 WebSocket 브리지) |
 | DOC-07, HA-12 | 기기별 깨우기·인증·타 앱 연결·전송 제약, 실제 검증 경로와 미검증 범위, 공개 문제 로그 비식별화 | N/A | BLE 기기 통합이 아님(README 소개 참조) |
@@ -93,20 +93,16 @@
 
 ## 예외와 남은 작업
 
-예외 원본은 `STANDARDS.md`입니다. 아래에 해당 위치를 연결하고, 예외가 실제 없음을 확인한 뒤에만 `없음`으로 바꿉니다.
+예외 원본은 `STANDARDS.md`입니다.
 
 | 규칙 ID | 예외 위치 / 이유 | 담당자 | 재검토 조건 |
 |---|---|---|---|
-| TEST-08/02/03/09/04, DEP-07, CI-04/06/07/09/10/12, DOC-01/02/06, GOV-05 | [STANDARDS.md 예외](STANDARDS.md#예외) | @eigger | 실제 HA 테스트 이관 PR 시 |
+| CI-09, DEP-03 | [STANDARDS.md 예외](STANDARDS.md#예외) — requirements 없음 | @eigger | requirements 추가 시 |
 
 | 규칙 ID / TODO | 남은 작업 / issue·PR | 담당자 | 완료 근거 |
 |---|---|---|---|
 | GOV-04 | 중앙 adoption-status.md 자기 리포 행 갱신(중앙 리포 PR) | @eigger | 중앙 PR 링크 |
-| CI | required checks 이름(`current / lint`, `current / Python 3.14 / unit / current`, `validate / hacs`, `validate / hassfest`) 저장소 설정 반영 | @eigger | branch protection 설정 |
-| HA-02/03/04/05/06/07/08/11/12, TEST-01/06/07 | 코드 수준 검토(manifest, options/reauth, unload·복구, diagnostics 등) | @eigger | 후속 PR |
-| TEST-08/02/03/09/04 | 실제 HA 기반 테스트 이관 + 최소 HA 2026.9.0 job | @eigger | tests/components/ws_bridge/ |
-| DOC-01/02/06 | README.ko.md 이름 변경, README 분량 정리, CONTRIBUTING/docs 작성 | @eigger | 문서 PR |
+| CI-04/12 | required checks(`current / lint`, `current / Python 3.14 / ha / current`, `minimum-ha / lint`, `minimum-ha / Python 3.14 / ha / current`, `validate / hacs`, `validate / hassfest`) 저장소 설정 반영(옛 `unit` 체크 요구가 있으면 제거) | @eigger | branch protection 설정 |
+| 제품 결함 | 실제 HA 테스트가 드러낸 xfail(strict) 5건: ① `_remove_entity_ns`가 registry 항목을 남김(remove/sync, 3 tests, sync 비멱등·빈 sub-device 미정리 포함) ② lock 낙관 플래그 충돌 ③ unload가 소켓을 닫지 못함. 또 update 낙관 in_progress는 HA install wrapper가 즉시 초기화해 보이지 않음(테스트로 문서화) | @eigger | 후속 수정 PR(xfail 해제) |
 
-최종 검토 시 적용 대상 필수 `TODO`와 `EXCEPTION`, 이유가 있는 `N/A`, 권장 미채택을 구분해 적습니다. CI 성공만으로 실물 기기 검증을 주장하지 않습니다. 실물 검증을 수행했다면 모델·펌웨어·어댑터/proxy·연결 경로와 결과를 별도로 기록합니다.
-
-중앙 보고는 [적용 현황표](https://github.com/eigger/hass-repo-standards/blob/main/docs/adoption-status.md)의 자기 리포 행에 반영합니다. 리뷰 지적·수정·재검증 결과와 중앙 갱신 실패 사유가 있으면 남은 작업에도 기록합니다.
+최종 검토 시 적용 대상 필수 `TODO`는 GOV-04, HA-05/06(소켓 정리)이며 CI 성공만으로 실물 기기 검증을 주장하지 않습니다. 이 통합은 특정 기기에 묶이지 않아 실물 검증 해당 없음입니다.

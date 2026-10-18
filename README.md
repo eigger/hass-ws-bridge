@@ -12,14 +12,8 @@
 
 A generic Home Assistant integration that enables **any authenticated WebSocket client** to dynamically create and update entities. It is fully decoupled from specific hardware or protocols (e.g., BLE, Zigbee); as long as the client conforms to the defined communication protocol, it works out of the box.
 
-> [한글 README (README_ko.md)](README_ko.md)
+> [한글 README (README.ko.md)](README.ko.md)
 
-## 💬 Feedback & Support
-
-🐞 Found a bug? Let us know via an [Issue](https://github.com/eigger/hass-ws-bridge/issues).  
-💡 Have a question or suggestion? Join the [Discussion](https://github.com/eigger/hass-ws-bridge/discussions)!
-
----
 
 ## 🚀 Key Features
 
@@ -30,60 +24,13 @@ A generic Home Assistant integration that enables **any authenticated WebSocket 
 - **Connection State Tracking (LWT)**: If the client's WebSocket connection drops, all child devices and entities registered by that client are automatically set to `unavailable` to prevent stale states.
 - **Connected Clients Diagnostic Sensor**: Provides a diagnostic sensor that reports the number of currently connected WebSocket clients (`gateway_id`) in real time.
 
----
-
-## 📐 Architecture Flow
-
-```mermaid
-graph TD
-    subgraph Clients [WebSocket Clients]
-        A[BLE Gateway App]
-        B[Custom ESP32 Device]
-    end
-
-    subgraph Home Assistant [Home Assistant Core]
-        HA_WS[Standard WebSocket API]
-        Bridge[WebSocket Bridge Integration]
-        Entities[Dynamic Entities]
-    end
-
-    A <-->|ws:// or wss:// & Long-lived Token| HA_WS
-    B <-->|ws:// or wss:// & Long-lived Token| HA_WS
-    HA_WS <--> Bridge
-    Bridge <--> Entities
-```
 
 ---
 
-## 🛠️ Supported Entity Platforms
+## 📋 Requirements
 
-| Platform | Direction | Description / Supported Attributes |
-|:---|:---:|:---|
-| `sensor` | Read | Numerical state data (`unit_of_measurement`, `device_class`, `state_class`) |
-| `binary_sensor` | Read | On/Off boolean states (`device_class`) |
-| `switch` | Control | Power toggle control (`turn_on`, `turn_off`) |
-| `number` | Control | Range value control (`set_value`, `min`, `max`, `step`) |
-| `select` | Control | Option selection control (`select_option`, `options`) |
-| `button` | Control | Execution trigger (`press`, stateless) |
-| `update` | Control | Firmware update (`install` / `check`; `installed_version` / `latest_version`) |
-| `light` | Control | Brightness / color (`turn_on` / `turn_off` with `params`) |
-| `cover` | Control | Open/close/position/tilt (`open_cover`, `set_cover_position`, …) |
-| `fan` | Control | Speed / preset / oscillate / direction |
-| `text` | Control | Writable string (`set_value`; not `text_sensor`) |
-| `lock` | Control | `lock` / `unlock` / `open` |
-| `date` / `time` / `datetime` | Control | ISO string + `set_value` |
-| `event` | Read | `event_types` required (not restored on restart) |
-| `valve` | Control | Open/close/position |
-| `climate` | Control | HVAC mode / temp / humidity / fan / swing |
-| `humidifier` | Control | Humidity / mode |
-| `water_heater` | Control | Temp / operation / away |
-| `siren` | Control | `turn_on` / `turn_off` (+ tone/volume) |
-| `alarm_control_panel` | Control | arm/disarm/trigger |
-| `media_player` | Control | Playback / volume / source (v1) |
-| `image` | Read | URL image |
-| `camera` | Control | Still/stream URL |
-
-Planned (not accepted on the wire yet): `vacuum` / `lawn_mower` / `remote` / `todo`. See [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms).
+- Home Assistant 2026.9.0 or newer (per `hacs.json`). This is a HACS custom integration, not an official Home Assistant Core integration.
+- An authenticated WebSocket client and a Long-Lived Access Token.
 
 ---
 
@@ -115,22 +62,40 @@ Planned (not accepted on the wire yet): `vacuum` / `lawn_mower` / `remote` / `to
 
 ---
 
-## 📄 Protocol Specification
+## 🧪 Quick Example
 
-For the detailed JSON message formats exchanged between clients and the bridge, see:
-- **[English Protocol Specification (docs/PROTOCOL.md)](docs/PROTOCOL.md)**
-- **[Korean Protocol Specification (docs/PROTOCOL_ko.md)](docs/PROTOCOL_ko.md)**
+```json
+// after auth_ok, send ws_bridge/connect, then declare entities, then push state
+{"id": 3, "type": "ws_bridge/state", "states": [{"unique_id": "temp_1", "value": 25.4}]}
+```
 
-### Message Summary:
-* **Session Registration**: `{"type": "ws_bridge/connect", "gateway_id": "..."}`
-* **Entity Declaration**: `{"type": "ws_bridge/entity", "unique_id": "...", "platform": "sensor", ...}`
-* **State Update**: `{"type": "ws_bridge/state", "states": [{"unique_id": "...", "value": 25.4}]}`
-* **Device Availability**: `{"type": "ws_bridge/availability", "device_id": "...", "online": true}`
-* **Remove**: `{"type": "ws_bridge/remove", "unique_id": "..."}` / `{"device_id": "..."}` / `{}` (entire gateway)
-* **Sync**: `{"type": "ws_bridge/sync", "unique_ids": [...]}` — removes entities of this gateway that are absent from the list, leaving the rest (and their history) untouched
-* **Control Event**: HA pushes `{"kind": "command", "unique_id": "...", "action": "turn_on"}` events to the client.
+See the documents below for entity declaration, commands and the full message set.
+
+---
+
+## ⚠️ Important Limitations
+
+- Planned but not yet accepted platforms: `vacuum` / `lawn_mower` / `remote` / `todo` (see [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms)).
+- When a client disconnects, its entities become `unavailable` (unless `keep_last_state_on_disconnect` is enabled for that gateway).
+- Always send `auth` → `ws_bridge/connect` → `ws_bridge/entity` in that order; messages before `auth_ok` are rejected.
+
+---
+
+## 📚 Documentation
+
+- [Architecture, supported platforms, protocol summary](docs/reference.md)
+- [Protocol specification](docs/PROTOCOL.md) / [한국어](docs/PROTOCOL_ko.md)
+- [Development & testing (Korean)](docs/development.md)
+
+---
+
+## 💬 Feedback & Support
+
+🐞 Found a bug? Let us know via an [Issue](https://github.com/eigger/hass-ws-bridge/issues).  
+💡 Have a question or suggestion? Join the [Discussion](https://github.com/eigger/hass-ws-bridge/discussions)!
+
 
 ---
 
 ## 📄 License
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
