@@ -380,4 +380,3 @@ async def test_connect_client_named_websocket_bridge_does_not_remove_service_dev
         identifiers={(DOMAIN, init_integration.entry_id)}
     )
     assert service_device_after is not None
-
