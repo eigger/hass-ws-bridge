@@ -1,4 +1,5 @@
 """light 플랫폼: 밝기/색상 등 복합 상태 → turn_on/turn_off 를 클라이언트에 중계."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -70,7 +71,9 @@ async def async_setup_entry(
     bridge.register_platform(PLATFORM_LIGHT, async_add_entities, WsBridgeLight)
 
 
-def _as_int(value: Any, *, minimum: int | None = None, maximum: int | None = None) -> int | None:
+def _as_int(
+    value: Any, *, minimum: int | None = None, maximum: int | None = None
+) -> int | None:
     """형제 플랫폼의 _as_position / _coerce_float 과 동일 — 파싱 실패 시 None."""
     if value is None or isinstance(value, bool):
         return None
@@ -116,7 +119,9 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
-def _infer_color_mode(state: dict[str, Any], supported: set[ColorMode] | None) -> ColorMode | None:
+def _infer_color_mode(
+    state: dict[str, Any], supported: set[ColorMode] | None
+) -> ColorMode | None:
     supported = supported or set()
     for key, mode in _INFER_COLOR_MODE:
         if state.get(key) is not None and mode in supported:
@@ -135,7 +140,9 @@ class WsBridgeLight(WsBridgeCompositeEntity, LightEntity):
     def _configure_from_defn(self, defn: dict[str, Any]) -> None:
         effects = defn.get("effect_list") or None
         self._attr_effect_list = list(effects) if effects else None
-        self._attr_supported_color_modes = _color_modes(defn.get("supported_color_modes"))
+        self._attr_supported_color_modes = _color_modes(
+            defn.get("supported_color_modes")
+        )
         self._attr_supported_features = _features(
             defn.get("features"), has_effects=bool(self._attr_effect_list)
         )
@@ -185,9 +192,7 @@ class WsBridgeLight(WsBridgeCompositeEntity, LightEntity):
             for key in _TURN_ON_KEYS
             if key in kwargs and kwargs[key] is not None
         }
-        self._send_command(
-            "turn_on", params=params or None
-        )
+        self._send_command("turn_on", params=params or None)
         self._state["state"] = "on"
         for key, val in params.items():
             if key not in ("transition", "flash"):
@@ -198,8 +203,6 @@ class WsBridgeLight(WsBridgeCompositeEntity, LightEntity):
         params = {}
         if (transition := kwargs.get("transition")) is not None:
             params["transition"] = transition
-        self._send_command(
-            "turn_off", params=params or None
-        )
+        self._send_command("turn_off", params=params or None)
         self._state["state"] = "off"
         self._publish_state()

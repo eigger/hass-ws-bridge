@@ -1,4 +1,5 @@
 """fan 플랫폼: 속도/프리셋/진동/방향 → turn_on/set_* 를 클라이언트에 중계."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -23,9 +24,7 @@ _FEATURE_MAP = {
 }
 
 _DEFAULT_FEATURES = (
-    FanEntityFeature.TURN_ON
-    | FanEntityFeature.TURN_OFF
-    | FanEntityFeature.SET_SPEED
+    FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF | FanEntityFeature.SET_SPEED
 )
 
 
@@ -85,9 +84,7 @@ class WsBridgeFan(WsBridgeCompositeEntity, FanEntity):
         else:
             self._attr_oscillating = parse_bool(oscillating)
         direction = self._state.get("direction")
-        self._attr_current_direction = (
-            str(direction) if direction is not None else None
-        )
+        self._attr_current_direction = str(direction) if direction is not None else None
 
     async def async_turn_on(
         self,
@@ -100,9 +97,7 @@ class WsBridgeFan(WsBridgeCompositeEntity, FanEntity):
             params["percentage"] = percentage
         if preset_mode is not None:
             params["preset_mode"] = preset_mode
-        self._send_command(
-            "turn_on", params=params or None
-        )
+        self._send_command("turn_on", params=params or None)
         self._state["state"] = "on"
         if percentage is not None:
             self._state["percentage"] = percentage
@@ -116,9 +111,7 @@ class WsBridgeFan(WsBridgeCompositeEntity, FanEntity):
         self._publish_state()
 
     async def async_set_percentage(self, percentage: int) -> None:
-        self._send_command(
-            "set_percentage", params={"percentage": percentage}
-        )
+        self._send_command("set_percentage", params={"percentage": percentage})
         self._state["percentage"] = percentage
         if percentage > 0:
             self._state["state"] = "on"
@@ -135,15 +128,11 @@ class WsBridgeFan(WsBridgeCompositeEntity, FanEntity):
         self._publish_state()
 
     async def async_oscillate(self, oscillating: bool) -> None:
-        self._send_command(
-            "oscillate", params={"oscillating": oscillating}
-        )
+        self._send_command("oscillate", params={"oscillating": oscillating})
         self._state["oscillating"] = oscillating
         self._publish_state()
 
     async def async_set_direction(self, direction: str) -> None:
-        self._send_command(
-            "set_direction", params={"direction": direction}
-        )
+        self._send_command("set_direction", params={"direction": direction})
         self._state["direction"] = direction
         self._publish_state()

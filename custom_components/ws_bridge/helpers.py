@@ -1,4 +1,5 @@
 """플랫폼 공용 값 변환 헬퍼."""
+
 from __future__ import annotations
 
 import ipaddress

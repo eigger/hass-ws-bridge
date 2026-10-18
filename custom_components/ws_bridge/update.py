@@ -19,6 +19,7 @@
 
 실제 다운로드/플래시는 클라이언트가 한다 (ESPHome이면 `update: platform: http_request`).
 """
+
 from __future__ import annotations
 
 from typing import Any

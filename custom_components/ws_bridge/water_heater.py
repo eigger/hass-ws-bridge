@@ -1,4 +1,5 @@
 """water_heater 플랫폼: 온도/운전모드/외출 → set_* 를 클라이언트에 중계."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -95,6 +96,7 @@ class WsBridgeWaterHeater(WsBridgeCompositeEntity, WaterHeaterEntity):
             defn.get("features"),
             has_operation_list=bool(self._attr_operation_list),
         )
+
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._configure_from_defn(defn)
 
@@ -117,9 +119,7 @@ class WsBridgeWaterHeater(WsBridgeCompositeEntity, WaterHeaterEntity):
     async def async_set_temperature(self, **kwargs: Any) -> None:
         temperature = kwargs.get("temperature")
         params = {"temperature": temperature} if temperature is not None else None
-        self._send_command(
-            "set_temperature", params=params
-        )
+        self._send_command("set_temperature", params=params)
         if temperature is not None:
             self._state["target_temperature"] = temperature
         self._publish_state()
@@ -133,16 +133,12 @@ class WsBridgeWaterHeater(WsBridgeCompositeEntity, WaterHeaterEntity):
         self._publish_state()
 
     async def async_turn_away_mode_on(self) -> None:
-        self._send_command(
-            "set_away_mode", params={"away_mode": True}
-        )
+        self._send_command("set_away_mode", params={"away_mode": True})
         self._state["away_mode"] = True
         self._publish_state()
 
     async def async_turn_away_mode_off(self) -> None:
-        self._send_command(
-            "set_away_mode", params={"away_mode": False}
-        )
+        self._send_command("set_away_mode", params={"away_mode": False})
         self._state["away_mode"] = False
         self._publish_state()
 

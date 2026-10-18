@@ -1,4 +1,5 @@
 """lock 플랫폼: lock/unlock/open 의도를 클라이언트에 중계. code 는 로그에 남기지 않음."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -97,24 +98,18 @@ class WsBridgeLock(WsBridgeEntity, LockEntity):
         return {"code": code}
 
     async def async_lock(self, **kwargs: Any) -> None:
-        self._send_command(
-            "lock", params=self._code_params(kwargs.get("code"))
-        )
+        self._send_command("lock", params=self._code_params(kwargs.get("code")))
         self._attr_is_locking = True
         self._attr_is_locked = False
         self.async_write_ha_state()
 
     async def async_unlock(self, **kwargs: Any) -> None:
-        self._send_command(
-            "unlock", params=self._code_params(kwargs.get("code"))
-        )
+        self._send_command("unlock", params=self._code_params(kwargs.get("code")))
         self._attr_is_unlocking = True
         self._attr_is_locked = True
         self.async_write_ha_state()
 
     async def async_open(self, **kwargs: Any) -> None:
-        self._send_command(
-            "open", params=self._code_params(kwargs.get("code"))
-        )
+        self._send_command("open", params=self._code_params(kwargs.get("code")))
         self._attr_is_opening = True
         self.async_write_ha_state()

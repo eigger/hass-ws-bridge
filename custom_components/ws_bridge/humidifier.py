@@ -1,4 +1,5 @@
 """humidifier 플랫폼: on/off·습도·모드 → turn_on/set_* 를 클라이언트에 중계."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -29,12 +30,12 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     bridge: WsBridge = hass.data[DOMAIN][entry.entry_id]
-    bridge.register_platform(PLATFORM_HUMIDIFIER, async_add_entities, WsBridgeHumidifier)
+    bridge.register_platform(
+        PLATFORM_HUMIDIFIER, async_add_entities, WsBridgeHumidifier
+    )
 
 
-def _features(
-    names: list[str] | None, *, has_modes: bool
-) -> HumidifierEntityFeature:
+def _features(names: list[str] | None, *, has_modes: bool) -> HumidifierEntityFeature:
     flags = HumidifierEntityFeature(0)
     for name in names or ():
         if name == "modes":
@@ -87,6 +88,7 @@ class WsBridgeHumidifier(WsBridgeCompositeEntity, HumidifierEntity):
         self._attr_action = (
             _ACTION_MAP.get(str(action).lower()) if action is not None else None
         )
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         self._send_command("turn_on")
         self._state["state"] = "on"
@@ -98,15 +100,11 @@ class WsBridgeHumidifier(WsBridgeCompositeEntity, HumidifierEntity):
         self._publish_state()
 
     async def async_set_humidity(self, humidity: int) -> None:
-        self._send_command(
-            "set_humidity", params={"humidity": humidity}
-        )
+        self._send_command("set_humidity", params={"humidity": humidity})
         self._state["target_humidity"] = humidity
         self._publish_state()
 
     async def async_set_mode(self, mode: str) -> None:
-        self._send_command(
-            "set_mode", params={"mode": mode}
-        )
+        self._send_command("set_mode", params={"mode": mode})
         self._state["mode"] = mode
         self._publish_state()

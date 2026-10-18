@@ -1,4 +1,5 @@
 """pytest configuration — mock Home Assistant modules to allow testing without HA installed."""
+
 import sys
 import types
 from enum import IntFlag
@@ -19,6 +20,7 @@ sys.modules["aiohttp"] = _aiohttp
 
 class MockBase:
     """Mock base class to support generic subclassing."""
+
     def __init__(self, *args, **kwargs):
         pass
 
@@ -407,7 +409,9 @@ mock_camera = sys.modules["homeassistant.components.camera"]
 mock_camera.Camera = MockBase
 mock_camera.CameraEntityFeature = CameraEntityFeature
 
-sys.modules["homeassistant.helpers.aiohttp_client"].async_get_clientsession = MagicMock()
+sys.modules[
+    "homeassistant.helpers.aiohttp_client"
+].async_get_clientsession = MagicMock()
 
 mock_const.UnitOfTemperature = UnitOfTemperature
 
@@ -422,8 +426,14 @@ _dt_mod.utcnow = lambda: __import__("datetime").datetime.now(
 _dt_mod.DEFAULT_TIME_ZONE = __import__("datetime").timezone(
     __import__("datetime").timedelta(hours=9)
 )
-_dt_mod.parse_date = lambda value: __import__("datetime").date.fromisoformat(value) if isinstance(value, str) else None
-_dt_mod.parse_datetime = lambda value: __import__("datetime").datetime.fromisoformat(value) if isinstance(value, str) else None
+_dt_mod.parse_date = lambda value: (
+    __import__("datetime").date.fromisoformat(value) if isinstance(value, str) else None
+)
+_dt_mod.parse_datetime = lambda value: (
+    __import__("datetime").datetime.fromisoformat(value)
+    if isinstance(value, str)
+    else None
+)
 _util_mod.dt = _dt_mod
 sys.modules["homeassistant.util"] = _util_mod
 sys.modules["homeassistant.util.dt"] = _dt_mod

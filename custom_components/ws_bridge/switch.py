@@ -1,4 +1,5 @@
 """switch 플랫폼: 토글 → command 의도를 클라이언트에 중계."""
+
 from __future__ import annotations
 
 from typing import Any

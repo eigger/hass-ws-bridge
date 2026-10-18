@@ -2,6 +2,7 @@
 
 범용 브릿지 — 인증된 클라이언트가 선언한 엔티티를 만들고 갱신. 형식(BLE 등) 무관.
 """
+
 from __future__ import annotations
 
 import logging
@@ -62,9 +63,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data:
-        websocket_api.async_register(hass)   # WS 커스텀 명령 1회 등록
+        websocket_api.async_register(hass)  # WS 커스텀 명령 1회 등록
     domain_data[entry.entry_id] = bridge
-    hass.data.setdefault(SUBENTRY_SNAPSHOTS, {})[entry.entry_id] = _subentry_gateway_ids(entry)
+    hass.data.setdefault(SUBENTRY_SNAPSHOTS, {})[entry.entry_id] = (
+        _subentry_gateway_ids(entry)
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

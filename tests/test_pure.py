@@ -1,4 +1,5 @@
 """Unit tests for the framework-agnostic ws_bridge logic."""
+
 import asyncio
 import os
 import sys
@@ -7,32 +8,39 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # Ensure custom_components is in path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from custom_components.ws_bridge.bridge import (
-    WsBridge,
-    _Client,
-    signal_value,
-    signal_avail,
-    signal_clients,
-)
-from custom_components.ws_bridge import _subentry_gateway_ids
-from custom_components.ws_bridge.const import ALL_PLATFORMS, PLATFORM_UPDATE
-from custom_components.ws_bridge.websocket_api import resolve_connect_sw_version
-from custom_components.ws_bridge.device_tracker import _parse_location
-from custom_components.ws_bridge.helpers import as_dict, is_unknown, parse_bool, parse_locked
-from custom_components.ws_bridge.cover import _features as cover_features
-from custom_components.ws_bridge.fan import _features as fan_features
-from custom_components.ws_bridge.light import _color_modes, _features as light_features
 from homeassistant.components.cover import CoverEntityFeature
 from homeassistant.components.fan import FanEntityFeature
 from homeassistant.components.light import ColorMode, LightEntityFeature
-from custom_components.ws_bridge.date import _parse_date
-from custom_components.ws_bridge.time import _parse_time
-from custom_components.ws_bridge.datetime import _parse_datetime
-from custom_components.ws_bridge.lock import _features as lock_features
-from custom_components.ws_bridge.valve import _features as valve_features
 from homeassistant.components.lock import LockEntityFeature
 from homeassistant.components.valve import ValveEntityFeature
+
+from custom_components.ws_bridge import _subentry_gateway_ids
+from custom_components.ws_bridge.bridge import (
+    WsBridge,
+    _Client,
+    signal_avail,
+    signal_clients,
+    signal_value,
+)
+from custom_components.ws_bridge.const import ALL_PLATFORMS, PLATFORM_UPDATE
+from custom_components.ws_bridge.cover import _features as cover_features
+from custom_components.ws_bridge.date import _parse_date
+from custom_components.ws_bridge.datetime import _parse_datetime
+from custom_components.ws_bridge.device_tracker import _parse_location
+from custom_components.ws_bridge.fan import _features as fan_features
+from custom_components.ws_bridge.helpers import (
+    as_dict,
+    is_unknown,
+    parse_bool,
+    parse_locked,
+)
+from custom_components.ws_bridge.light import _color_modes
+from custom_components.ws_bridge.light import _features as light_features
+from custom_components.ws_bridge.lock import _features as lock_features
+from custom_components.ws_bridge.time import _parse_time
 from custom_components.ws_bridge.update import _parse_update_state, _strip_build_suffix
+from custom_components.ws_bridge.valve import _features as valve_features
+from custom_components.ws_bridge.websocket_api import resolve_connect_sw_version
 
 
 def test_signals():
@@ -48,15 +56,23 @@ def test_signals():
 def test_bridge_static_helpers():
     # _client_id_matches
     assert WsBridge._client_id_matches("device_1", "device_1", prefix=False) is True
-    assert WsBridge._client_id_matches("device_1_sub", "device_1", prefix=False) is False
+    assert (
+        WsBridge._client_id_matches("device_1_sub", "device_1", prefix=False) is False
+    )
     assert WsBridge._client_id_matches("device_1", "device_1", prefix=True) is True
     assert WsBridge._client_id_matches("device_1_sub", "device_1", prefix=True) is True
     assert WsBridge._client_id_matches("device_2", "device_1", prefix=True) is False
 
     # _client_device_id_from_ns
     assert WsBridge._client_device_id_from_ns("gateway_1", "gateway_1") == "gateway_1"
-    assert WsBridge._client_device_id_from_ns("gateway_1", "gateway_1:device_1") == "device_1"
-    assert WsBridge._client_device_id_from_ns("gateway_1", "other_gateway:device_1") is None
+    assert (
+        WsBridge._client_device_id_from_ns("gateway_1", "gateway_1:device_1")
+        == "device_1"
+    )
+    assert (
+        WsBridge._client_device_id_from_ns("gateway_1", "other_gateway:device_1")
+        is None
+    )
 
     # _ns_uid
     assert WsBridge._ns_uid("gateway_1", "sensor_1") == "gateway_1__sensor_1"
@@ -66,17 +82,20 @@ def test_bridge_static_helpers():
 
     # _strip
     assert WsBridge._strip("gateway_1", "gateway_1__sensor_1") == "sensor_1"
-    assert WsBridge._strip("gateway_1", "other_gateway__sensor_1") == "other_gateway__sensor_1"
+    assert (
+        WsBridge._strip("gateway_1", "other_gateway__sensor_1")
+        == "other_gateway__sensor_1"
+    )
 
 
 def test_subentry_gateway_ids():
     # Create mock subentries
     sub_1 = MagicMock()
     sub_1.data = {"gateway_id": "gw1"}
-    
+
     sub_2 = MagicMock()
     sub_2.data = {"gateway_id": "gw2", "name": "Gateway 2"}
-    
+
     sub_3 = MagicMock()
     sub_3.data = {"name": "No gateway ID"}
 
@@ -164,8 +183,16 @@ def test_connect_client_purges_stale_defns_when_flag_turns_off():
     bridge = WsBridge(hass, "entry1")
     bridge._keep_last["gw1"] = True
     bridge._defns = {
-        "gw1__a": {"unique_id": "gw1__a", "platform": "sensor", "_device": {"gateway_id": "gw1"}},
-        "gw2__b": {"unique_id": "gw2__b", "platform": "sensor", "_device": {"gateway_id": "gw2"}},
+        "gw1__a": {
+            "unique_id": "gw1__a",
+            "platform": "sensor",
+            "_device": {"gateway_id": "gw1"},
+        },
+        "gw2__b": {
+            "unique_id": "gw2__b",
+            "platform": "sensor",
+            "_device": {"gateway_id": "gw2"},
+        },
     }
 
     with patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
@@ -173,8 +200,11 @@ def test_connect_client_purges_stale_defns_when_flag_turns_off():
         mock_dr.async_get.return_value = mock_dev_reg
         mock_dr.async_entries_for_config_entry.return_value = []
         mock_dev_reg.async_get_or_create.return_value = MagicMock(
-            via_device_id=None, sw_version=None, hw_version=None,
-            manufacturer="ws_bridge", model="Gateway",
+            via_device_id=None,
+            sw_version=None,
+            hw_version=None,
+            manufacturer="ws_bridge",
+            model="Gateway",
         )
 
         bridge.connect_client(
@@ -215,10 +245,14 @@ def test_sync_removes_only_undeclared_entities():
     live = {u: MagicMock(async_remove=AsyncMock()) for u in bridge._created}
     bridge._entities = dict(live)
 
-    with patch("custom_components.ws_bridge.bridge.er") as mock_er, \
-         patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+    with (
+        patch("custom_components.ws_bridge.bridge.er") as mock_er,
+        patch("custom_components.ws_bridge.bridge.dr") as mock_dr,
+    ):
         mock_er.async_entries_for_config_entry.return_value = [
-            _reg_entry("gw1__a"), _reg_entry("gw1__b"), _reg_entry("gw1__c")
+            _reg_entry("gw1__a"),
+            _reg_entry("gw1__b"),
+            _reg_entry("gw1__c"),
         ]
         mock_dr.async_entries_for_config_entry.return_value = []
         removed = asyncio.run(bridge.async_sync_entities("gw1", ["a", "c"]))
@@ -235,12 +269,12 @@ def test_sync_ignores_other_gateways_and_diagnostic_sensor():
     """다른 게이트웨이의 엔티티와 통합 진단 센서는 절대 건드리면 안 된다."""
     bridge = _sync_bridge()
     bridge._created = {"gw1__a", "gw2__a"}
-    bridge._entities = {
-        u: MagicMock(async_remove=AsyncMock()) for u in bridge._created
-    }
+    bridge._entities = {u: MagicMock(async_remove=AsyncMock()) for u in bridge._created}
 
-    with patch("custom_components.ws_bridge.bridge.er") as mock_er, \
-         patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+    with (
+        patch("custom_components.ws_bridge.bridge.er") as mock_er,
+        patch("custom_components.ws_bridge.bridge.dr") as mock_dr,
+    ):
         mock_er.async_entries_for_config_entry.return_value = [
             _reg_entry("gw1__a"),
             _reg_entry("gw2__a"),
@@ -259,16 +293,24 @@ def test_sync_reconciles_restored_keep_last_definitions():
     bridge = _sync_bridge()
     bridge._keep_last = {"gw1": True}
     bridge._defns = {
-        "gw1__a": {"unique_id": "gw1__a", "platform": "sensor",
-                   "_device": {"gateway_id": "gw1"}},
-        "gw1__gone": {"unique_id": "gw1__gone", "platform": "sensor",
-                      "_device": {"gateway_id": "gw1"}},
+        "gw1__a": {
+            "unique_id": "gw1__a",
+            "platform": "sensor",
+            "_device": {"gateway_id": "gw1"},
+        },
+        "gw1__gone": {
+            "unique_id": "gw1__gone",
+            "platform": "sensor",
+            "_device": {"gateway_id": "gw1"},
+        },
     }
     bridge._seed_restorable_entities()
     assert len(bridge._pending["sensor"]) == 2
 
-    with patch("custom_components.ws_bridge.bridge.er") as mock_er, \
-         patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+    with (
+        patch("custom_components.ws_bridge.bridge.er") as mock_er,
+        patch("custom_components.ws_bridge.bridge.dr") as mock_dr,
+    ):
         mock_er.async_entries_for_config_entry.return_value = []
         mock_dr.async_entries_for_config_entry.return_value = []
         removed = asyncio.run(bridge.async_sync_entities("gw1", ["a"]))
@@ -291,10 +333,12 @@ def test_sync_prunes_sub_devices_left_empty():
     gw_device = MagicMock(id="dev_gw", identifiers={("ws_bridge", "gw1")})
     sub_device = MagicMock(id="dev_sub", identifiers={("ws_bridge", "gw1:sub1")})
 
-    with patch("custom_components.ws_bridge.bridge.er") as mock_er, \
-         patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+    with (
+        patch("custom_components.ws_bridge.bridge.er") as mock_er,
+        patch("custom_components.ws_bridge.bridge.dr") as mock_dr,
+    ):
         mock_er.async_entries_for_config_entry.return_value = [_reg_entry("gw1__a")]
-        mock_er.async_entries_for_device.return_value = []   # 남은 엔티티 없음
+        mock_er.async_entries_for_device.return_value = []  # 남은 엔티티 없음
         mock_dev_reg = MagicMock()
         mock_dr.async_get.return_value = mock_dev_reg
         mock_dr.async_entries_for_config_entry.return_value = [gw_device, sub_device]
@@ -308,10 +352,13 @@ def test_sync_is_noop_when_everything_still_declared():
     bridge = _sync_bridge()
     bridge._created = {"gw1__a", "gw1__b"}
 
-    with patch("custom_components.ws_bridge.bridge.er") as mock_er, \
-         patch("custom_components.ws_bridge.bridge.dr") as mock_dr:
+    with (
+        patch("custom_components.ws_bridge.bridge.er") as mock_er,
+        patch("custom_components.ws_bridge.bridge.dr") as mock_dr,
+    ):
         mock_er.async_entries_for_config_entry.return_value = [
-            _reg_entry("gw1__a"), _reg_entry("gw1__b")
+            _reg_entry("gw1__a"),
+            _reg_entry("gw1__b"),
         ]
         mock_dr.async_entries_for_config_entry.return_value = []
         removed = asyncio.run(
@@ -329,8 +376,11 @@ def _connect(bridge, gateway_id="gw1", connection=None, **kwargs):
         mock_dr.async_get.return_value = mock_dev_reg
         mock_dr.async_entries_for_config_entry.return_value = []
         mock_dev_reg.async_get_or_create.return_value = MagicMock(
-            via_device_id=None, sw_version=None, hw_version=None,
-            manufacturer="ws_bridge", model="Gateway",
+            via_device_id=None,
+            sw_version=None,
+            hw_version=None,
+            manufacturer="ws_bridge",
+            model="Gateway",
         )
         return bridge.connect_client(
             connection=connection or MagicMock(),
@@ -350,8 +400,11 @@ def test_connect_defaults_device_registry_when_fields_omitted():
         mock_dr.async_get.return_value = mock_dev_reg
         mock_dr.async_entries_for_config_entry.return_value = []
         mock_dev_reg.async_get_or_create.return_value = MagicMock(
-            via_device_id=None, sw_version=None, hw_version=None,
-            manufacturer="ws_bridge", model="Gateway",
+            via_device_id=None,
+            sw_version=None,
+            hw_version=None,
+            manufacturer="ws_bridge",
+            model="Gateway",
         )
         bridge.connect_client(
             connection=MagicMock(),
@@ -376,8 +429,11 @@ def test_connect_applies_optional_device_fields_independently():
         mock_dr.async_get.return_value = mock_dev_reg
         mock_dr.async_entries_for_config_entry.return_value = []
         mock_dev_reg.async_get_or_create.return_value = MagicMock(
-            via_device_id=None, sw_version=None, hw_version=None,
-            manufacturer="ws_bridge", model="Gateway",
+            via_device_id=None,
+            sw_version=None,
+            hw_version=None,
+            manufacturer="ws_bridge",
+            model="Gateway",
         )
         bridge.connect_client(
             connection=MagicMock(),
@@ -406,9 +462,13 @@ def test_reconnect_keeps_previous_device_fields_when_omitted():
 
 
 def test_resolve_connect_sw_version_prefers_sw_version():
-    assert resolve_connect_sw_version({"sw_version": "2.0", "app_version": "1.0"}) == "2.0"
+    assert (
+        resolve_connect_sw_version({"sw_version": "2.0", "app_version": "1.0"}) == "2.0"
+    )
     assert resolve_connect_sw_version({"app_version": "1.0"}) == "1.0"
-    assert resolve_connect_sw_version({"sw_version": "  ", "app_version": "1.0"}) == "1.0"
+    assert (
+        resolve_connect_sw_version({"sw_version": "  ", "app_version": "1.0"}) == "1.0"
+    )
     assert resolve_connect_sw_version({}) is None
 
 
@@ -424,22 +484,33 @@ def test_reconnect_does_not_resurrect_undeclared_sub_devices():
     conn = MagicMock()
     disconnect = _connect(bridge, connection=conn)
     for dev in ("keeps", "goes_away"):
-        bridge.handle_entity("gw1", {
-            "unique_id": f"{dev}_x", "platform": "sensor", "name": "X",
-            "device": {"id": dev},
-        })
+        bridge.handle_entity(
+            "gw1",
+            {
+                "unique_id": f"{dev}_x",
+                "platform": "sensor",
+                "name": "X",
+                "device": {"id": dev},
+            },
+        )
     assert bridge._clients["gw1"].device_ids == {"gw1", "gw1:keeps", "gw1:goes_away"}
     disconnect()
 
     with patch("custom_components.ws_bridge.bridge.async_dispatcher_send") as send:
         _connect(bridge)
-        bridge.handle_entity("gw1", {
-            "unique_id": "keeps_x", "platform": "sensor", "name": "X",
-            "device": {"id": "keeps"},
-        })
+        bridge.handle_entity(
+            "gw1",
+            {
+                "unique_id": "keeps_x",
+                "platform": "sensor",
+                "name": "X",
+                "device": {"id": "keeps"},
+            },
+        )
 
     online = {
-        c.args[1] for c in send.call_args_list
+        c.args[1]
+        for c in send.call_args_list
         if c.args[1].startswith("ws_bridge_entry1_avail_") and c.args[2] is True
     }
     assert "ws_bridge_entry1_avail_gw1:keeps" in online
@@ -455,10 +526,15 @@ def test_reconnect_state_only_client_still_restores_availability():
     bridge.register_platform("sensor", MagicMock(), MagicMock())
 
     disconnect = _connect(bridge)
-    bridge.handle_entity("gw1", {
-        "unique_id": "sub_x", "platform": "sensor", "name": "X",
-        "device": {"id": "sub"},
-    })
+    bridge.handle_entity(
+        "gw1",
+        {
+            "unique_id": "sub_x",
+            "platform": "sensor",
+            "name": "X",
+            "device": {"id": "sub"},
+        },
+    )
     disconnect()
 
     with patch("custom_components.ws_bridge.bridge.async_dispatcher_send") as send:
@@ -466,7 +542,8 @@ def test_reconnect_state_only_client_still_restores_availability():
         bridge.handle_state("gw1", "sub_x", 42)
 
     online = {
-        c.args[1] for c in send.call_args_list
+        c.args[1]
+        for c in send.call_args_list
         if c.args[1].startswith("ws_bridge_entry1_avail_") and c.args[2] is True
     }
     assert "ws_bridge_entry1_avail_gw1:sub" in online
@@ -481,11 +558,16 @@ def test_second_connection_does_not_reset_device_tracking():
     bridge.register_platform("sensor", MagicMock(), MagicMock())
 
     _connect(bridge, connection=MagicMock())
-    bridge.handle_entity("gw1", {
-        "unique_id": "sub_x", "platform": "sensor", "name": "X",
-        "device": {"id": "sub"},
-    })
-    _connect(bridge, connection=MagicMock())   # 두 번째 커넥션
+    bridge.handle_entity(
+        "gw1",
+        {
+            "unique_id": "sub_x",
+            "platform": "sensor",
+            "name": "X",
+            "device": {"id": "sub"},
+        },
+    )
+    _connect(bridge, connection=MagicMock())  # 두 번째 커넥션
 
     assert bridge._clients["gw1"].device_ids == {"gw1", "gw1:sub"}
 
@@ -498,9 +580,11 @@ def test_parse_location_full_payload():
 
 def test_parse_location_accepts_numeric_strings():
     """클라이언트가 숫자를 문자열로 보내도 좌표로 받아들인다."""
-    assert _parse_location(
-        {"latitude": "37.5", "longitude": "127.0"}
-    ) == (37.5, 127.0, 0)
+    assert _parse_location({"latitude": "37.5", "longitude": "127.0"}) == (
+        37.5,
+        127.0,
+        0,
+    )
 
 
 def test_parse_location_rejects_partial_or_non_dict():
@@ -522,9 +606,7 @@ def test_parse_location_null_clears_coordinates():
     assert _parse_location(
         {"latitude": None, "longitude": None, "gps_accuracy": 9999}
     ) == (None, None, 9999)
-    assert _parse_location(
-        {"latitude": 37.5, "longitude": None}
-    ) == (None, None, 0)
+    assert _parse_location({"latitude": 37.5, "longitude": None}) == (None, None, 0)
 
 
 def test_all_platforms_includes_update():
@@ -593,7 +675,9 @@ def test_send_command_returns_false_when_disconnected():
         {"kind": "command", "unique_id": "firmware", "action": "install"}
     )
 
+
 # ── Phase 0: 복합 상태 / params / helpers ────────────────────────────────────
+
 
 def test_handle_state_shallow_merges_dicts():
     """dict + dict 는 얕은 병합. 이전 키가 보존된다."""
@@ -626,7 +710,8 @@ def test_handle_state_event_does_not_merge_attributes():
     bridge._entities["gw1__bell"] = entity
     with patch("custom_components.ws_bridge.bridge.async_dispatcher_send") as send:
         bridge.handle_state(
-            "gw1", "bell",
+            "gw1",
+            "bell",
             {"event_type": "doorbell", "attributes": {"zone": "front"}},
         )
         bridge.handle_state("gw1", "bell", {"event_type": "motion"})
@@ -647,7 +732,8 @@ def test_set_local_state_keeps_optimistic_keys_on_partial_push():
     bridge = WsBridge(hass, "entry1")
     with patch("custom_components.ws_bridge.bridge.async_dispatcher_send"):
         bridge.handle_state(
-            "gw1", "ac",
+            "gw1",
+            "ac",
             {"hvac_mode": "heat", "target_temperature": 26, "current_temperature": 22},
         )
     bridge.set_local_state(
@@ -667,6 +753,7 @@ def test_set_local_state_keeps_optimistic_keys_on_partial_push():
 
 def test_entity_send_command_raises_when_disconnected():
     from homeassistant.exceptions import HomeAssistantError
+
     from custom_components.ws_bridge.entity import WsBridgeEntity
 
     hass = MagicMock()
@@ -693,11 +780,13 @@ def test_handle_state_null_clears_merged_key():
     bridge = WsBridge(hass, "entry1")
     with patch("custom_components.ws_bridge.bridge.async_dispatcher_send"):
         bridge.handle_state(
-            "gw1", "car",
+            "gw1",
+            "car",
             {"latitude": 37.5, "longitude": 127.0, "gps_accuracy": 8},
         )
         bridge.handle_state(
-            "gw1", "car",
+            "gw1",
+            "car",
             {"latitude": None, "longitude": None, "gps_accuracy": 9999},
         )
 
@@ -742,7 +831,9 @@ def test_send_command_params():
     bridge._clients["gw1"] = _Client("gw1", "GW1", send_event)
     bridge._entity_client["gw1__led"] = "gw1"
 
-    assert bridge.send_command("gw1__led", "turn_on", params={"brightness": 128}) is True
+    assert (
+        bridge.send_command("gw1__led", "turn_on", params={"brightness": 128}) is True
+    )
     assert send_event.call_args.args[0] == {
         "kind": "command",
         "unique_id": "led",
@@ -828,7 +919,9 @@ def test_all_platforms_are_forwarded():
     expected = set(ALL_PLATFORMS) - {"text_sensor"}
     assert expected <= forwarded
 
+
 # ── Phase 1: light / cover / fan ─────────────────────────────────────────────
+
 
 def test_light_color_modes_and_features():
     assert _color_modes(None) == {ColorMode.ONOFF}
@@ -980,10 +1073,17 @@ def test_fan_set_percentage_zero_turns_off():
     assert entity._attr_is_on is False
     assert entity._attr_percentage == 0
 
+
 # ── Phase 2: text / lock / date / time / datetime / event / valve ────────────
 
+
 def test_text_and_text_sensor_are_distinct_platforms():
-    from custom_components.ws_bridge.const import PLATFORM_TEXT, PLATFORM_TEXT_SENSOR, ALL_PLATFORMS
+    from custom_components.ws_bridge.const import (
+        ALL_PLATFORMS,
+        PLATFORM_TEXT,
+        PLATFORM_TEXT_SENSOR,
+    )
+
     assert PLATFORM_TEXT == "text"
     assert PLATFORM_TEXT_SENSOR == "text_sensor"
     assert PLATFORM_TEXT in ALL_PLATFORMS
@@ -1020,7 +1120,8 @@ def test_lock_features_and_state_parser():
 
 
 def test_date_time_datetime_parsers():
-    from datetime import date, time, datetime, timezone, timedelta
+    from datetime import date, datetime, time, timedelta, timezone
+
     from homeassistant.util import dt as dt_util
 
     assert _parse_date("2026-08-13") == date(2026, 8, 13)
@@ -1079,9 +1180,11 @@ def test_valve_features_default():
 
 # ── Phase 3: climate / humidifier / water_heater / siren / alarm ─────────────
 
+
 def test_climate_hvac_modes_and_features():
-    from custom_components.ws_bridge.climate import _hvac_modes, _features
     from homeassistant.components.climate import ClimateEntityFeature, HVACMode
+
+    from custom_components.ws_bridge.climate import _features, _hvac_modes
 
     assert _hvac_modes(None) == [HVACMode.OFF]
     assert _hvac_modes(["heat", "nope", "cool"]) == [HVACMode.HEAT, HVACMode.COOL]
@@ -1096,8 +1199,9 @@ def test_climate_hvac_modes_and_features():
 
 
 def test_climate_apply_and_set_temperature():
-    from custom_components.ws_bridge.climate import WsBridgeClimate
     from homeassistant.components.climate import HVACMode
+
+    from custom_components.ws_bridge.climate import WsBridgeClimate
 
     bridge = WsBridge(MagicMock(), "entry1")
     bridge.send_command = MagicMock(return_value=True)
@@ -1133,22 +1237,33 @@ def test_climate_apply_and_set_temperature():
 
 
 def test_humidifier_and_water_heater_basics():
-    from custom_components.ws_bridge.humidifier import WsBridgeHumidifier, _features as hum_features
-    from custom_components.ws_bridge.water_heater import (
-        WsBridgeWaterHeater,
-        _features as wh_features,
+    from homeassistant.components.humidifier import (
+        HumidifierAction,
+        HumidifierEntityFeature,
     )
-    from homeassistant.components.humidifier import HumidifierAction, HumidifierEntityFeature
     from homeassistant.components.water_heater import WaterHeaterEntityFeature
     from homeassistant.const import UnitOfTemperature
 
-    assert not (hum_features(["modes"], has_modes=False) & HumidifierEntityFeature.MODES)
+    from custom_components.ws_bridge.humidifier import WsBridgeHumidifier
+    from custom_components.ws_bridge.humidifier import _features as hum_features
+    from custom_components.ws_bridge.water_heater import (
+        WsBridgeWaterHeater,
+    )
+    from custom_components.ws_bridge.water_heater import (
+        _features as wh_features,
+    )
+
+    assert not (
+        hum_features(["modes"], has_modes=False) & HumidifierEntityFeature.MODES
+    )
     assert hum_features(None, has_modes=True) & HumidifierEntityFeature.MODES
     assert not (
-        wh_features(None, has_operation_list=False) & WaterHeaterEntityFeature.OPERATION_MODE
+        wh_features(None, has_operation_list=False)
+        & WaterHeaterEntityFeature.OPERATION_MODE
     )
     assert (
-        wh_features(None, has_operation_list=True) & WaterHeaterEntityFeature.OPERATION_MODE
+        wh_features(None, has_operation_list=True)
+        & WaterHeaterEntityFeature.OPERATION_MODE
     )
 
     bridge = WsBridge(MagicMock(), "entry1")
@@ -1193,14 +1308,18 @@ def test_humidifier_and_water_heater_basics():
 
 
 def test_siren_and_alarm_control_panel():
-    from custom_components.ws_bridge.siren import WsBridgeSiren, _features as siren_features
-    from custom_components.ws_bridge.alarm_control_panel import WsBridgeAlarmControlPanel
     from homeassistant.components.alarm_control_panel import (
         AlarmControlPanelState,
         CodeFormat,
     )
     from homeassistant.components.siren import SirenEntityFeature
     from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.ws_bridge.alarm_control_panel import (
+        WsBridgeAlarmControlPanel,
+    )
+    from custom_components.ws_bridge.siren import WsBridgeSiren
+    from custom_components.ws_bridge.siren import _features as siren_features
 
     assert not (siren_features(["tones"], has_tones=False) & SirenEntityFeature.TONES)
     assert siren_features(None, has_tones=True) & SirenEntityFeature.TONES
@@ -1256,12 +1375,12 @@ def test_siren_and_alarm_control_panel():
 
 def test_phase3_platforms_registered():
     from custom_components.ws_bridge.const import (
+        ALL_PLATFORMS,
+        PLATFORM_ALARM_CONTROL_PANEL,
         PLATFORM_CLIMATE,
         PLATFORM_HUMIDIFIER,
-        PLATFORM_WATER_HEATER,
         PLATFORM_SIREN,
-        PLATFORM_ALARM_CONTROL_PANEL,
-        ALL_PLATFORMS,
+        PLATFORM_WATER_HEATER,
     )
 
     for p in (
@@ -1276,20 +1395,24 @@ def test_phase3_platforms_registered():
 
 # ── Phase 4: media_player / image / camera + version pin ─────────────────────
 
+
 def test_media_player_features_and_state():
-    from custom_components.ws_bridge.media_player import (
-        WsBridgeMediaPlayer,
-        _features,
-    )
     from homeassistant.components.media_player import (
         MediaPlayerEntityFeature,
         MediaPlayerState,
     )
 
+    from custom_components.ws_bridge.media_player import (
+        WsBridgeMediaPlayer,
+        _features,
+    )
+
     flags = _features(None, has_sources=False)
     assert flags & MediaPlayerEntityFeature.PLAY
     assert not (flags & MediaPlayerEntityFeature.SELECT_SOURCE)
-    assert _features(["play"], has_sources=True) & MediaPlayerEntityFeature.SELECT_SOURCE
+    assert (
+        _features(["play"], has_sources=True) & MediaPlayerEntityFeature.SELECT_SOURCE
+    )
 
     bridge = WsBridge(MagicMock(), "entry1")
     bridge.send_command = MagicMock(return_value=True)
@@ -1347,10 +1470,11 @@ def test_media_player_features_and_state():
 
 
 def test_image_and_camera_url_state():
-    from custom_components.ws_bridge.image import WsBridgeImage
+    from homeassistant.components.camera import CameraEntityFeature
+
     from custom_components.ws_bridge.camera import WsBridgeCamera, _features
     from custom_components.ws_bridge.helpers import sanitize_remote_url
-    from homeassistant.components.camera import CameraEntityFeature
+    from custom_components.ws_bridge.image import WsBridgeImage
 
     assert sanitize_remote_url("http://cam.local/still.jpg")
     assert sanitize_remote_url("http://127.0.0.1/x") is None
@@ -1410,8 +1534,6 @@ def test_image_and_camera_url_state():
     assert cam._still_url is None
 
 
-
-
 def _mk_entity(cls, platform, uid, seed, extra_defn=None):
     """seed 상태를 미리 넣은 bridge + 연결된 클라이언트로 엔티티를 만든다."""
     bridge = WsBridge(MagicMock(), "entry1")
@@ -1441,7 +1563,7 @@ def test_publish_state_does_not_persist_transient_cover_state():
     )
     asyncio.run(entity.async_open_cover())
 
-    assert entity.is_opening is True                      # UI 는 즉시 반응
+    assert entity.is_opening is True  # UI 는 즉시 반응
     assert bridge._states["gw1__bl"]["state"] == "closed"  # 저장본은 그대로
 
     restored = WsBridgeCover(bridge, defn)
@@ -1455,7 +1577,9 @@ def test_publish_state_does_not_persist_update_in_progress():
     from custom_components.ws_bridge.update import WsBridgeUpdate
 
     bridge, entity, defn = _mk_entity(
-        WsBridgeUpdate, "update", "fw",
+        WsBridgeUpdate,
+        "update",
+        "fw",
         {"installed_version": "1.0.0", "latest_version": "1.0.1", "in_progress": False},
     )
     asyncio.run(entity.async_install(None, False))
@@ -1473,7 +1597,7 @@ def test_install_clears_stale_progress_percentage():
     """이전 설치의 progress:100 이 낙관적 UI에 100%로 깜빡이면 안 된다."""
     from custom_components.ws_bridge.update import WsBridgeUpdate
 
-    bridge, entity, _ = _mk_entity(
+    _bridge, entity, _ = _mk_entity(
         WsBridgeUpdate,
         "update",
         "fw",
@@ -1500,9 +1624,9 @@ def test_update_refresh_hook_is_silent_when_disconnected():
     bridge, entity, _ = _mk_entity(
         WsBridgeUpdate, "update", "fw", {"installed_version": "1.0.0"}
     )
-    bridge._clients.clear()   # 게이트웨이 끊김
+    bridge._clients.clear()  # 게이트웨이 끊김
 
-    asyncio.run(entity.async_update())   # 예외 없이 통과해야 한다
+    asyncio.run(entity.async_update())  # 예외 없이 통과해야 한다
 
 
 def test_entity_device_info_via_device_id():
@@ -1568,7 +1692,9 @@ def test_get_gateway_device_id_lookups():
         )
 
         # 2. 디바이스가 삭제되었거나 존재하지 않아 ValueError가 발생하는 경우
-        mock_dr.async_get_device_id_by_identifier.side_effect = ValueError("Device not found")
+        mock_dr.async_get_device_id_by_identifier.side_effect = ValueError(
+            "Device not found"
+        )
         assert bridge.get_gateway_device_id("gw1") is None
 
 
@@ -1597,4 +1723,3 @@ def test_handle_entity_subdevice_does_not_persist_via_device_id():
     stored_defn = bridge._defns["gw1__sensor1"]
     assert "via_device_id" not in stored_defn["_device"]
     assert "via_device" not in stored_defn["_device"]
-

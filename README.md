@@ -1,9 +1,14 @@
 # WebSocket Bridge (`ws_bridge`) for Home Assistant
 
-[![GitHub Release](https://img.shields.io/github/v/release/eigger/hass-ws-bridge?style=flat-square)](https://github.com/eigger/hass-ws-bridge/releases)
+<!-- hass-standards:badges:start -->
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?style=flat-square)](#-installation)
+[![Release](https://img.shields.io/github/v/release/eigger/hass-ws-bridge?style=flat-square)](https://github.com/eigger/hass-ws-bridge/releases)
+[![Home Assistant minimum](https://img.shields.io/badge/HA-%E2%89%A5%202026.9.0-41BDF5?style=flat-square)](hacs.json)
+[![Tests](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/tests.yml?branch=main&style=flat-square&label=Tests)](https://github.com/eigger/hass-ws-bridge/actions/workflows/tests.yml)
+[![Validate](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/validate.yml?branch=main&style=flat-square&label=Validate)](https://github.com/eigger/hass-ws-bridge/actions/workflows/validate.yml)
 [![License](https://img.shields.io/github/license/eigger/hass-ws-bridge?style=flat-square)](LICENSE)
-[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-![integration usage](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=usage&suffix=%20installs&cacheSeconds=15600&query=%24.ws_bridge.total&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json)
+[![Analytics reporting installs](https://img.shields.io/badge/dynamic/json?style=flat-square&color=41BDF5&label=Usage&query=%24.ws_bridge.total&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json)](https://analytics.home-assistant.io/)
+<!-- hass-standards:badges:end -->
 
 A generic Home Assistant integration that enables **any authenticated WebSocket client** to dynamically create and update entities. It is fully decoupled from specific hardware or protocols (e.g., BLE, Zigbee); as long as the client conforms to the defined communication protocol, it works out of the box.
 

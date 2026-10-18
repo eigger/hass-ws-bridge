@@ -1,0 +1,18 @@
+{
+  "repository": "eigger/hass-ws-bridge",
+  "default_branch": "main",
+  "readmes": [
+    "README.md",
+    "README_ko.md"
+  ],
+  "hacs": "custom",
+  "release": true,
+  "installation_link": "#-installation",
+  "hacs_default_evidence": "",
+  "tests_workflow": "tests.yml",
+  "validate_workflow": "validate.yml",
+  "installation_links": {
+    "README.md": "#-installation",
+    "README_ko.md": "#-설치"
+  }
+}

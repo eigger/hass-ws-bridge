@@ -1,4 +1,5 @@
 """text 플랫폼: 쓰기 가능 문자열 (text_sensor 와 별개 — HA text 도메인)."""
+
 from __future__ import annotations
 
 from typing import Any

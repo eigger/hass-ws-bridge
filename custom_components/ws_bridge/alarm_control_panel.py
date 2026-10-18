@@ -1,4 +1,5 @@
 """alarm_control_panel 플랫폼: arm/disarm/trigger 를 클라이언트에 중계. code 는 로그 금지."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -73,7 +74,9 @@ class WsBridgeAlarmControlPanel(WsBridgeEntity, AlarmControlPanelEntity):
 
     def _configure_from_defn(self, defn: dict[str, Any]) -> None:
         code_required = defn.get("code_arm_required")
-        self._attr_code_arm_required = True if code_required is None else bool(code_required)
+        self._attr_code_arm_required = (
+            True if code_required is None else bool(code_required)
+        )
         fmt = defn.get("code_format")
         if fmt == "number":
             self._attr_code_format = CodeFormat.NUMBER

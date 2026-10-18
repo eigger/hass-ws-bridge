@@ -1,4 +1,5 @@
 """image 플랫폼: 클라이언트가 제공한 URL 을 HA ImageEntity 로 노출 (바이트 전송 없음)."""
+
 from __future__ import annotations
 
 import logging
@@ -60,9 +61,7 @@ class WsBridgeImage(WsBridgeEntity, ImageEntity):
         raw_url = str(url) if url is not None else None
         new_url = sanitize_remote_url(raw_url)
         if raw_url and new_url is None:
-            _LOGGER.warning(
-                "Ignoring unsafe image_url for %s", self._attr_unique_id
-            )
+            _LOGGER.warning("Ignoring unsafe image_url for %s", self._attr_unique_id)
         url_changed = new_url != self._attr_image_url
         if url_changed:
             self._cached_image = None

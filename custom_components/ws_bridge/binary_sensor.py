@@ -1,4 +1,5 @@
 """binary_sensor 플랫폼: 불리언 상태(켜짐/꺼짐, 감지/접촉 등)."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -18,7 +19,9 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     bridge: WsBridge = hass.data[DOMAIN][entry.entry_id]
-    bridge.register_platform(PLATFORM_BINARY_SENSOR, async_add_entities, WsBridgeBinarySensor)
+    bridge.register_platform(
+        PLATFORM_BINARY_SENSOR, async_add_entities, WsBridgeBinarySensor
+    )
 
 
 class WsBridgeBinarySensor(WsBridgeEntity, BinarySensorEntity):

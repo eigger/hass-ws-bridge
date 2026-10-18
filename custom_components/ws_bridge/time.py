@@ -1,4 +1,5 @@
 """time 플랫폼: ISO 시각 문자열 ↔ HA time 엔티티."""
+
 from __future__ import annotations
 
 from datetime import time

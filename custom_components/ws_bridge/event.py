@@ -1,4 +1,5 @@
 """event 플랫폼: 읽기 전용 이벤트 발화. last_state 로 복원하지 않음(유령 이벤트 방지)."""
+
 from __future__ import annotations
 
 import logging

@@ -1,5 +1,6 @@
 """Config flow: 범용 브릿지는 설정이 없다. 클라이언트가 HA URL+토큰으로 연결하므로
 여기선 통합 인스턴스(단일)만 생성한다. 게이트웨이 Subentry는 connect 시 자동 생성."""
+
 from __future__ import annotations
 
 from typing import Any
