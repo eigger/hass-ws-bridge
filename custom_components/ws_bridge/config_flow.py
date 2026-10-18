@@ -41,22 +41,28 @@ class WsBridgeOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(
-                data={CONF_ALLOWED_USER_IDS: user_input[CONF_ALLOWED_USER_IDS]}
+                data={CONF_ALLOWED_USER_IDS: user_input.get(CONF_ALLOWED_USER_IDS, [])}
             )
 
         users = await self.hass.auth.async_get_users()
         choices = [
-            {"value": u.id, "label": f"{u.name} ({u.id[:8]})"}
+            {"value": u.id, "label": f"{u.name or u.id} ({u.id[:8]})"}
             for u in users
             if not u.system_generated and u.is_active
         ]
-        current = self.config_entry.options.get(CONF_ALLOWED_USER_IDS, [])
+        valid = {c["value"] for c in choices}
+        # 삭제·비활성된 사용자 ID는 선택지에 없으므로 기본값에서 제외한다.
+        current = [
+            uid
+            for uid in self.config_entry.options.get(CONF_ALLOWED_USER_IDS, [])
+            if uid in valid
+        ]
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
+                    vol.Optional(
                         CONF_ALLOWED_USER_IDS, default=current
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(

@@ -14,7 +14,7 @@
     "step": {
       "init": {
         "title": "WebSocket Bridge options",
-        "description": "Select which users are allowed to own gateway tokens. Gateway clients must connect with a long-lived access token created by one of these users.",
+        "description": "Select which users may own gateway tokens. Leave empty to allow administrators only.",
         "data": {
           "allowed_user_ids": "Users allowed to own gateway tokens"
         }

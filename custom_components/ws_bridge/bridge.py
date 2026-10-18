@@ -385,7 +385,16 @@ class WsBridge:
     @callback
     def unload(self) -> None:
         """Close all client connections when integration unloads."""
+        self.close_connections()
+
+    @callback
+    def close_connections(
+        self, should_close: Callable[[Any], bool] | None = None
+    ) -> None:
+        """Close client connections (all, or those `should_close` accepts)."""
         for conn in list(self._connections):
+            if should_close is not None and not should_close(conn):
+                continue
             try:
                 # ActiveConnection has no public close(). Its send_message is the
                 # bound WebSocketHandler._send_message, and the handler's _cancel()

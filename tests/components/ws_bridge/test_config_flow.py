@@ -91,3 +91,26 @@ async def test_options_flow_lists_active_human_users_and_saves_allowlist(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert config_entry.options == {CONF_ALLOWED_USER_IDS: [other.id]}
+
+
+async def test_options_flow_drops_stale_user_ids_and_allows_empty(
+    hass: HomeAssistant, config_entry: MockConfigEntry
+) -> None:
+    """Removed users do not block saving; an empty selection (admins only) is valid."""
+    other = await hass.auth.async_create_user("Other")
+    hass.config_entries.async_update_entry(
+        config_entry, options={CONF_ALLOWED_USER_IDS: ["gone-user"]}
+    )
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_ALLOWED_USER_IDS: [other.id]}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert config_entry.options == {CONF_ALLOWED_USER_IDS: [other.id]}
+
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_ALLOWED_USER_IDS: []}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert config_entry.options == {CONF_ALLOWED_USER_IDS: []}

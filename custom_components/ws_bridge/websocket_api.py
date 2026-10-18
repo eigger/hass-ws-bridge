@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -35,6 +36,8 @@ from .const import (
     WS_SYNC,
 )
 
+_LOGGER = logging.getLogger(__name__)
+
 
 @callback
 def async_register(hass: HomeAssistant) -> None:
@@ -50,15 +53,43 @@ def _bridges(hass: HomeAssistant) -> list[WsBridge]:
     return [b for b in hass.data.get(DOMAIN, {}).values() if isinstance(b, WsBridge)]
 
 
-def _token_owner_allowed(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection
-) -> bool:
-    allowed: list[str] = []
+_warned_users: set[str] = set()
+
+
+def allowed_user_ids(hass: HomeAssistant) -> list[str]:
+    """Explicitly allowed token owners; empty means admins only."""
     for entry in hass.config_entries.async_entries(DOMAIN):
-        allowed = entry.options.get(CONF_ALLOWED_USER_IDS) or []
-        break
+        return list(entry.options.get(CONF_ALLOWED_USER_IDS) or [])
+    return []
+
+
+def user_allowed(hass: HomeAssistant, user: Any) -> bool:
+    """Whether `user` (a token owner) may use ws_bridge commands."""
+    if user is None or not user.is_active:
+        return False
+    allowed = allowed_user_ids(hass)
+    return user.is_admin if not allowed else user.id in allowed
+
+
+def _reject_if_not_allowed(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> bool:
+    """Send `not_allowed` and return True when the token owner may not use ws_bridge."""
+    if user_allowed(hass, connection.user):
+        return False
     user = connection.user
-    return bool(allowed) and user is not None and user.id in allowed
+    if user is not None and user.id not in _warned_users:
+        _warned_users.add(user.id)
+        _LOGGER.warning(
+            "Rejected ws_bridge command from user %s (%s): not allowed. Select "
+            "allowed users in the integration options, or use an administrator token",
+            user.name,
+            user.id,
+        )
+    connection.send_error(
+        msg["id"], "not_allowed", "Token owner is not allowed for ws_bridge"
+    )
+    return True
 
 
 def resolve_connect_sw_version(msg: dict[str, Any]) -> str | None:
@@ -92,10 +123,7 @@ def resolve_connect_sw_version(msg: dict[str, Any]) -> str | None:
 async def ws_connect(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    if not _token_owner_allowed(hass, connection):
-        connection.send_error(
-            msg["id"], "not_allowed", "Token owner is not allowed for ws_bridge"
-        )
+    if _reject_if_not_allowed(hass, connection, msg):
         return
 
     @callback
@@ -192,10 +220,7 @@ async def ws_connect(
 def ws_entity(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    if not _token_owner_allowed(hass, connection):
-        connection.send_error(
-            msg["id"], "not_allowed", "Token owner is not allowed for ws_bridge"
-        )
+    if _reject_if_not_allowed(hass, connection, msg):
         return
     if msg.get("platform") == "event":
         types = msg.get("event_types")
@@ -241,10 +266,7 @@ def ws_entity(
 def ws_state(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    if not _token_owner_allowed(hass, connection):
-        connection.send_error(
-            msg["id"], "not_allowed", "Token owner is not allowed for ws_bridge"
-        )
+    if _reject_if_not_allowed(hass, connection, msg):
         return
     for b in _bridges(hass):
         if (gid := b.client_for(connection)) is None:
@@ -265,10 +287,7 @@ def ws_state(
 def ws_availability(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    if not _token_owner_allowed(hass, connection):
-        connection.send_error(
-            msg["id"], "not_allowed", "Token owner is not allowed for ws_bridge"
-        )
+    if _reject_if_not_allowed(hass, connection, msg):
         return
     for b in _bridges(hass):
         if (gid := b.client_for(connection)) is not None:
@@ -289,10 +308,7 @@ async def ws_remove(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """엔티티·sub-device·게이트웨이(전체) 삭제. 대상 미지정 시 연결된 게이트웨이 전체."""
-    if not _token_owner_allowed(hass, connection):
-        connection.send_error(
-            msg["id"], "not_allowed", "Token owner is not allowed for ws_bridge"
-        )
+    if _reject_if_not_allowed(hass, connection, msg):
         return
     mode = msg.get("mode", "exact")
     for b in _bridges(hass):
@@ -324,10 +340,7 @@ async def ws_sync(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """선언 전체 목록과 대조해, 이제는 없는 엔티티만 제거한다 (PROTOCOL.md §3.5)."""
-    if not _token_owner_allowed(hass, connection):
-        connection.send_error(
-            msg["id"], "not_allowed", "Token owner is not allowed for ws_bridge"
-        )
+    if _reject_if_not_allowed(hass, connection, msg):
         return
     for b in _bridges(hass):
         if (gid := b.client_for(connection)) is None:
