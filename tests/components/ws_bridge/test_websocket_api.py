@@ -70,22 +70,44 @@ async def test_connect_sw_version_prefers_sw_over_deprecated_app_version(
     assert get_device(hass, "gw1").sw_version == expected
 
 
-async def test_connect_removes_offline_duplicate_by_name(
+async def test_connect_keeps_offline_device_with_same_name(
     hass: HomeAssistant, bridge_client_factory
 ) -> None:
-    """A gateway that came back under a new gateway_id with the same name
-    replaces the old offline device (and its sub-devices)."""
+    """Offline gateways and entities with the same name are not removed."""
     old = await bridge_client_factory()
     await old.connect("old_gw", "Kitchen")
     await old.entity("t", "sensor", "T", device={"id": "probe"})
+    await old.state("t", 21)
+    assert get_device(hass, "old_gw") is not None
     assert get_device(hass, "old_gw:probe") is not None
+    assert entity_id_for(hass, "sensor", "t", "old_gw") is not None
     await old.close()
 
     new = await bridge_client_factory()
     await new.connect("new_gw", "Kitchen")
-    assert get_device(hass, "old_gw") is None
-    assert get_device(hass, "old_gw:probe") is None
+    await new.entity("h", "sensor", "H")
+    await new.state("h", 55)
+
+    assert get_device(hass, "old_gw") is not None
+    assert get_device(hass, "old_gw:probe") is not None
+    assert entity_id_for(hass, "sensor", "t", "old_gw") is not None
     assert get_device(hass, "new_gw") is not None
+    assert entity_id_for(hass, "sensor", "h", "new_gw") is not None
+
+
+async def test_connect_client_named_websocket_bridge_does_not_remove_service_device(
+    hass: HomeAssistant, bridge_client_factory
+) -> None:
+    """A client naming itself 'WebSocket Bridge' does not remove the service device."""
+    client = await bridge_client_factory()
+    entry = client.entry
+    assert get_device(hass, entry.entry_id) is not None
+
+    imposter = await bridge_client_factory()
+    await imposter.connect("gw_imposter", "WebSocket Bridge")
+
+    assert get_device(hass, entry.entry_id) is not None
+    assert get_device(hass, "gw_imposter") is not None
 
 
 async def test_connect_keeps_online_device_with_same_name(
