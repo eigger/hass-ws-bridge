@@ -6,7 +6,6 @@ from aiohttp import WSMsgType
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
@@ -366,17 +365,10 @@ async def test_connect_client_named_websocket_bridge_does_not_remove_service_dev
     bridge_client_factory,
 ) -> None:
     """A client naming itself 'WebSocket Bridge' must not remove the service device."""
-    dev_reg = dr.async_get(hass)
-    service_device = dev_reg.async_get_device(
-        identifiers={(DOMAIN, init_integration.entry_id)}
-    )
-    assert service_device is not None
+    assert get_device(hass, init_integration.entry_id) is not None
 
     client = await bridge_client_factory()
     await client.connect("gw_imposter", "WebSocket Bridge")
 
     # Service device must still exist
-    service_device_after = dev_reg.async_get_device(
-        identifiers={(DOMAIN, init_integration.entry_id)}
-    )
-    assert service_device_after is not None
+    assert get_device(hass, init_integration.entry_id) is not None

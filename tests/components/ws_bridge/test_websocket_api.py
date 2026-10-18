@@ -70,11 +70,10 @@ async def test_connect_sw_version_prefers_sw_over_deprecated_app_version(
     assert get_device(hass, "gw1").sw_version == expected
 
 
-async def test_connect_removes_offline_duplicate_by_name(
+async def test_connect_keeps_offline_device_with_same_name(
     hass: HomeAssistant, bridge_client_factory
 ) -> None:
-    """A gateway that came back under a new gateway_id with the same name
-    replaces the old offline device (and its sub-devices)."""
+    """A gateway with the same name does not remove an offline device (match is on gateway_id)."""
     old = await bridge_client_factory()
     await old.connect("old_gw", "Kitchen")
     await old.entity("t", "sensor", "T", device={"id": "probe"})
@@ -83,8 +82,8 @@ async def test_connect_removes_offline_duplicate_by_name(
 
     new = await bridge_client_factory()
     await new.connect("new_gw", "Kitchen")
-    assert get_device(hass, "old_gw") is None
-    assert get_device(hass, "old_gw:probe") is None
+    assert get_device(hass, "old_gw") is not None
+    assert get_device(hass, "old_gw:probe") is not None
     assert get_device(hass, "new_gw") is not None
 
 
