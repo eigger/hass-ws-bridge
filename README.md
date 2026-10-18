@@ -55,9 +55,12 @@ A generic Home Assistant integration that enables **any authenticated WebSocket 
 1. **Add Integration in HA**:
    * Navigate to **Settings** -> **Devices & Services** -> **Add Integration**.
    * Search for **WebSocket Bridge** and add it. (It will initialize instantly without requiring any UI configuration.)
-2. **Generate Long-Lived Access Token**:
-   * Go to your Home Assistant user profile page, scroll to the bottom, and click **Create Token**. Copy the token value.
-3. **Configure Client**:
+2. **Allow Gateway Users**:
+   * Open the integration's **Configure** (options) dialog and select the users whose tokens gateways may use.
+   * Optional: while the list is empty, tokens of **administrator** users are accepted. Once you select users, only those users are accepted (administrators must be listed too). Use this to give gateways a dedicated non-admin account.
+3. **Generate Long-Lived Access Token**:
+   * Log in as one of the allowed users, go to the user profile page, scroll to the bottom, and click **Create Token**. Copy the token value.
+4. **Configure Client**:
    * Enter the Home Assistant WebSocket URL (e.g., `ws://192.168.1.100:8123/api/websocket`) and the generated token in your client application/device.
 
 ---

@@ -85,6 +85,11 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     snapshots[entry.entry_id] = new_gids
 
     bridge: WsBridge | None = domain_data.get(entry.entry_id)
+    if bridge:
+        # 허용 목록에서 빠진 토큰 소유자의 기존 연결은 끊는다.
+        bridge.close_connections(
+            lambda conn: not websocket_api.user_allowed(hass, conn.user)
+        )
     if bridge and removed:
         for gateway_id in removed:
             _LOGGER.info("Subentry removed — cleaning up gateway: %s", gateway_id)

@@ -10,6 +10,17 @@
       "already_configured": "Already configured."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "WebSocket Bridge options",
+        "description": "Select which users may own gateway tokens. Leave empty to allow administrators only.",
+        "data": {
+          "allowed_user_ids": "Users allowed to own gateway tokens"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "connected_clients": {
@@ -18,4 +29,3 @@
     }
   }
 }
-

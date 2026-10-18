@@ -1,12 +1,21 @@
 """ws_bridge/* protocol over the real HA WebSocket API (PROTOCOL.md §2-§3)."""
 
+import asyncio
+from datetime import timedelta
+
 import pytest
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
+
+from custom_components.ws_bridge.const import CONF_ALLOWED_USER_IDS, DOMAIN
 
 from .conftest import BridgeClient, entity_id_for, entity_is_live, get_device
 
@@ -552,3 +561,135 @@ async def test_sub_device_created_when_gateway_device_missing(
     sub = get_device(hass, "gw1:probe")
     assert sub is not None
     assert sub.via_device_id is None
+
+
+# ── token owner allowlist ───────────────────────────────────────────────────
+GUARDED_COMMANDS = [
+    ("connect", {"gateway_id": "gw2"}),
+    ("entity", {"unique_id": "s1", "platform": "sensor", "name": "S"}),
+    ("state", {"states": [{"unique_id": "s1", "value": 1}]}),
+    ("availability", {"device_id": "d1", "online": True}),
+    ("remove", {"unique_id": "s1"}),
+    ("sync", {"unique_ids": ["s1"]}),
+]
+
+
+@pytest.mark.parametrize(("command", "payload"), GUARDED_COMMANDS)
+async def test_commands_rejected_when_admin_not_listed(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    bridge_client_factory,
+    command: str,
+    payload: dict,
+) -> None:
+    """A non-empty allowlist is exclusive: even an admin must be listed."""
+    hass.config_entries.async_update_entry(
+        init_integration, options={CONF_ALLOWED_USER_IDS: ["someone-else"]}
+    )
+    ws = await bridge_client_factory()
+    msg = await ws.send(command, **payload)
+    assert not msg["success"]
+    assert msg["error"]["code"] == "not_allowed"
+
+
+@pytest.mark.parametrize(("command", "payload"), GUARDED_COMMANDS)
+async def test_empty_allowlist_rejects_non_admin(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client,
+    hass_read_only_access_token: str,
+    command: str,
+    payload: dict,
+) -> None:
+    ws = BridgeClient(
+        hass, init_integration, await hass_ws_client(hass, hass_read_only_access_token)
+    )
+    msg = await ws.send(command, **payload)
+    assert not msg["success"]
+    assert msg["error"]["code"] == "not_allowed"
+
+
+async def test_rejected_connect_creates_nothing(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client,
+    hass_read_only_access_token: str,
+) -> None:
+    ws = BridgeClient(
+        hass, init_integration, await hass_ws_client(hass, hass_read_only_access_token)
+    )
+    msg = await ws.send("connect", gateway_id="gw1", name="GW1")
+    assert msg["error"]["code"] == "not_allowed"
+    assert get_device(hass, "gw1") is None
+    assert not init_integration.subentries
+
+
+async def test_empty_allowlist_allows_admin(client: BridgeClient) -> None:
+    await client.entity("s1", "sensor")
+
+
+async def test_listed_non_admin_can_connect(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client,
+    hass_read_only_user,
+    hass_read_only_access_token: str,
+) -> None:
+    hass.config_entries.async_update_entry(
+        init_integration, options={CONF_ALLOWED_USER_IDS: [hass_read_only_user.id]}
+    )
+    ws = BridgeClient(
+        hass, init_integration, await hass_ws_client(hass, hass_read_only_access_token)
+    )
+    await ws.connect()
+    await ws.entity("s1", "sensor")
+    assert get_device(hass, "gw1") is not None
+
+
+async def test_rejected_commands_do_not_change_state(
+    hass: HomeAssistant, client: BridgeClient, bridge_client_factory
+) -> None:
+    await client.entity("s1", "sensor")
+    await client.state("s1", 1)
+    hass.config_entries.async_update_entry(
+        client.entry, options={CONF_ALLOWED_USER_IDS: ["someone-else"]}
+    )
+    await hass.async_block_till_done()
+    ws = await bridge_client_factory()
+    for command, payload in GUARDED_COMMANDS[2:]:
+        msg = await ws.send(command, **payload)
+        assert msg["error"]["code"] == "not_allowed"
+    assert entity_id_for(hass, "sensor", "s1") is not None
+
+
+async def test_connection_closed_when_owner_removed_from_allowlist(
+    hass: HomeAssistant, client: BridgeClient, hass_admin_user
+) -> None:
+    hass.config_entries.async_update_entry(
+        client.entry, options={CONF_ALLOWED_USER_IDS: ["someone-else"]}
+    )
+    await hass.async_block_till_done()
+    bridge = hass.data[DOMAIN][client.entry.entry_id]
+    for _ in range(200):
+        await asyncio.sleep(0.01)
+        await hass.async_block_till_done()
+        if not bridge._conn_client:
+            break
+    assert not bridge._conn_client
+
+
+async def test_connection_closed_after_command_rejected_for_lost_admin(
+    hass: HomeAssistant, client: BridgeClient, hass_admin_user
+) -> None:
+    """Losing admin rights (no options change) closes the gateway on its next command."""
+    await hass.auth.async_update_user(hass_admin_user, group_ids=["system-read-only"])
+    msg = await client.send("state", states=[{"unique_id": "s1", "value": 1}])
+    assert msg["error"]["code"] == "not_allowed"
+    bridge = hass.data[DOMAIN][client.entry.entry_id]
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=2))
+    for _ in range(200):
+        await asyncio.sleep(0.01)
+        await hass.async_block_till_done()
+        if not bridge._conn_client:
+            break
+    assert not bridge._conn_client

@@ -21,6 +21,7 @@ The integration utilizes Home Assistant's standard WebSocket API (`/api/websocke
    - Send: `{"type": "auth", "access_token": "<LONG_LIVED_ACCESS_TOKEN>"}`
    - Receive: `{"type": "auth_ok", "ha_version": "..."}`
 3. **Only after `auth_ok`** may the client send `ws_bridge/*` commands below.
+   - The token owner must be an administrator, or — when users are selected in the integration options (allowed gateway users) — one of those users (then administrators must be listed too). Otherwise every `ws_bridge/*` command fails with error code `not_allowed`. A gateway whose owner is removed from the selection is disconnected.
 4. The client registers its gateway session:
    - Send: `{"id": <n>, "type": "ws_bridge/connect", "gateway_id": "<unique_id>", "name": "<display_name>"}`
    - `gateway_id` (String, Required): A unique identifier for the client. Used to create a gateway device in HA and namespace all associated devices and entities to avoid collision.
