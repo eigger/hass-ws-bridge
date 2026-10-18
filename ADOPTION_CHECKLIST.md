@@ -13,7 +13,7 @@
 | 검토일 / 조율 담당 | 2026-10-18 / 메인 에이전트 |
 | 구현 서브 에이전트 / 독립 리뷰·검증 서브 에이전트 | Opus 구현 에이전트 / 별도 Opus 리뷰 에이전트 |
 | 원격 CI(PR #52) | Tests(lint, Python 3.14 unit)·Validate(hacs, hassfest) 4개 SUCCESS |
-| 중앙 현황표 반영일 / 기록 | 미반영 — 중앙 리포 PR 필요(GOV-04 TODO) |
+| 중앙 현황표 반영일 / 기록 | 2026-10-18 / [커밋 645184b](https://github.com/eigger/hass-repo-standards/commit/645184b) |
 | 변경 전 지원 최소 HA / 근거 파일 | 2026.9.0 / hacs.json |
 | 유지·변경할 지원 최소 / 변경 시 실제 비호환 근거·명시적 승인 | 2026.9.0 유지, 변경 없음 |
 | current 테스트 HA / 호환 Python·플러그인 | HA 2026.10.2 / Python 3.14.5 / plugin 0.13.373 |
@@ -30,7 +30,7 @@
 |---|---|---|---|
 | GOV-01, GOV-02 | `STANDARDS.md`에 표준 SHA·profile·실제 기본 브랜치·예외 기록, workflow/action은 검토 SHA로 고정 | PASS | STANDARDS.md(SHA·profile·브랜치·예외), tests.yml/validate.yml이 `@ba9f3fa…` 전체 SHA로 고정 |
 | GOV-03 | 새 표준 채택 변경의 영향·이관 방법과 명시적 채택 PR 확인. 규칙 자체를 변경하면 공통 CHANGELOG 기록 | PASS | 이 PR이 명시적 채택 PR. 규칙 리포가 아니므로 공통 CHANGELOG 변경 없음 |
-| GOV-04 | 중앙 표에 작업 시작·단계 변경·종료 상태, 담당·적용 내용·검증/리뷰 근거·남은 작업 갱신, 타 리포 기록 보존 | TODO | 중앙 adoption-status.md는 별도 리포 PR 필요, 이번 PR에서 미반영 |
+| GOV-04 | 중앙 표에 작업 시작·단계 변경·종료 상태, 담당·적용 내용·검증/리뷰 근거·남은 작업 갱신, 타 리포 기록 보존 | PASS | 중앙 표 자기 행 갱신: [커밋 645184b](https://github.com/eigger/hass-repo-standards/commit/645184b) (다른 행 변경 없음) |
 | GOV-05 | 구현과 독립 리뷰·검증을 별도 서브 에이전트에게 위임, 지적 수정·재검증 및 결과 취합 | EXCEPTION | PR #52는 메인 에이전트가 구현(사후 Opus 리뷰), 이번 PR은 Opus 구현 서브 에이전트 + 별도 Opus 리뷰어가 수행하고 지적 수정·재검증함. PR #52분 예외는 [STANDARDS.md 예외](STANDARDS.md#예외) |
 | HA-01, HA-13 | `custom_components/<domain>/`와 domain 일치, 필요한 모듈·공개 API·생명주기는 Core 대응 구조 | PASS | `custom_components/ws_bridge/`가 manifest domain `ws_bridge`와 일치. 라이프사이클 상세 검토는 HA-05 행 |
 | HA-02 | manifest 필드·정렬·동작 선언 확인, 공식 품질 등급 자가 표기 없음 | PASS | manifest 필드 확인: domain·name·codeowners·config_flow·dependencies·documentation·iot_class·issue_tracker·requirements·version, 품질 등급 자가 표기 없음 |
@@ -101,8 +101,7 @@
 
 | 규칙 ID / TODO | 남은 작업 / issue·PR | 담당자 | 완료 근거 |
 |---|---|---|---|
-| GOV-04 | 중앙 adoption-status.md 자기 리포 행 갱신(중앙 리포 PR) | @eigger | 중앙 PR 링크 |
 | CI-04/12 | required checks(`current / lint`, `current / Python 3.14 / ha / current`, `minimum-ha / lint`, `minimum-ha / Python 3.14 / ha / current`, `validate / hacs`, `validate / hassfest`) 저장소 설정 반영(옛 `unit` 체크 요구가 있으면 제거) | @eigger | branch protection 설정 |
 | 제품 결함 | 수정 완료(xfail 5건 해제): ① `_remove_entity_ns`가 registry 항목까지 제거 ② lock 낙관 플래그 상호 배타 ③ unload가 클라이언트 소켓 종료. 남은 항목: update 낙관 in_progress는 HA install wrapper가 즉시 초기화해 보이지 않음(테스트로 문서화) | @eigger | 이 수정 PR |
 
-최종 검토 시 적용 대상 필수 `TODO`는 GOV-04, HA-05/06(부분 setup 실패 정리 검증)이며 CI 성공만으로 실물 기기 검증을 주장하지 않습니다. 이 통합은 특정 기기에 묶이지 않아 실물 검증 해당 없음입니다.
+최종 검토 시 적용 대상 필수 `TODO`는 HA-05/06(부분 setup 실패 정리 검증)이며 CI 성공만으로 실물 기기 검증을 주장하지 않습니다. 이 통합은 특정 기기에 묶이지 않아 실물 검증 해당 없음입니다.
