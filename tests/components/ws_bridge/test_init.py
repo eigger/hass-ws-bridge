@@ -6,6 +6,7 @@ from aiohttp import WSMsgType
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
@@ -322,3 +323,61 @@ async def test_unload_closes_client_connections(
     assert "Error closing client connection" not in caplog.text
     assert (await client.ws.receive(timeout=5)).type is WSMsgType.CLOSE
     assert client.ws.closed
+
+
+async def test_connect_shared_name_does_not_remove_offline_gateway(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    bridge_client_factory,
+) -> None:
+    """Connecting a client with the same display name as an offline gateway
+    must not delete the offline gateway, its subdevices, or entities."""
+    gw1 = await bridge_client_factory()
+    await gw1.connect("gw1", "Shared Gateway Name")
+    await gw1.entity("temp", "sensor", "Temp", device={"id": "room", "name": "Room"})
+    await gw1.state("temp", 21)
+
+    assert get_device(hass, "gw1") is not None
+    assert get_device(hass, "gw1:room") is not None
+    assert entity_id_for(hass, "sensor", "temp", "gw1") is not None
+
+    # gw1 goes offline (e.g. during reboot)
+    await gw1.close()
+
+    # gw2 connects with the same display name
+    gw2 = await bridge_client_factory()
+    await gw2.connect("gw2", "Shared Gateway Name")
+    await gw2.entity("hum", "sensor", "Humidity")
+    await gw2.state("hum", 55)
+
+    # gw1's devices and entities must remain in registries
+    assert get_device(hass, "gw1") is not None
+    assert get_device(hass, "gw1:room") is not None
+    assert entity_id_for(hass, "sensor", "temp", "gw1") is not None
+
+    # gw2's devices and entities are also registered
+    assert get_device(hass, "gw2") is not None
+    assert entity_id_for(hass, "sensor", "hum", "gw2") is not None
+
+
+async def test_connect_client_named_websocket_bridge_does_not_remove_service_device(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    bridge_client_factory,
+) -> None:
+    """A client naming itself 'WebSocket Bridge' must not remove the service device."""
+    dev_reg = dr.async_get(hass)
+    service_device = dev_reg.async_get_device(
+        identifiers={(DOMAIN, init_integration.entry_id)}
+    )
+    assert service_device is not None
+
+    client = await bridge_client_factory()
+    await client.connect("gw_imposter", "WebSocket Bridge")
+
+    # Service device must still exist
+    service_device_after = dev_reg.async_get_device(
+        identifiers={(DOMAIN, init_integration.entry_id)}
+    )
+    assert service_device_after is not None
+
