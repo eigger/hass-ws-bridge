@@ -8,6 +8,8 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.ws_bridge.const import CONF_ALLOWED_USER_IDS
+
 from .conftest import BridgeClient, entity_id_for, entity_is_live, get_device
 
 
@@ -552,3 +554,44 @@ async def test_sub_device_created_when_gateway_device_missing(
     sub = get_device(hass, "gw1:probe")
     assert sub is not None
     assert sub.via_device_id is None
+
+
+# ── token owner allowlist ───────────────────────────────────────────────────
+GUARDED_COMMANDS = [
+    ("connect", {"gateway_id": "gw2"}),
+    ("entity", {"unique_id": "s1", "platform": "sensor", "name": "S"}),
+    ("state", {"states": [{"unique_id": "s1", "value": 1}]}),
+    ("availability", {"device_id": "d1", "online": True}),
+    ("remove", {"unique_id": "s1"}),
+    ("sync", {"unique_ids": ["s1"]}),
+]
+
+
+@pytest.mark.parametrize(
+    "allowed", [[], ["someone-else"]], ids=["empty_allowlist", "owner_not_listed"]
+)
+@pytest.mark.parametrize(("command", "payload"), GUARDED_COMMANDS)
+async def test_commands_rejected_when_token_owner_not_allowed(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    allowed: list[str],
+    command: str,
+    payload: dict,
+) -> None:
+    hass.config_entries.async_update_entry(
+        client.entry, options={CONF_ALLOWED_USER_IDS: allowed}
+    )
+    msg = await client.send(command, **payload)
+    assert not msg["success"]
+    assert msg["error"]["code"] == "not_allowed"
+
+
+async def test_connect_rejected_without_options_creates_nothing(
+    hass: HomeAssistant, config_entry: MockConfigEntry, bridge_client_factory
+) -> None:
+    hass.config_entries.async_update_entry(config_entry, options={})
+    gw = await bridge_client_factory()
+    msg = await gw.send("connect", gateway_id="gw1", name="GW1")
+    assert msg["error"]["code"] == "not_allowed"
+    assert get_device(hass, "gw1") is None
+    assert not config_entry.subentries

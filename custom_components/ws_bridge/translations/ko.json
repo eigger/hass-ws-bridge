@@ -10,6 +10,17 @@
       "already_configured": "이미 설정되어 있습니다."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "WebSocket Bridge 옵션",
+        "description": "게이트웨이 토큰을 소유할 수 있는 사용자를 선택하세요. 게이트웨이 클라이언트는 이 사용자 중 한 명이 만든 장기 액세스 토큰으로 접속해야 합니다.",
+        "data": {
+          "allowed_user_ids": "게이트웨이 토큰 소유가 허용된 사용자"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "connected_clients": {
@@ -18,4 +29,3 @@
     }
   }
 }
-

@@ -129,3 +129,5 @@ DEFAULT_PLATFORM_ICONS: dict[str, str] = {
     PLATFORM_IMAGE: "mdi:image",
     PLATFORM_CAMERA: "mdi:camera",
 }
+
+CONF_ALLOWED_USER_IDS = "allowed_user_ids"

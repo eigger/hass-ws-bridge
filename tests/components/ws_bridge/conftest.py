@@ -13,6 +13,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Any
 
 import pytest
+from homeassistant.auth.models import User
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
@@ -25,7 +26,7 @@ from pytest_homeassistant_custom_component.typing import (
 )
 
 from custom_components.ws_bridge.bridge import WsBridge
-from custom_components.ws_bridge.const import DOMAIN
+from custom_components.ws_bridge.const import CONF_ALLOWED_USER_IDS, DOMAIN
 
 RECEIVE_TIMEOUT = 5
 
@@ -163,10 +164,14 @@ async def restart_without_client(
 
 
 @pytest.fixture
-def config_entry(hass: HomeAssistant) -> MockConfigEntry:
-    """The single ws_bridge config entry, as the config flow creates it."""
+def config_entry(hass: HomeAssistant, hass_admin_user: User) -> MockConfigEntry:
+    """The single ws_bridge config entry, allowing the test client's token owner."""
     entry = MockConfigEntry(
-        domain=DOMAIN, title="WebSocket Bridge", unique_id=DOMAIN, data={}
+        domain=DOMAIN,
+        title="WebSocket Bridge",
+        unique_id=DOMAIN,
+        data={},
+        options={CONF_ALLOWED_USER_IDS: [hass_admin_user.id]},
     )
     entry.add_to_hass(hass)
     return entry
