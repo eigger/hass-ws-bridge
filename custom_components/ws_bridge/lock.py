@@ -100,16 +100,22 @@ class WsBridgeLock(WsBridgeEntity, LockEntity):
     async def async_lock(self, **kwargs: Any) -> None:
         self._send_command("lock", params=self._code_params(kwargs.get("code")))
         self._attr_is_locking = True
+        self._attr_is_unlocking = False
+        self._attr_is_opening = False
         self._attr_is_locked = False
         self.async_write_ha_state()
 
     async def async_unlock(self, **kwargs: Any) -> None:
         self._send_command("unlock", params=self._code_params(kwargs.get("code")))
+        self._attr_is_locking = False
         self._attr_is_unlocking = True
+        self._attr_is_opening = False
         self._attr_is_locked = True
         self.async_write_ha_state()
 
     async def async_open(self, **kwargs: Any) -> None:
         self._send_command("open", params=self._code_params(kwargs.get("code")))
+        self._attr_is_locking = False
+        self._attr_is_unlocking = False
         self._attr_is_opening = True
         self.async_write_ha_state()

@@ -387,7 +387,15 @@ class WsBridge:
         """Close all client connections when integration unloads."""
         for conn in list(self._connections):
             try:
-                conn.close()
+                # ActiveConnection has no public close(). Its send_message is the
+                # bound WebSocketHandler._send_message, and the handler's _cancel()
+                # is what HA itself uses on shutdown: it cancels the handler tasks,
+                # whose cleanup closes the socket and runs the subscriptions.
+                handler = getattr(conn.send_message, "__self__", None)
+                cancel = getattr(handler, "_cancel", None)
+                if cancel is None:
+                    raise RuntimeError("websocket handler not found")
+                cancel()
             except Exception as e:  # noqa: BLE001
                 _LOGGER.warning("Error closing client connection: %s", e)
 
@@ -706,16 +714,20 @@ class WsBridge:
 
     async def _remove_entity_ns(self, ns_uid: str, *, persist: bool = True) -> None:
         entity = self._entities.pop(ns_uid, None)
-        if entity is not None:
-            await entity.async_remove()
-        else:
-            entity_reg = er.async_get(self.hass)
-            for entity_entry in er.async_entries_for_config_entry(
-                entity_reg, self.entry_id
-            ):
-                if entity_entry.unique_id == ns_uid:
-                    entity_reg.async_remove(entity_entry.entity_id)
-                    break
+        entity_reg = er.async_get(self.hass)
+        # Entity.async_remove()는 레지스트리 항목을 남기므로, 레지스트리에서
+        # 직접 지운다 (엔티티도 함께 제거된다).
+        entity_id = None
+        for entity_entry in er.async_entries_for_config_entry(
+            entity_reg, self.entry_id
+        ):
+            if entity_entry.unique_id == ns_uid:
+                entity_id = entity_entry.entity_id
+                break
+        if entity_id is not None:
+            entity_reg.async_remove(entity_id)
+        elif entity is not None:
+            await entity.async_remove(force_remove=True)
 
         self._created.discard(ns_uid)
         self._states.pop(ns_uid, None)

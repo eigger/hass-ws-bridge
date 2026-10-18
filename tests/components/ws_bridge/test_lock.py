@@ -73,14 +73,6 @@ async def test_lock_commands_with_code(
     assert hass.states.get(entity_id).state == LockState.OPENING
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "BUG custom_components/ws_bridge/lock.py: async_lock/async_unlock/async_open "
-        "set one optimistic flag without clearing the others, so unlock right after "
-        "lock (before the client reports) still shows 'locking'"
-    ),
-)
 async def test_lock_back_to_back_optimistic_commands(
     hass: HomeAssistant, client: BridgeClient
 ) -> None:

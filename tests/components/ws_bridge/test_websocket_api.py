@@ -10,12 +10,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from .conftest import BridgeClient, entity_id_for, entity_is_live, get_device
 
-REGISTRY_BUG = (
-    "BUG custom_components/ws_bridge/bridge.py _remove_entity_ns: a live entity is "
-    "removed with Entity.async_remove(), which keeps its entity registry entry "
-    "(state becomes unavailable) instead of deleting it"
-)
-
 
 # ── connect / gateway device ────────────────────────────────────────────────
 async def test_connect_registers_gateway_device_with_defaults(
@@ -368,7 +362,6 @@ async def test_remove_entity_exact_and_prefix(
     assert hass.states.get(entity_id_for(hass, "sensor", "sensor_1")).state == "5"
 
 
-@pytest.mark.xfail(strict=True, reason=REGISTRY_BUG)
 async def test_remove_entity_deletes_registry_entry(
     hass: HomeAssistant, client: BridgeClient
 ) -> None:
@@ -381,13 +374,17 @@ async def test_remove_entity_deletes_registry_entry(
 
 
 async def test_remove_entity_not_live_deletes_registry_entry(
-    hass: HomeAssistant, init_integration: MockConfigEntry, client: BridgeClient
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    client: BridgeClient,
+    bridge_client_factory,
 ) -> None:
     """An entity that is only in the registry (not created this run) is removed
     from the registry."""
     await client.entity("t", "sensor", "T")
     assert await hass.config_entries.async_reload(init_integration.entry_id)
     await hass.async_block_till_done()
+    client = await bridge_client_factory()  # reload closed the old socket
     await client.connect()
     await client.ok("remove", unique_id="t")
     assert entity_id_for(hass, "sensor", "t") is None
@@ -469,7 +466,6 @@ async def test_sync_removes_only_undeclared(
     )
 
 
-@pytest.mark.xfail(strict=True, reason=REGISTRY_BUG)
 async def test_sync_deletes_registry_entry_and_is_idempotent(
     hass: HomeAssistant, client: BridgeClient
 ) -> None:
@@ -496,7 +492,6 @@ async def test_sync_noop_and_keeps_gateway_device(
     assert get_device(hass, "gw1") is not None
 
 
-@pytest.mark.xfail(strict=True, reason=REGISTRY_BUG)
 async def test_sync_prunes_sub_devices_left_empty(
     hass: HomeAssistant, client: BridgeClient
 ) -> None:
