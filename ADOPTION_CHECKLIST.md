@@ -105,3 +105,25 @@
 | 제품 결함 | 수정 완료(xfail 5건 해제): ① `_remove_entity_ns`가 registry 항목까지 제거 ② lock 낙관 플래그 상호 배타 ③ unload가 클라이언트 소켓 종료. 남은 항목: update 낙관 in_progress는 HA install wrapper가 즉시 초기화해 보이지 않음(테스트로 문서화) | @eigger | 이 수정 PR |
 
 최종 검토 시 적용 대상 필수 `TODO`는 HA-05/06(부분 setup 실패 정리 검증)이며 CI 성공만으로 실물 기기 검증을 주장하지 않습니다. 이 통합은 특정 기기에 묶이지 않아 실물 검증 해당 없음입니다.
+
+
+## 2026-10-22 재검토
+
+이번 검토 대상은 main에서 시작한 로컬 변경이며, 검토 표준은 `0ec31111a81b0ee5702f1d8a17f03616a10a5db6`입니다. 위 2026-10-18 채택 표는 이력으로 보존하며 이번 변경의 검증 결과와 구분합니다.
+
+| 항목 | 상태 | 이번 검토 근거 |
+|---|---|---|
+| GOV-01, GOV-02 | PASS | 최신 원격 main full SHA 확인 (`0ec31111a81b0ee5702f1d8a17f03616a10a5db6`), STANDARDS.md 기준 SHA 및 workflows의 `standards-ref` 일치 |
+| HACS-01, HACS-02 | PASS | 루트 README/LICENSE/hacs.json 존재, 최소 지원 HA 2026.9.0 유지 |
+| HACS-03 | PASS | [공식 기본 목록](https://github.com/hacs/default/blob/master/integration)에 `eigger/hass-ws-bridge` 포함 확인 (2026-10-21 [PR #10042](https://github.com/hacs/default/pull/10042) 머지). Default 배지 및 My Home Assistant 바로가기 연결 |
+| HA-02 | PASS | 실제 WebSocket 브리지 용도에 맞게 `diy_makers.web_data_connectors`, `hubs_protocols` 카테고리 선정. 공식 Core taxonomy 확인, manifest.json 및 `.hass-standards.json.categories_review`에 기록 |
+| DOC-01…DOC-06 | PASS | 중앙 README 템플릿 영역(`header`, `badges`, `installation`, `support`, `related-projects`, `license`) 경계 주석 반영, HACS Default 및 Downloads 배지 적용, `check_integration.py` 검사 통과 |
+| TEST-08, TEST-03 | PASS | 26개 플랫폼 1:1 테스트 파일 구성 (`test_alarm_control_panel.py`, `test_camera.py`, `test_date.py`, `test_datetime.py`, `test_humidifier.py`, `test_image.py`, `test_siren.py`, `test_time.py`, `test_water_heater.py` 분리 이관), 루트 conftest 중앙 템플릿 일치, 도메인 conftest 마커 추가, 207개 테스트 전량 통과 |
+| CI-01, CI-02, CI-03 | PASS | Tests/Validate 워크플로 최신 SHA `0ec31111a81b0ee5702f1d8a17f03616a10a5db6` 고정, `standards` job(중앙 템플릿 적합성 검사) 및 `hassfest-core-ref` 설정 |
+| REL-01…REL-03 | N/A | 이번 작업에서 버전·태그·릴리스를 생성하지 않음 |
+
+### 이번 검증 결과
+
+- 로컬 Python 3.14 WSL 테스트: `python3 -m pytest tests/components/ws_bridge/ -q` → 207 passed in 123.07s
+- 정적 분석: `python -m ruff check .` → All checks passed!, `python -m ruff format --check .` → 79 files already formatted
+- 중앙 통합 검사: `python ..\hass-repo-standards\scripts\check_integration.py . --check` → Exit code 0 (오류 없음)

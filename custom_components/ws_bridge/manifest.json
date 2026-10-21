@@ -1,6 +1,10 @@
 {
   "domain": "ws_bridge",
   "name": "WebSocket Bridge",
+  "categories": [
+    "diy_makers.web_data_connectors",
+    "hubs_protocols"
+  ],
   "codeowners": [
     "@eigger"
   ],

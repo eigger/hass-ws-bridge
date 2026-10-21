@@ -1,19 +1,22 @@
+<!-- hass-standards:header:start -->
 # WebSocket Bridge (`ws_bridge`) for Home Assistant
 
+Generic WebSocket Bridge for Home Assistant that dynamically registers devices and entities from external WebSocket clients.
+
+**English** | [한국어](README.ko.md)
+
 <!-- hass-standards:badges:start -->
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?style=flat-square)](#-installation)
-[![Release](https://img.shields.io/github/v/release/eigger/hass-ws-bridge?style=flat-square)](https://github.com/eigger/hass-ws-bridge/releases)
-[![Home Assistant minimum](https://img.shields.io/badge/HA-%E2%89%A5%202026.9.0-41BDF5?style=flat-square)](hacs.json)
-[![Tests](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/tests.yml?branch=main&style=flat-square&label=Tests)](https://github.com/eigger/hass-ws-bridge/actions/workflows/tests.yml)
-[![Validate](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/validate.yml?branch=main&style=flat-square&label=Validate)](https://github.com/eigger/hass-ws-bridge/actions/workflows/validate.yml)
-[![License](https://img.shields.io/github/license/eigger/hass-ws-bridge?style=flat-square)](LICENSE)
-[![Analytics reporting installs](https://img.shields.io/badge/dynamic/json?style=flat-square&color=41BDF5&label=Usage&query=%24.ws_bridge.total&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json)](https://analytics.home-assistant.io/)
+[![Release](https://img.shields.io/github/v/release/eigger/hass-ws-bridge?style=flat)](https://github.com/eigger/hass-ws-bridge/releases)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5?style=flat)](#-installation)
+[![Home Assistant minimum](https://img.shields.io/badge/HA-%E2%89%A5%202026.9.0-41BDF5?style=flat)](hacs.json)
+[![Tests](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/tests.yml?branch=main&style=flat&label=Tests)](https://github.com/eigger/hass-ws-bridge/actions/workflows/tests.yml)
+[![Validate](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/validate.yml?branch=main&style=flat&label=Validate)](https://github.com/eigger/hass-ws-bridge/actions/workflows/validate.yml)
+[![License](https://img.shields.io/github/license/eigger/hass-ws-bridge?style=flat)](LICENSE)
+[![HACS Downloads](https://img.shields.io/badge/dynamic/json?style=flat&color=41BDF5&label=HACS+Downloads&query=%24%5B%3F%28%40.full_name%3D%3D%22eigger%2Fhass-ws-bridge%22%29%5D.downloads&url=https%3A%2F%2Fdata-v2.hacs.xyz%2Fintegration%2Fdata.json)](https://www.hacs.xyz/)
 <!-- hass-standards:badges:end -->
+<!-- hass-standards:header:end -->
 
 A generic Home Assistant integration that enables **any authenticated WebSocket client** to dynamically create and update entities. It is fully decoupled from specific hardware or protocols (e.g., BLE, Zigbee); as long as the client conforms to the defined communication protocol, it works out of the box.
-
-> [한글 README (README.ko.md)](README.ko.md)
-
 
 ## 🚀 Key Features
 
@@ -36,11 +39,14 @@ A generic Home Assistant integration that enables **any authenticated WebSocket 
 
 ## 💾 Installation
 
+<!-- hass-standards:installation:start -->
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eigger&repository=hass-ws-bridge)
+<!-- hass-standards:installation:end -->
+
 ### Method 1: Via HACS (Recommended)
-1. Navigate to **HACS** in your Home Assistant sidebar.
-2. Click the three dots in the top right corner and select **Custom repositories**.
-3. Enter `https://github.com/eigger/hass-ws-bridge` as the repository URL, set the category to **Integration**, and click **Add**.
-4. Install the integration, then **restart Home Assistant**.
+1. Open your Home Assistant instance and navigate to **HACS**.
+2. Search for **WebSocket Bridge** (`ws_bridge`) in the default integration store, or click the My Home Assistant button above.
+3. Click **Download**, then restart Home Assistant.
 
 ### Method 2: Manual Installation
 1. Download the `custom_components/ws_bridge` folder from this repository.
@@ -92,13 +98,18 @@ See the documents below for entity declaration, commands and the full message se
 
 ---
 
-## 💬 Feedback & Support
+<!-- hass-standards:support:start -->
+## Support
 
-🐞 Found a bug? Let us know via an [Issue](https://github.com/eigger/hass-ws-bridge/issues).  
-💡 Have a question or suggestion? Join the [Discussion](https://github.com/eigger/hass-ws-bridge/discussions)!
+- [Issues](https://github.com/eigger/hass-ws-bridge/issues): Report bugs or request features.
+- [Discussions](https://github.com/eigger/hass-ws-bridge/discussions): Ask questions and share your experience.
+<!-- hass-standards:support:end -->
 
+<!-- hass-standards:related-projects:start -->
+<!-- hass-standards:related-projects:end -->
 
----
+<!-- hass-standards:license:start -->
+## License
 
-## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Released under the [MIT License](LICENSE).
+<!-- hass-standards:license:end -->

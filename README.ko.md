@@ -1,19 +1,22 @@
+<!-- hass-standards:header:start -->
 # WebSocket Bridge (`ws_bridge`) for Home Assistant
 
+외부 WebSocket 클라이언트에서 기기와 엔티티를 동적으로 등록하는 Home Assistant 통합구성요소입니다.
+
+[English](README.md) | **한국어**
+
 <!-- hass-standards:badges:start -->
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?style=flat-square)](#-설치)
-[![Release](https://img.shields.io/github/v/release/eigger/hass-ws-bridge?style=flat-square)](https://github.com/eigger/hass-ws-bridge/releases)
-[![Home Assistant minimum](https://img.shields.io/badge/HA-%E2%89%A5%202026.9.0-41BDF5?style=flat-square)](hacs.json)
-[![Tests](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/tests.yml?branch=main&style=flat-square&label=Tests)](https://github.com/eigger/hass-ws-bridge/actions/workflows/tests.yml)
-[![Validate](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/validate.yml?branch=main&style=flat-square&label=Validate)](https://github.com/eigger/hass-ws-bridge/actions/workflows/validate.yml)
-[![License](https://img.shields.io/github/license/eigger/hass-ws-bridge?style=flat-square)](LICENSE)
-[![Analytics reporting installs](https://img.shields.io/badge/dynamic/json?style=flat-square&color=41BDF5&label=Usage&query=%24.ws_bridge.total&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json)](https://analytics.home-assistant.io/)
+[![Release](https://img.shields.io/github/v/release/eigger/hass-ws-bridge?style=flat)](https://github.com/eigger/hass-ws-bridge/releases)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5?style=flat)](#-설치)
+[![Home Assistant minimum](https://img.shields.io/badge/HA-%E2%89%A5%202026.9.0-41BDF5?style=flat)](hacs.json)
+[![Tests](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/tests.yml?branch=main&style=flat&label=Tests)](https://github.com/eigger/hass-ws-bridge/actions/workflows/tests.yml)
+[![Validate](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/validate.yml?branch=main&style=flat&label=Validate)](https://github.com/eigger/hass-ws-bridge/actions/workflows/validate.yml)
+[![License](https://img.shields.io/github/license/eigger/hass-ws-bridge?style=flat)](LICENSE)
+[![HACS Downloads](https://img.shields.io/badge/dynamic/json?style=flat&color=41BDF5&label=HACS+Downloads&query=%24%5B%3F%28%40.full_name%3D%3D%22eigger%2Fhass-ws-bridge%22%29%5D.downloads&url=https%3A%2F%2Fdata-v2.hacs.xyz%2Fintegration%2Fdata.json)](https://www.hacs.xyz/)
 <!-- hass-standards:badges:end -->
+<!-- hass-standards:header:end -->
 
 인증된 **WebSocket 클라이언트**가 엔티티를 동적으로 생성·갱신할 수 있게 해 주는 범용 Home Assistant 통합구성요소입니다. BLE, Zigbee 등 특정 하드웨어나 프로토콜에 묶이지 않으며, 정의된 통신 규약만 따르면 바로 사용할 수 있습니다.
-
-> [English README (README.md)](README.md)
-
 
 ## 🚀 주요 기능
 
@@ -36,11 +39,14 @@
 
 ## 💾 설치
 
+<!-- hass-standards:installation:start -->
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eigger&repository=hass-ws-bridge)
+<!-- hass-standards:installation:end -->
+
 ### 방법 1: HACS (권장)
 1. Home Assistant 사이드바에서 **HACS**로 이동합니다.
-2. 우측 상단 점 세 개 → **사용자 지정 리포지토리**를 선택합니다.
-3. 리포지토리 URL에 `https://github.com/eigger/hass-ws-bridge`를 입력하고, 카테고리를 **Integration**으로 설정한 뒤 **추가**합니다.
-4. 통합구성요소를 설치한 후 **Home Assistant를 재시작**합니다.
+2. 기본 통합 스토어에서 **WebSocket Bridge** (`ws_bridge`)를 검색하거나 위의 My Home Assistant 바로가기 버튼을 누릅니다.
+3. **다운로드**를 클릭한 후 **Home Assistant를 재시작**합니다.
 
 ### 방법 2: 수동 설치
 1. 이 리포지토리에서 `custom_components/ws_bridge` 폴더를 받습니다.
@@ -92,12 +98,18 @@
 
 ---
 
-## 💬 피드백 및 지원
+<!-- hass-standards:support:start -->
+## 지원
 
-🐞 버그를 발견하셨나요? [Issue](https://github.com/eigger/hass-ws-bridge/issues)로 알려 주세요.  
-💡 질문이나 제안이 있으신가요? [Discussion](https://github.com/eigger/hass-ws-bridge/discussions)에 참여해 주세요!
+- [Issues](https://github.com/eigger/hass-ws-bridge/issues): 버그를 신고하거나 기능을 요청하세요.
+- [Discussions](https://github.com/eigger/hass-ws-bridge/discussions): 질문하고 사용 경험을 공유하세요.
+<!-- hass-standards:support:end -->
 
----
+<!-- hass-standards:related-projects:start -->
+<!-- hass-standards:related-projects:end -->
 
-## 📄 라이선스
-이 프로젝트는 MIT License 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참고하세요.
+<!-- hass-standards:license:start -->
+## 라이선스
+
+[MIT License](LICENSE) 라이선스로 배포됩니다.
+<!-- hass-standards:license:end -->
