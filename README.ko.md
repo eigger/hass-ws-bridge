@@ -7,7 +7,7 @@
 
 <!-- hass-standards:badges:start -->
 [![Release](https://img.shields.io/github/v/release/eigger/hass-ws-bridge?style=flat)](https://github.com/eigger/hass-ws-bridge/releases)
-[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5?style=flat)](#-설치)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5?style=flat)](#설치)
 [![Home Assistant minimum](https://img.shields.io/badge/HA-%E2%89%A5%202026.9.0-41BDF5?style=flat)](hacs.json)
 [![Tests](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/tests.yml?branch=main&style=flat&label=Tests)](https://github.com/eigger/hass-ws-bridge/actions/workflows/tests.yml)
 [![Validate](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/validate.yml?branch=main&style=flat&label=Validate)](https://github.com/eigger/hass-ws-bridge/actions/workflows/validate.yml)
@@ -18,7 +18,7 @@
 
 인증된 **WebSocket 클라이언트**가 엔티티를 동적으로 생성·갱신할 수 있게 해 주는 범용 Home Assistant 통합구성요소입니다. BLE, Zigbee 등 특정 하드웨어나 프로토콜에 묶이지 않으며, 정의된 통신 규약만 따르면 바로 사용할 수 있습니다.
 
-## 🚀 주요 기능
+## 주요 기능
 
 - **추가 브로커/포트 불필요**: Home Assistant 표준 WebSocket API(`/api/websocket`)와 장기 액세스 토큰만 사용합니다. MQTT 브로커를 따로 띄우거나 TCP 포트를 추가로 열 필요가 없습니다.
 - **동적 엔티티 생성**: 클라이언트가 WebSocket으로 JSON 메시지로 엔티티를 선언하면 Home Assistant에 즉시 생성됩니다.
@@ -27,17 +27,16 @@
 - **연결 상태 추적(LWT)**: 클라이언트 WebSocket 연결이 끊기면, 그 클라이언트가 등록한 하위 장치·엔티티가 자동으로 `unavailable`이 됩니다.
 - **연결 클라이언트 수 진단 센서**: 현재 WebSocket으로 연결된 클라이언트(`gateway_id`) 수를 실시간으로 표시하는 진단 센서를 제공합니다.
 
-
 ---
 
-## 📋 요구 사항
+## 요구 사항
 
 - Home Assistant 2026.9.0 이상 (`hacs.json` 기준). HACS 커스텀 통합이며 Home Assistant Core에 포함된 공식 통합이 아닙니다.
 - 인증된 WebSocket 클라이언트와 장기 액세스 토큰.
 
 ---
 
-## 💾 설치
+## 설치
 
 <!-- hass-standards:installation:start -->
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eigger&repository=hass-ws-bridge)
@@ -56,7 +55,7 @@
 
 ---
 
-## ⚙️ 설정
+## 설정
 
 1. **HA에 통합구성요소 추가**
    * **설정** → **디바이스 및 서비스** → **통합구성요소 추가**
@@ -71,7 +70,7 @@
 
 ---
 
-## 🧪 대표 예제
+## 대표 예제
 
 ```json
 // auth_ok 이후 ws_bridge/connect → 엔티티 선언 → 상태 전송 순서
@@ -82,7 +81,7 @@
 
 ---
 
-## ⚠️ 중요 제한
+## 중요 제한
 
 - 아직 수신하지 않는 플랫폼: `vacuum` / `lawn_mower` / `remote` / `todo` (계획 중, [프로토콜 §6](docs/PROTOCOL_ko.md)).
 - 클라이언트 연결이 끊기면 기본적으로 해당 클라이언트의 엔티티가 `unavailable`이 됩니다(게이트웨이별 `keep_last_state_on_disconnect` 사용 시 제외).
@@ -90,7 +89,7 @@
 
 ---
 
-## 📚 문서
+## 문서
 
 - [아키텍처·지원 플랫폼·프로토콜 요약](docs/reference_ko.md)
 - [프로토콜 규격 (한국어)](docs/PROTOCOL_ko.md) / [English](docs/PROTOCOL.md)

@@ -7,13 +7,13 @@
   ],
   "hacs": "default",
   "release": true,
-  "installation_link": "#-installation",
+  "installation_link": "#installation",
   "hacs_default_evidence": "https://github.com/hacs/default/blob/master/integration includes eigger/hass-ws-bridge; checked 2026-10-21.",
   "tests_workflow": "tests.yml",
   "validate_workflow": "validate.yml",
   "installation_links": {
-    "README.md": "#-installation",
-    "README.ko.md": "#-설치"
+    "README.md": "#installation",
+    "README.ko.md": "#설치"
   },
   "readme": {
     "title": "WebSocket Bridge (`ws_bridge`) for Home Assistant",
