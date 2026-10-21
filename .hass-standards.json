@@ -5,14 +5,37 @@
     "README.md",
     "README.ko.md"
   ],
-  "hacs": "custom",
+  "hacs": "default",
   "release": true,
-  "installation_link": "#-installation",
-  "hacs_default_evidence": "",
+  "installation_link": "#installation",
+  "hacs_default_evidence": "https://github.com/hacs/default/blob/master/integration includes eigger/hass-ws-bridge; checked 2026-10-21.",
   "tests_workflow": "tests.yml",
   "validate_workflow": "validate.yml",
   "installation_links": {
-    "README.md": "#-installation",
-    "README.ko.md": "#-설치"
+    "README.md": "#installation",
+    "README.ko.md": "#설치"
+  },
+  "readme": {
+    "title": "WebSocket Bridge (`ws_bridge`) for Home Assistant",
+    "descriptions": {
+      "en": "Generic WebSocket Bridge for Home Assistant that dynamically registers devices and entities from external WebSocket clients.",
+      "ko": "외부 WebSocket 클라이언트에서 기기와 엔티티를 동적으로 등록하는 Home Assistant 통합구성요소입니다."
+    },
+    "issues": true,
+    "discussions": true,
+    "license_name": "MIT License",
+    "license_notices": {
+      "en": [],
+      "ko": []
+    },
+    "related_projects": []
+  },
+  "categories_review": {
+    "value": [
+      "diy_makers.web_data_connectors",
+      "hubs_protocols"
+    ],
+    "integration_type": null,
+    "source": "README.md: Generic WebSocket Bridge for Home Assistant that dynamically registers devices and entities from external WebSocket clients. Primary purpose is connecting external scripts/makers to Home Assistant over WebSocket (diy_makers.web_data_connectors) as a protocol bridge (hubs_protocols). Reviewed 2026-10-21 against official taxonomy https://github.com/home-assistant/core/blob/ec18d8b25d1ee39aa8b85a72a170e42bee33228c/homeassistant/generated/integration_categories.json ."
   }
 }
