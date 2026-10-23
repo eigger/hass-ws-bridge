@@ -1,4 +1,4 @@
-# Shared standards: eigger/hass-repo-standards@0ec31111a81b0ee5702f1d8a17f03616a10a5db6
+# Shared standards: eigger/hass-repo-standards@b54ac48102d6e326c6929071fdc02ba8fade794e
 name: Tests
 'on':
   push:
@@ -18,9 +18,9 @@ concurrency:
 # (e.g. camera → PyTurboJPEG) from the installed HA's own manifests.
 jobs:
   current:
-    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@0ec31111a81b0ee5702f1d8a17f03616a10a5db6
+    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@b54ac48102d6e326c6929071fdc02ba8fade794e
     with:
-      standards-ref: 0ec31111a81b0ee5702f1d8a17f03616a10a5db6
+      standards-ref: b54ac48102d6e326c6929071fdc02ba8fade794e
       domain: ws_bridge
       python-versions: '["3.14"]'
       requirements: requirements_test.txt
@@ -33,9 +33,9 @@ jobs:
         image camera
       pytest-args: tests/components/ws_bridge/ -v
   minimum-ha:
-    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@0ec31111a81b0ee5702f1d8a17f03616a10a5db6
+    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@b54ac48102d6e326c6929071fdc02ba8fade794e
     with:
-      standards-ref: 0ec31111a81b0ee5702f1d8a17f03616a10a5db6
+      standards-ref: b54ac48102d6e326c6929071fdc02ba8fade794e
       domain: ws_bridge
       python-versions: '["3.14"]'
       requirements: requirements_test_min.txt
