@@ -16,7 +16,7 @@ Generic WebSocket Bridge for Home Assistant that dynamically registers devices a
 <!-- hass-standards:badges:end -->
 <!-- hass-standards:header:end -->
 
-The Downloads badge counts GitHub release asset downloads across all releases, not active installations. HACS source-file installations are not counted; ZIP release distribution is not used.
+The Downloads badge counts GitHub release asset downloads across all releases, not active installations.
 
 A generic Home Assistant integration that enables **any authenticated WebSocket client** to dynamically create and update entities. It is fully decoupled from specific hardware or protocols (e.g., BLE, Zigbee); as long as the client conforms to the defined communication protocol, it works out of the box.
 
