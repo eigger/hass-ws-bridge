@@ -1,6 +1,6 @@
 # 개발·테스트 안내
 
-ws_bridge는 HACS 커스텀 통합이며 Home Assistant Core에 포함된 공식 통합이 아닙니다. 구조는 Core 컴포넌트 규칙을 따릅니다. 공통 규칙은 [hass-repo-standards](https://github.com/eigger/hass-repo-standards/tree/ba9f3fad8b635c163fb44a4e91b1833cc4ab47b4) 참조 커밋 기준이며 적용 현황은 [STANDARDS.md](../STANDARDS.md), [ADOPTION_CHECKLIST.md](../ADOPTION_CHECKLIST.md)에 있습니다.
+ws_bridge는 HACS 커스텀 통합이며 Home Assistant Core에 포함된 공식 통합이 아닙니다. 구조는 Core 컴포넌트 규칙을 따릅니다. 공통 규칙은 [hass-repo-standards](https://github.com/eigger/hass-repo-standards/tree/v1.0.0) 참조 커밋 기준이며 적용 현황은 [STANDARDS.md](../STANDARDS.md), [ADOPTION_CHECKLIST.md](../ADOPTION_CHECKLIST.md)에 있습니다.
 
 ## 테스트 구조
 
