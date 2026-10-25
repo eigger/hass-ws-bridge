@@ -13,7 +13,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, Entity
 
-from .bridge import WsBridge, signal_avail, signal_value
+from .bridge import WsBridge, signal_avail, signal_media, signal_value
 from .const import DEFAULT_PLATFORM_ICONS, DOMAIN
 from .helpers import as_dict
 
@@ -132,6 +132,14 @@ class WsBridgeEntity(Entity):
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass, signal_value(self._bridge.entry_id, self._attr_unique_id), cb
+            )
+        )
+
+    def _subscribe_media(self, cb) -> None:
+        """Subscribe to a newly uploaded/cleared in-memory JPEG frame."""
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, signal_media(self._bridge.entry_id, self._attr_unique_id), cb
             )
         )
 

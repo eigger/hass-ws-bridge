@@ -118,8 +118,8 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
     - **`siren` platform**: `available_tones` (non-empty list enables `tones` feature), `features` (`turn_on`/`turn_off`/`tones`/`duration`/`volume_set`).
     - **`alarm_control_panel` platform**: `code_arm_required` (Boolean, Optional, default `true`), `code_format` (`"number"`/`"text"`/omit — unlike lock, this is **not** a regex), `features` (`arm_home`/`arm_away`/`arm_night`/`arm_vacation`/`arm_custom_bypass`/`trigger`).
     - **`media_player` platform** (v1: playback / volume / source): `source_list`, `features` (`play`/`pause`/`stop`/`next_track`/`previous_track`/`volume_set`/`volume_mute`/`volume_step`/`turn_on`/`turn_off`/`select_source`; `select_source` auto-enabled when `source_list` is set).
-    - **`image` platform**: no extra declare fields — state carries `image_url` (URL only; no base64).
-    - **`camera` platform**: `brand` / `model`, `features` (`on_off`/`stream`; `stream` auto-enabled when state has `stream_source`). Still/stream are **URLs only**.
+    - **`image` platform**: no extra declare fields — state can carry `image_url`; it can also receive a JPEG through the authenticated media-upload protocol in §3.2.1.
+    - **`camera` platform**: `brand` / `model`, `features` (`on_off`/`stream`; `stream` auto-enabled when state has `stream_source`). Still images can use a URL or §3.2.1 JPEG upload; `stream_source` remains a URL.
 
 * **Response**
   ```json
@@ -193,7 +193,7 @@ Updates states for one or more entities in batch. If a state update arrives befo
       - For `device_tracker`, see the object form below.
       - For `update`, see the object form below.
       - For `light` / `cover` / `fan` / `valve` / `climate` / `humidifier` / `water_heater` / `media_player` / `camera`, see the object forms below.
-      - For `image`, send an `image_url` string (or `{"image_url": "..."}`). URL only — no base64.
+      - For `image`, send an `image_url` string (or `{"image_url": "..."}`) for URL mode. Do not put base64 or bytes in state; use §3.2.1 for uploaded JPEGs.
       - For `lock`, accept `"locked"`/`"unlocked"`/… or bool (`true` = locked).
       - For `date` / `time` / `datetime`, send ISO 8601 strings; parse failures become unknown (`None`). Tz-naive datetimes get HA's local timezone attached (not interpreted as UTC).
       - For `event`, send an event_type string or `{"event_type": "...", "attributes": {...}}`. Events are **not** restored from last state on restart.
@@ -370,9 +370,39 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 {"unique_id": "front_cam", "value": {"still_image_url": "http://cam.local/still.jpg", "stream_source": "rtsp://cam.local/stream", "is_on": true}}
 ```
 
-- **URL only** — do not send base64/binary over the WebSocket. HA fetches stills from `still_image_url` / `image_url`.
-- Optional `image_last_updated` (ISO datetime) for `image`. If omitted, the integration bumps the timestamp **only when `image_url` changes** (so periodic full-state sync does not re-download).
+- URL mode remains available: HA fetches stills from `still_image_url` / `image_url`. Do not put base64 or bytes in `ws_bridge/state`.
+- Optional `image_last_updated` (ISO datetime) for `image`. If omitted, the integration bumps the timestamp **only when `image_url` changes** (so periodic full-state sync does not re-download). Sending a changed timestamp invalidates cached URL bytes.
 - Fetchable URLs must be `http`/`https` (streams may also use `rtsp`/`rtsps`). Loopback / link-local / non-network schemes are rejected — HA will not SSRF to `localhost` on the user's behalf. LAN camera hosts remain allowed.
+
+#### 3.2.1 Authenticated JPEG upload (`ws_bridge/media_open` / `ws_bridge/media_connect`)
+
+This optional snapshot transport lets an ESPHome gateway **initiate both connections** to HA. HA never opens a connection to the gateway. It uses HA's ordinary `/api/websocket` endpoint twice, so normal Home Assistant authentication and remote-access routing apply; it does not open a port or add an unauthenticated endpoint.
+
+1. Keep the ordinary, authenticated control socket connected and declare the target `image` or `camera` entity.
+2. On that control socket, reserve the entity:
+
+   ```json
+   {"id": 8, "type": "ws_bridge/media_open", "unique_id": "front_snap"}
+   ```
+
+   HA returns a one-use `session_id` and `expires_in` (30 seconds).
+3. Open a **second** `/api/websocket` connection, authenticate it with the same HA token/user (and, where HA exposes it, the same refresh token), then send:
+
+   ```json
+   {"id": 1, "type": "ws_bridge/media_connect", "session_id": "<session_id>"}
+   ```
+
+   The response contains `handler_id`. Send each JPEG as one WebSocket binary message: one leading handler byte followed by JPEG bytes.
+
+   ```text
+   +------------+---------------------------------+
+   | 1 byte     | JPEG (FF D8 ... FF D9)          |
+   +------------+---------------------------------+
+   | handler_id | at most 1,048,576 bytes total   |
+   +------------+---------------------------------+
+   ```
+
+`session_id` is an opaque, one-use correlation value, **not** an authentication credential. HA accepts upload only while the originating control socket still owns that gateway and declared entity, and only from a separately authenticated socket of the same user/token identity. Pending sessions are capped and expire; active upload handlers, frames, and sessions are invalidated if the control owner disconnects or is replaced, or if the entity/gateway is removed. Invalid/non-JPEG/oversized frames are discarded. Frames are memory-only, never persisted as entity state; HA retains only the latest frame per entity in a bounded 8 MiB per-bridge cache. A fresh upload takes precedence over URL mode until it is invalidated. Sending `image_url`, `url`, or `still_image_url` in a state update explicitly switches that entity back to URL mode and invalidates its upload session/frame.
 
 * **Response**
   ```json

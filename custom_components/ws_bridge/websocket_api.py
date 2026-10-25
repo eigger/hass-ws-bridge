@@ -32,6 +32,8 @@ from .const import (
     WS_AVAILABILITY,
     WS_CONNECT,
     WS_ENTITY,
+    WS_MEDIA_CONNECT,
+    WS_MEDIA_OPEN,
     WS_REMOVE,
     WS_STATE,
     WS_SYNC,
@@ -48,6 +50,8 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_availability)
     websocket_api.async_register_command(hass, ws_remove)
     websocket_api.async_register_command(hass, ws_sync)
+    websocket_api.async_register_command(hass, ws_media_open)
+    websocket_api.async_register_command(hass, ws_media_connect)
 
 
 def _bridges(hass: HomeAssistant) -> list[WsBridge]:
@@ -361,4 +365,83 @@ async def ws_sync(
         return
     connection.send_error(
         msg["id"], "not_connected", "No ws_bridge session for this connection"
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_MEDIA_OPEN,
+        vol.Required("unique_id"): str,
+    }
+)
+@callback
+def ws_media_open(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Reserve a short-lived, entity-bound binary upload connection.
+
+    The returned session id is not a credential: media_connect still requires a
+    separate standard HA-authenticated socket owned by the same token/user.
+    """
+    if _reject_if_not_allowed(hass, connection, msg):
+        return
+    gateway_id = next(
+        (
+            bridge.client_for(connection)
+            for bridge in _bridges(hass)
+            if bridge.client_for(connection)
+        ),
+        None,
+    )
+    if gateway_id is None or connection.user is None:
+        connection.send_error(
+            msg["id"],
+            "not_connected",
+            "No ws_bridge control session for this connection",
+        )
+        return
+    for bridge in _bridges(hass):
+        if bridge.client_for(connection) != gateway_id:
+            continue
+        if session_id := bridge.open_media_session(
+            connection, gateway_id, msg["unique_id"], connection.user.id
+        ):
+            connection.send_result(
+                msg["id"], {"session_id": session_id, "expires_in": 30}
+            )
+            return
+        connection.send_error(
+            msg["id"], "invalid_media_entity", "Entity is not an owned image or camera"
+        )
+        return
+    connection.send_error(msg["id"], "not_connected", "No ws_bridge control session")
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_MEDIA_CONNECT,
+        vol.Required("session_id"): str,
+    }
+)
+@callback
+def ws_media_connect(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Bind a separately authenticated socket to one pending media session."""
+    if _reject_if_not_allowed(hass, connection, msg):
+        return
+    if connection.user is None:
+        connection.send_error(msg["id"], "not_allowed", "Authenticated user required")
+        return
+    for bridge in _bridges(hass):
+        if connected := bridge.connect_media_session(
+            connection, msg["session_id"], connection.user.id
+        ):
+            handler_id, unique_id = connected
+            connection.send_result(
+                msg["id"], {"handler_id": handler_id, "unique_id": unique_id}
+            )
+            return
+    connection.send_error(
+        msg["id"], "invalid_media_session", "Media session is expired or not owned"
     )

@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .bridge import WsBridge
 from .const import DOMAIN, PLATFORM_CAMERA
-from .entity import WsBridgeCompositeEntity
+from .entity import WsBridgeCompositeEntity, safe_write_ha_state
 from .helpers import parse_bool, sanitize_remote_url
 
 _LOGGER = logging.getLogger(__name__)
@@ -107,6 +107,8 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
+        if frame := self._bridge.latest_media_frame(self._attr_unique_id):
+            return frame
         if not self._still_url:
             return None
         try:
@@ -129,6 +131,15 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
                 err,
             )
             return None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._subscribe_media(self._on_media)
+
+    @callback
+    def _on_media(self) -> None:
+        """Publish a new frame so camera proxy consumers refresh immediately."""
+        safe_write_ha_state(self)
 
     async def stream_source(self) -> str | None:
         return self._stream_url
