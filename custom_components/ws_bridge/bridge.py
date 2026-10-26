@@ -11,6 +11,9 @@
 from __future__ import annotations
 
 import logging
+import secrets
+import time
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -27,7 +30,13 @@ from homeassistant.helpers.storage import Store
 from .const import (
     CONNECTED_CLIENTS_UNIQUE_ID,
     DOMAIN,
+    MEDIA_CACHE_MAX_BYTES,
+    MEDIA_FRAME_MAX_BYTES,
+    MEDIA_MAX_SESSIONS,
+    MEDIA_SESSION_TTL,
+    PLATFORM_CAMERA,
     PLATFORM_EVENT,
+    PLATFORM_IMAGE,
     REMOVE_MODE_PREFIX,
     SUBENTRY_TYPE_GATEWAY,
 )
@@ -50,6 +59,11 @@ def signal_clients(entry_id: str) -> str:
     return f"{DOMAIN}_{entry_id}_clients"
 
 
+def signal_media(entry_id: str, unique_id: str) -> str:
+    """Signal that an entity's in-memory JPEG frame changed or was cleared."""
+    return f"{DOMAIN}_{entry_id}_media_{unique_id}"
+
+
 def _nonempty(value: Any) -> str | None:
     """프로토콜 선택 문자열. 비어 있으면 미전송으로 본다."""
     if isinstance(value, str) and value.strip():
@@ -68,6 +82,24 @@ class _Client:
     manufacturer: str | None = None
     model: str | None = None
     hw_version: str | None = None
+
+
+@dataclass
+class _MediaSession:
+    gateway_id: str
+    unique_id: str
+    control_connection: Any
+    user_id: str
+    refresh_token_id: str | None
+    expires_at: float
+
+
+@dataclass
+class _MediaConnection:
+    gateway_id: str
+    unique_id: str
+    control_connection: Any
+    unsubscribe_binary: Callable[[], None]
 
 
 class _PlatformReg:
@@ -90,10 +122,16 @@ class WsBridge:
         ] = {}  # gateway_id → keep_last_state_on_disconnect
         self._clients: dict[str, _Client] = {}  # gateway_id → ctx
         self._conn_client: dict[Any, str] = {}  # connection → gateway_id
+        self._conn_generation: dict[Any, object] = {}  # connection → latest connect
+        self._gateway_owner: dict[str, Any] = {}  # gateway_id → control connection
         self._entity_client: dict[str, str] = {}  # ns unique_id → gateway_id
         self._entity_device: dict[str, str] = {}  # ns unique_id → ns device id
         self._entities: dict[str, Entity] = {}  # ns unique_id → live entity
         self._connections: set[Any] = set()  # active connections
+        self._media_sessions: dict[str, _MediaSession] = {}
+        self._media_connections: dict[Any, _MediaConnection] = {}
+        self._media_frames: OrderedDict[str, bytes] = OrderedDict()
+        self._media_cache_bytes = 0
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}.states")
         self._save_unsub: Callable[[], None] | None = None
 
@@ -245,7 +283,22 @@ class WsBridge:
         model = _nonempty(model)
         hw_version = _nonempty(hw_version)
         sw_version = _nonempty(sw_version)
+        previous_gateway = self._conn_client.get(connection)
+        if previous_gateway is not None and previous_gateway != gateway_id:
+            # One physical WebSocket may not retain media ownership after it
+            # announces a different gateway.
+            self._revoke_control_media(connection)
+            if self._gateway_owner.get(previous_gateway) is connection:
+                self._gateway_owner.pop(previous_gateway, None)
+
         client = self._clients.get(gateway_id)
+        # A second control socket claiming a gateway replaces its command owner.
+        # Do not disrupt a harmless repeated connect on the same socket, because
+        # gateways commonly reannounce their entities periodically.
+        if (
+            owner := self._gateway_owner.get(gateway_id)
+        ) is not None and owner is not connection:
+            self._revoke_gateway_media(gateway_id)
         if client is None:
             client = self._clients[gateway_id] = _Client(
                 gateway_id,
@@ -284,6 +337,9 @@ class WsBridge:
         is_first_connection = gateway_id not in self._conn_client.values()
         self._connections.add(connection)
         self._conn_client[connection] = gateway_id
+        generation = object()
+        self._conn_generation[connection] = generation
+        self._gateway_owner[gateway_id] = connection
         self._notify_clients_changed()
 
         # 게이트웨이를 독립 디바이스로 등록 — WebSocket Bridge 서비스 디바이스와 병렬
@@ -332,8 +388,16 @@ class WsBridge:
 
         @callback
         def _disconnect() -> None:
+            # A control socket may send connect repeatedly. Only its newest
+            # subscription owns cleanup; all prior callbacks are no-ops.
+            if self._conn_generation.get(connection) != generation:
+                return
+            self._revoke_control_media(connection)
             self._connections.discard(connection)
             self._conn_client.pop(connection, None)
+            self._conn_generation.pop(connection, None)
+            if self._gateway_owner.get(gateway_id) is connection:
+                self._gateway_owner.pop(gateway_id, None)
             if (
                 gateway_id not in self._conn_client.values()
                 and not client.keep_last_state_on_disconnect
@@ -352,6 +416,7 @@ class WsBridge:
     def unload(self) -> None:
         """Close all client connections when integration unloads."""
         self.close_connections()
+        self._revoke_gateway_media(None)
 
     @callback
     def close_connections(
@@ -361,22 +426,254 @@ class WsBridge:
         for conn in list(self._connections):
             if should_close is not None and not should_close(conn):
                 continue
-            try:
-                # ActiveConnection has no public close(). Its send_message is the
-                # bound WebSocketHandler._send_message, and the handler's _cancel()
-                # is what HA itself uses on shutdown: it cancels the handler tasks,
-                # whose cleanup closes the socket and runs the subscriptions.
-                handler = getattr(conn.send_message, "__self__", None)
-                cancel = getattr(handler, "_cancel", None)
-                if cancel is None:
-                    raise RuntimeError("websocket handler not found")
-                cancel()
-            except Exception as e:  # noqa: BLE001
-                _LOGGER.warning("Error closing client connection: %s", e)
+            self._close_connection(conn)
+        for conn in list(self._media_connections):
+            if should_close is None or should_close(conn):
+                self._revoke_media_connection(conn, close=True)
+
+    @callback
+    def _close_connection(self, connection: Any) -> None:
+        """Close an HA ActiveConnection using HA's own handler cancellation path."""
+        try:
+            # ActiveConnection has no public close(). Its send_message is the
+            # bound WebSocketHandler._send_message, and _cancel() is the path HA
+            # itself uses on shutdown; cleanup then runs subscriptions.
+            handler = getattr(connection.send_message, "__self__", None)
+            cancel = getattr(handler, "_cancel", None)
+            if cancel is None:
+                raise RuntimeError("websocket handler not found")
+            cancel()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Error closing client connection: %s", err)
 
     @callback
     def client_for(self, connection: Any) -> str | None:
         return self._conn_client.get(connection)
+
+    @callback
+    def is_media_connection(self, connection: Any) -> bool:
+        """Whether this socket is already dedicated to binary media upload."""
+        return connection in self._media_connections
+
+    # ── Binary media upload ─────────────────────────────────────────────────
+    @callback
+    def open_media_session(
+        self, connection: Any, gateway_id: str, unique_id: str, user_id: str
+    ) -> str | None:
+        """Reserve one short-lived upload session for a declared image/camera.
+
+        The session id is an opaque correlation value, not an authentication
+        credential. The second socket must separately complete HA authentication
+        as the same user and the originating control socket must still own the
+        gateway when it connects.
+        """
+        self._prune_media_sessions()
+        ns_uid = self._ns_uid(gateway_id, unique_id)
+        if (
+            self._gateway_owner.get(gateway_id) is not connection
+            or self._conn_client.get(connection) != gateway_id
+            or self._entity_client.get(ns_uid) != gateway_id
+            or self._entity_platform(ns_uid) not in (PLATFORM_IMAGE, PLATFORM_CAMERA)
+        ):
+            return None
+        if len(self._media_sessions) >= MEDIA_MAX_SESSIONS:
+            return None
+
+        # One control owner may only have one pending request for an entity.
+        for session_id, session in list(self._media_sessions.items()):
+            if session.control_connection is connection and session.unique_id == ns_uid:
+                self._media_sessions.pop(session_id)
+
+        session_id = secrets.token_urlsafe(24)
+        self._media_sessions[session_id] = _MediaSession(
+            gateway_id=gateway_id,
+            unique_id=ns_uid,
+            control_connection=connection,
+            user_id=user_id,
+            refresh_token_id=connection.refresh_token_id,
+            expires_at=time.monotonic() + MEDIA_SESSION_TTL,
+        )
+        return session_id
+
+    @callback
+    def connect_media_session(
+        self, connection: Any, session_id: str, user_id: str
+    ) -> tuple[int, str] | None:
+        """Bind an authenticated, dedicated upload socket to a reserved session."""
+        self._prune_media_sessions()
+        if connection in self._media_connections or connection in self._conn_client:
+            return None
+        session = self._media_sessions.pop(session_id, None)
+        if (
+            session is None
+            or session.user_id != user_id
+            or (
+                session.refresh_token_id is not None
+                and session.refresh_token_id != connection.refresh_token_id
+            )
+            or self._gateway_owner.get(session.gateway_id)
+            is not session.control_connection
+            or self._conn_client.get(session.control_connection) != session.gateway_id
+            or self._entity_client.get(session.unique_id) != session.gateway_id
+            or self._entity_platform(session.unique_id)
+            not in (PLATFORM_IMAGE, PLATFORM_CAMERA)
+        ):
+            return None
+
+        # A producer owns its declared entity exclusively. This also releases
+        # the prior binary handler before allocating another one (HA caps these
+        # handlers at 255 per socket).
+        self._revoke_media_entity(session.unique_id)
+
+        try:
+            handler_id, unsub_binary = connection.async_register_binary_handler(
+                lambda _hass, _connection, payload: self._handle_media_callback(
+                    connection, payload
+                )
+            )
+        except RuntimeError:
+            _LOGGER.warning("Unable to register binary media handler: limit reached")
+            return None
+
+        media = _MediaConnection(
+            gateway_id=session.gateway_id,
+            unique_id=session.unique_id,
+            control_connection=session.control_connection,
+            unsubscribe_binary=unsub_binary,
+        )
+        self._media_connections[connection] = media
+        subscription_key = (DOMAIN, self.entry_id, "media", session_id)
+
+        @callback
+        def _disconnect_media() -> None:
+            self._revoke_media_connection(connection)
+
+        connection.subscriptions[subscription_key] = _disconnect_media
+        return handler_id, self._strip(session.gateway_id, session.unique_id)
+
+    @callback
+    def _handle_media_binary(self, connection: Any, payload: bytes) -> None:
+        media = self._media_connections.get(connection)
+        if media is None:
+            return
+        # Re-check authorization for every frame: a user can be disabled or
+        # removed from the integration allow-list after the socket is connected.
+        from .websocket_api import user_allowed
+
+        if not user_allowed(self.hass, connection.user):
+            self._revoke_media_connection(connection, close=True)
+            return
+        if (
+            self._gateway_owner.get(media.gateway_id) is not media.control_connection
+            or self._conn_client.get(media.control_connection) != media.gateway_id
+        ):
+            self._revoke_media_connection(connection, close=True)
+            return
+        if not self._store_media_frame(media.gateway_id, media.unique_id, payload):
+            _LOGGER.warning(
+                "Rejected media frame for %s: expected a JPEG no larger than %d bytes",
+                media.unique_id,
+                MEDIA_FRAME_MAX_BYTES,
+            )
+
+    @callback
+    def _handle_media_callback(self, connection: Any, payload: bytes) -> None:
+        """Keep HA's binary handler bookkeeping in sync on an unexpected error."""
+        try:
+            self._handle_media_binary(connection, payload)
+        except Exception:  # never retain an orphaned binary handler
+            _LOGGER.exception("Unexpected error handling media frame")
+            self._revoke_media_connection(connection, close=True)
+
+    @callback
+    def _store_media_frame(self, gateway_id: str, ns_uid: str, frame: bytes) -> bool:
+        """Atomically replace one entity's frame while enforcing cache limits."""
+        if (
+            self._entity_client.get(ns_uid) != gateway_id
+            or self._entity_platform(ns_uid) not in (PLATFORM_IMAGE, PLATFORM_CAMERA)
+            or len(frame) < 4
+            or len(frame) > MEDIA_FRAME_MAX_BYTES
+            or not frame.startswith(b"\xff\xd8")
+            or not frame.endswith(b"\xff\xd9")
+        ):
+            return False
+
+        old = self._media_frames.pop(ns_uid, None)
+        if old is not None:
+            self._media_cache_bytes -= len(old)
+        # ``bytes`` protects the cache from a mutable buffer supplied by a
+        # websocket implementation and keeps the replacement atomic.
+        stored = bytes(frame)
+        self._media_frames[ns_uid] = stored
+        self._media_cache_bytes += len(stored)
+        while self._media_cache_bytes > MEDIA_CACHE_MAX_BYTES:
+            evicted_uid, evicted = self._media_frames.popitem(last=False)
+            self._media_cache_bytes -= len(evicted)
+            async_dispatcher_send(self.hass, signal_media(self.entry_id, evicted_uid))
+        async_dispatcher_send(self.hass, signal_media(self.entry_id, ns_uid))
+        return True
+
+    @callback
+    def latest_media_frame(self, unique_id: str) -> bytes | None:
+        frame = self._media_frames.get(unique_id)
+        if frame is not None:
+            self._media_frames.move_to_end(unique_id)
+        return frame
+
+    @callback
+    def _prune_media_sessions(self) -> None:
+        now = time.monotonic()
+        for session_id, session in list(self._media_sessions.items()):
+            if session.expires_at <= now:
+                self._media_sessions.pop(session_id, None)
+
+    @callback
+    def _clear_media_frame(self, ns_uid: str) -> None:
+        if (frame := self._media_frames.pop(ns_uid, None)) is not None:
+            self._media_cache_bytes -= len(frame)
+            async_dispatcher_send(self.hass, signal_media(self.entry_id, ns_uid))
+
+    @callback
+    def _revoke_media_connection(self, connection: Any, *, close: bool = False) -> None:
+        media = self._media_connections.pop(connection, None)
+        if media is None:
+            return
+        media.unsubscribe_binary()
+        self._clear_media_frame(media.unique_id)
+        if close:
+            self._close_connection(connection)
+
+    @callback
+    def _revoke_control_media(self, control_connection: Any) -> None:
+        for session_id, session in list(self._media_sessions.items()):
+            if session.control_connection is control_connection:
+                self._media_sessions.pop(session_id, None)
+        for connection, media in list(self._media_connections.items()):
+            if media.control_connection is control_connection:
+                self._revoke_media_connection(connection, close=True)
+
+    @callback
+    def _revoke_media_entity(self, ns_uid: str) -> None:
+        for session_id, session in list(self._media_sessions.items()):
+            if session.unique_id == ns_uid:
+                self._media_sessions.pop(session_id, None)
+        for connection, media in list(self._media_connections.items()):
+            if media.unique_id == ns_uid:
+                self._revoke_media_connection(connection, close=True)
+        self._clear_media_frame(ns_uid)
+
+    @callback
+    def _revoke_gateway_media(self, gateway_id: str | None) -> None:
+        for session_id, session in list(self._media_sessions.items()):
+            if gateway_id is None or session.gateway_id == gateway_id:
+                self._media_sessions.pop(session_id, None)
+        for connection, media in list(self._media_connections.items()):
+            if gateway_id is None or media.gateway_id == gateway_id:
+                self._revoke_media_connection(connection, close=True)
+        prefix = f"{gateway_id}__" if gateway_id is not None else ""
+        for ns_uid in list(self._media_frames):
+            if gateway_id is None or ns_uid.startswith(prefix):
+                self._clear_media_frame(ns_uid)
 
     @property
     def connected_client_count(self) -> int:
@@ -651,6 +948,7 @@ class WsBridge:
 
     async def async_remove_gateway(self, gateway_id: str) -> None:
         """게이트웨이·하위 장치·엔티티를 HA 레지스트리와 내부 상태에서 제거."""
+        self._revoke_gateway_media(gateway_id)
         prefix = f"{gateway_id}__"
         entity_reg = er.async_get(self.hass)
 
@@ -688,6 +986,7 @@ class WsBridge:
         _LOGGER.info("Removed gateway and associated devices/entities: %s", gateway_id)
 
     async def _remove_entity_ns(self, ns_uid: str, *, persist: bool = True) -> None:
+        self._revoke_media_entity(ns_uid)
         entity = self._entities.pop(ns_uid, None)
         entity_reg = er.async_get(self.hass)
         # Entity.async_remove()는 레지스트리 항목을 남기므로, 레지스트리에서
@@ -720,8 +1019,10 @@ class WsBridge:
             await self.async_save()
 
     def _purge_gateway_state(self, gateway_id: str) -> None:
+        self._revoke_gateway_media(gateway_id)
         prefix = f"{gateway_id}__"
         self._clients.pop(gateway_id, None)
+        self._gateway_owner.pop(gateway_id, None)
         for uid in list(self._created):
             if uid.startswith(prefix):
                 self._created.discard(uid)
@@ -771,6 +1072,21 @@ class WsBridge:
                     return defn.get("platform")
         return None
 
+    def _is_url_media_state(self, ns_uid: str, value: Any) -> bool:
+        """Whether this incoming state explicitly selects URL image transport."""
+        platform = self._entity_platform(ns_uid)
+        if platform == PLATFORM_IMAGE:
+            if isinstance(value, str):
+                return True
+            return isinstance(value, dict) and any(
+                key in value for key in ("image_url", "url", "state")
+            )
+        return (
+            platform == PLATFORM_CAMERA
+            and isinstance(value, dict)
+            and ("still_image_url" in value or "image_url" in value)
+        )
+
     @callback
     def handle_state(self, gateway_id: str, unique_id: str, value: Any) -> None:
         ns_uid = self._ns_uid(gateway_id, unique_id)
@@ -779,6 +1095,10 @@ class WsBridge:
         ) is not None:
             self._touch_device(client, ns_dev)
         is_event = self._entity_platform(ns_uid) == PLATFORM_EVENT
+        if self._is_url_media_state(ns_uid, value):
+            # State is the explicit URL transport selection. Do not leave a
+            # stale pushed frame (or upload socket) masking that URL.
+            self._revoke_media_entity(ns_uid)
         if isinstance(value, dict):
             # event 는 fire-and-forget — 얕은 병합하면 이전 attributes 가 다음 이벤트로 샌다.
             if is_event:

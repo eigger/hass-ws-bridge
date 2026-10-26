@@ -118,8 +118,8 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
     - **`siren` 플랫폼**: `available_tones`(비어 있지 않으면 `tones` feature 활성), `features`(`turn_on`/`turn_off`/`tones`/`duration`/`volume_set`).
     - **`alarm_control_panel` 플랫폼**: `code_arm_required`(bool, 기본 `true`), `code_format`(`"number"`/`"text"`/생략 — lock과 달리 **정규식 아님**), `features`(`arm_home`/`arm_away`/`arm_night`/`arm_vacation`/`arm_custom_bypass`/`trigger`).
     - **`media_player` 플랫폼** (1차: 재생/볼륨/소스): `source_list`, `features`(`play`/`pause`/`stop`/`next_track`/`previous_track`/`volume_set`/`volume_mute`/`volume_step`/`turn_on`/`turn_off`/`select_source`; `source_list`가 있으면 `select_source` 자동 활성).
-    - **`image` 플랫폼**: 선언 전용 필드 없음 — 상태에 `image_url`(URL만, base64 없음).
-    - **`camera` 플랫폼**: `brand` / `model`, `features`(`on_off`/`stream`; 상태에 `stream_source`가 있으면 `stream` 자동 활성). still/stream은 **URL만**.
+    - **`image` 플랫폼**: 선언 전용 필드 없음 — 상태에 `image_url`을 둘 수 있고, §3.2.1의 인증된 미디어 업로드로 JPEG를 받을 수도 있습니다.
+    - **`camera` 플랫폼**: `brand` / `model`, `features`(`on_off`/`stream`; 상태에 `stream_source`가 있으면 `stream` 자동 활성). still 이미지는 URL 또는 §3.2.1 JPEG 업로드를 쓰며, `stream_source`는 계속 URL입니다.
 
 * **응답**
   ```json
@@ -193,7 +193,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
       - `device_tracker` 플랫폼은 아래 객체 형식을 사용합니다.
       - `update` 플랫폼은 아래 객체 형식을 사용합니다.
       - `light` / `cover` / `fan` / `valve` / `climate` / `humidifier` / `water_heater` / `media_player` / `camera` 플랫폼은 아래 객체 형식을 사용합니다.
-      - `image`는 `image_url` 문자열(또는 `{"image_url": "..."}`)을 보냅니다. URL만 — base64 금지.
+      - `image` URL 모드는 `image_url` 문자열(또는 `{"image_url": "..."}`)을 보냅니다. state에 base64/bytes를 넣지 말고 업로드 JPEG는 §3.2.1을 사용하세요.
       - `lock`은 `"locked"`/`"unlocked"`/… 또는 bool(`true`=잠김)을 받습니다.
       - `date` / `time` / `datetime`은 ISO 8601 문자열을 보냅니다. 파싱 실패 시 unknown(`None`). tz-naive datetime은 HA 로컬 타임존을 부착합니다(UTC로 해석하지 않음).
       - `event`는 event_type 문자열 또는 `{"event_type": "...", "attributes": {...}}`입니다. 재시작 시 last state로 **복원하지 않습니다**.
@@ -370,9 +370,39 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 {"unique_id": "front_cam", "value": {"still_image_url": "http://cam.local/still.jpg", "stream_source": "rtsp://cam.local/stream", "is_on": true}}
 ```
 
-- **URL만** — WebSocket으로 base64/바이너리를 보내지 마세요. HA가 `still_image_url` / `image_url`을 fetch합니다.
-- `image`의 `image_last_updated`(ISO datetime)는 옵션. 생략 시 **`image_url`이 바뀔 때만** 타임스탬프를 갱신합니다(주기적 전체 상태 재전송으로 재다운로드하지 않음).
+- URL 모드는 그대로 지원합니다. HA가 `still_image_url` / `image_url`을 fetch합니다. `ws_bridge/state`에 base64/bytes를 넣지 마세요.
+- `image`의 `image_last_updated`(ISO datetime)는 옵션. 생략 시 **`image_url`이 바뀔 때만** 타임스탬프를 갱신합니다(주기적 전체 상태 재전송으로 재다운로드하지 않음). 타임스탬프가 바뀌면 같은 URL의 캐시 바이트도 무효화합니다.
 - fetch 가능한 URL은 `http`/`https`(스트림은 `rtsp`/`rtsps`도 허용). 루프백·링크로컬·비네트워크 스킴은 거절합니다. LAN 카메라 호스트는 허용됩니다.
+
+#### 3.2.1 인증된 JPEG 업로드 (`ws_bridge/media_open` / `ws_bridge/media_connect`)
+
+이 선택 스냅샷 전송은 ESPHome 게이트웨이가 HA로 향하는 **두 연결을 모두 시작**하게 합니다. HA가 게이트웨이에 연결하지 않습니다. HA 표준 `/api/websocket` 엔드포인트를 두 번 사용하므로 기존 Home Assistant 인증과 원격 접근 경로가 그대로 적용되고, 새 포트나 익명 엔드포인트를 만들지 않습니다.
+
+1. 일반 인증 제어 소켓을 유지하고 대상 `image` 또는 `camera` 엔티티를 선언합니다.
+2. 제어 소켓에서 엔티티를 예약합니다.
+
+   ```json
+   {"id": 8, "type": "ws_bridge/media_open", "unique_id": "front_snap"}
+   ```
+
+   HA가 한 번만 쓸 수 있는 `session_id`와 `expires_in`(30초)을 돌려줍니다.
+3. **두 번째** `/api/websocket` 연결을 열어 같은 HA 토큰/사용자로 인증하고(HA가 제공하면 같은 refresh token도 사용), 다음을 보냅니다.
+
+   ```json
+   {"id": 1, "type": "ws_bridge/media_connect", "session_id": "<session_id>"}
+   ```
+
+   응답의 `handler_id`를 사용해 JPEG마다 WebSocket binary 메시지 하나를 보냅니다. 첫 바이트는 handler, 나머지는 JPEG입니다.
+
+   ```text
+   +------------+---------------------------------+
+   | 1 byte     | JPEG (FF D8 ... FF D9)          |
+   +------------+---------------------------------+
+   | handler_id | JPEG ≤1,048,576 bytes; 메시지 ≤1,048,577 bytes |
+   +------------+---------------------------------+
+   ```
+
+`session_id`는 불투명한 일회용 연결 식별자일 뿐 **인증 자격 증명은 아닙니다**. 원래 제어 소켓이 해당 게이트웨이와 선언된 엔티티를 계속 소유하고, 별도 소켓이 같은 사용자/토큰 identity로 인증된 동안에만 업로드가 허용됩니다. 대기 세션 수는 제한되고 만료되며, 제어 소유자가 끊기거나 교체되거나 엔티티/게이트웨이가 제거되면 활성 업로드 handler·프레임·세션이 무효화됩니다. JPEG가 아니거나 너무 큰 프레임은 버립니다. 프레임은 상태로 저장하지 않는 메모리 전용 데이터이며, 브리지당 최대 8 MiB cache에서 엔티티별 최신 1개만 유지합니다. 새 업로드는 무효화될 때까지 URL 모드보다 우선합니다. state 갱신에 `image_url`, `url`, `still_image_url`을 보내면 해당 엔티티를 URL 모드로 명시 전환하고 업로드 session/frame을 무효화합니다.
 
 * **응답**
   ```json

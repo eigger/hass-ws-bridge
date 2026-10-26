@@ -43,10 +43,36 @@ class WsBridgeImage(WsBridgeEntity, ImageEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self._subscribe_state(self._on_value)
+        self._subscribe_media(self._on_media)
+
+    async def async_image(self) -> bytes | None:
+        """Prefer the latest gateway-uploaded JPEG, retaining URL mode as fallback."""
+        if frame := self._bridge.latest_media_frame(self._attr_unique_id):
+            self._attr_content_type = "image/jpeg"
+            return frame
+        image = await super().async_image()
+        # A URL fetch can finish after a new JPEG arrived. Do not let its
+        # content type/cache win over the newest upload.
+        if frame := self._bridge.latest_media_frame(self._attr_unique_id):
+            self._cached_image = None
+            self._attr_content_type = "image/jpeg"
+            return frame
+        return image
 
     @callback
     def _on_value(self, value: Any) -> None:
         self._apply(value)
+        safe_write_ha_state(self)
+
+    @callback
+    def _on_media(self) -> None:
+        # A pushed frame replaces the previously fetched URL image. Bump the
+        # timestamp even when a URL state is unchanged so ImageEntity's proxy
+        # and stream consumers fetch the new bytes.
+        self._cached_image = None
+        if self._bridge.latest_media_frame(self._attr_unique_id) is not None:
+            self._attr_content_type = "image/jpeg"
+            self._attr_image_last_updated = dt_util.utcnow()
         safe_write_ha_state(self)
 
     @callback
@@ -67,6 +93,7 @@ class WsBridgeImage(WsBridgeEntity, ImageEntity):
             self._cached_image = None
         self._attr_image_url = new_url
         updated = data.get("image_last_updated")
+        previous_updated = self._attr_image_last_updated
         if isinstance(updated, str):
             try:
                 parsed = datetime.fromisoformat(updated)
@@ -81,3 +108,7 @@ class WsBridgeImage(WsBridgeEntity, ImageEntity):
             # Same URL re-pushed without timestamp must not bump last_updated
             # (periodic full-state sync would re-download every cycle).
             self._attr_image_last_updated = dt_util.utcnow()
+        # A timestamp is a cache-busting state update even when image_url is
+        # unchanged. Previously this left ImageEntity's fetched byte cache live.
+        if self._attr_image_last_updated != previous_updated:
+            self._cached_image = None

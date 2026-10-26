@@ -23,6 +23,15 @@ WS_STATE = f"{DOMAIN}/state"
 WS_AVAILABILITY = f"{DOMAIN}/availability"
 WS_REMOVE = f"{DOMAIN}/remove"
 WS_SYNC = f"{DOMAIN}/sync"
+WS_MEDIA_OPEN = f"{DOMAIN}/media_open"
+WS_MEDIA_CONNECT = f"{DOMAIN}/media_connect"
+
+# Media upload uses HA's standard /api/websocket endpoint. After a successful
+# media_connect, the dedicated upload connection sends [handler_id][JPEG].
+MEDIA_FRAME_MAX_BYTES = 1024 * 1024
+MEDIA_CACHE_MAX_BYTES = 8 * 1024 * 1024
+MEDIA_MAX_SESSIONS = 16
+MEDIA_SESSION_TTL = 30
 
 # ws_bridge/remove mode (PROTOCOL.md §3.4)
 REMOVE_MODE_EXACT = "exact"

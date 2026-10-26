@@ -593,6 +593,8 @@ GUARDED_COMMANDS = [
     ("availability", {"device_id": "d1", "online": True}),
     ("remove", {"unique_id": "s1"}),
     ("sync", {"unique_ids": ["s1"]}),
+    ("media_open", {"unique_id": "s1"}),
+    ("media_connect", {"session_id": "not-a-session"}),
 ]
 
 

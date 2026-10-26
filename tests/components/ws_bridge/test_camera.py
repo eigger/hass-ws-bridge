@@ -1,5 +1,7 @@
 """camera platform tests."""
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from http import HTTPStatus
 
 import pytest
@@ -11,9 +13,10 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
 )
 
-from .conftest import BridgeClient, call_service, entity_id_for
+from .conftest import BridgeClient, call_service, entity_id_for, get_bridge
 
 STILL = "http://cam.local/still.jpg"
+JPEG = b"\xff\xd8\xff\xe0camera-upload\xff\xd9"
 
 
 async def test_camera_still_stream_and_commands(
@@ -72,3 +75,27 @@ async def test_camera_rejects_unsafe_urls_and_handles_http_errors(
     with pytest.raises(HomeAssistantError):
         await camera.async_get_image(hass, entity_id)
     assert "returned HTTP 404" in caplog.text
+
+
+async def test_camera_serves_uploaded_jpeg(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+) -> None:
+    await client.entity("cam", "camera", "Cam")
+    session = await client.ok("media_open", unique_id="cam")
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+
+    bridge = get_bridge(hass, client.entry)
+    for _ in range(50):
+        if bridge.latest_media_frame("gw1__cam") == JPEG:
+            break
+        await asyncio.sleep(0.01)
+        await hass.async_block_till_done()
+    else:
+        raise AssertionError("HA did not receive the binary JPEG frame")
+
+    image = await camera.async_get_image(hass, entity_id_for(hass, "camera", "cam"))
+    assert image.content == JPEG
