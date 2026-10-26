@@ -140,6 +140,13 @@ async def ws_connect(
 ) -> None:
     if _reject_if_not_allowed(hass, connection, msg):
         return
+    if any(bridge.is_media_connection(connection) for bridge in _bridges(hass)):
+        connection.send_error(
+            msg["id"],
+            "media_connection",
+            "A media upload socket cannot become a ws_bridge control connection",
+        )
+        return
 
     @callback
     def _send_event(event: dict[str, Any]) -> None:

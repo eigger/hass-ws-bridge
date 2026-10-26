@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from aiohttp import ClientConnectionResetError
 from homeassistant.components import image
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
@@ -193,6 +194,8 @@ async def test_control_and_bound_media_socket_cannot_rebind(
     media = await bridge_client_factory()
     first = await client.ok("media_open", unique_id="a")
     await media.ok("media_connect", session_id=first["session_id"])
+    denied = await media.send("connect", gateway_id="other", name="Other")
+    assert denied["error"]["code"] == "media_connection"
     second = await client.ok("media_open", unique_id="b")
     denied = await media.send("media_connect", session_id=second["session_id"])
     assert denied["error"]["code"] == "invalid_media_session"
@@ -225,3 +228,28 @@ async def test_uploaded_jpeg_resets_url_content_type(
     fetched = await image.async_get_image(hass, entity_id_for(hass, "image", "snap"))
     assert fetched.content == JPEG
     assert fetched.content_type == "image/jpeg"
+
+
+async def test_control_gateway_switch_revokes_old_media_handler(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+) -> None:
+    await client.entity("snap", "image", "Snap")
+    session = await client.ok("media_open", unique_id="snap")
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+    await client.connect("other", "Other")
+    bridge = get_bridge(hass, client.entry)
+    assert not bridge._media_connections
+    assert bridge.latest_media_frame("gw1__snap") is None
+
+    # Handler revocation closes the old upload socket; either aiohttp rejects
+    # the write or it is ignored while the close is being processed.
+    try:
+        await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    except (ClientConnectionResetError, ConnectionResetError):
+        pass
+    await asyncio.sleep(0.01)
+    await hass.async_block_till_done()
+    assert bridge.latest_media_frame("gw1__snap") is None

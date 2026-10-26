@@ -282,6 +282,14 @@ class WsBridge:
         model = _nonempty(model)
         hw_version = _nonempty(hw_version)
         sw_version = _nonempty(sw_version)
+        previous_gateway = self._conn_client.get(connection)
+        if previous_gateway is not None and previous_gateway != gateway_id:
+            # One physical WebSocket may not retain media ownership after it
+            # announces a different gateway.
+            self._revoke_control_media(connection)
+            if self._gateway_owner.get(previous_gateway) is connection:
+                self._gateway_owner.pop(previous_gateway, None)
+
         client = self._clients.get(gateway_id)
         # A second control socket claiming a gateway replaces its command owner.
         # Do not disrupt a harmless repeated connect on the same socket, because
@@ -378,10 +386,13 @@ class WsBridge:
         @callback
         def _disconnect() -> None:
             self._revoke_control_media(connection)
-            self._connections.discard(connection)
-            self._conn_client.pop(connection, None)
-            if self._gateway_owner.get(gateway_id) is connection:
-                self._gateway_owner.pop(gateway_id, None)
+            # This socket may have reconnected under another gateway id. Its
+            # older connect subscription must not remove the newer mapping.
+            if self._conn_client.get(connection) == gateway_id:
+                self._connections.discard(connection)
+                self._conn_client.pop(connection, None)
+                if self._gateway_owner.get(gateway_id) is connection:
+                    self._gateway_owner.pop(gateway_id, None)
             if (
                 gateway_id not in self._conn_client.values()
                 and not client.keep_last_state_on_disconnect
@@ -434,6 +445,11 @@ class WsBridge:
     def client_for(self, connection: Any) -> str | None:
         return self._conn_client.get(connection)
 
+    @callback
+    def is_media_connection(self, connection: Any) -> bool:
+        """Whether this socket is already dedicated to binary media upload."""
+        return connection in self._media_connections
+
     # ── Binary media upload ─────────────────────────────────────────────────
     @callback
     def open_media_session(
@@ -450,6 +466,7 @@ class WsBridge:
         ns_uid = self._ns_uid(gateway_id, unique_id)
         if (
             self._gateway_owner.get(gateway_id) is not connection
+            or self._conn_client.get(connection) != gateway_id
             or self._entity_client.get(ns_uid) != gateway_id
             or self._entity_platform(ns_uid) not in (PLATFORM_IMAGE, PLATFORM_CAMERA)
         ):
@@ -491,6 +508,7 @@ class WsBridge:
             )
             or self._gateway_owner.get(session.gateway_id)
             is not session.control_connection
+            or self._conn_client.get(session.control_connection) != session.gateway_id
             or self._entity_client.get(session.unique_id) != session.gateway_id
             or self._entity_platform(session.unique_id)
             not in (PLATFORM_IMAGE, PLATFORM_CAMERA)
@@ -540,7 +558,10 @@ class WsBridge:
         if not user_allowed(self.hass, connection.user):
             self._revoke_media_connection(connection, close=True)
             return
-        if self._gateway_owner.get(media.gateway_id) is not media.control_connection:
+        if (
+            self._gateway_owner.get(media.gateway_id) is not media.control_connection
+            or self._conn_client.get(media.control_connection) != media.gateway_id
+        ):
             self._revoke_media_connection(connection, close=True)
             return
         if not self._store_media_frame(media.gateway_id, media.unique_id, payload):
