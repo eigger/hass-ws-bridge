@@ -99,3 +99,104 @@ async def test_camera_serves_uploaded_jpeg(
 
     image = await camera.async_get_image(hass, entity_id_for(hass, "camera", "cam"))
     assert image.content == JPEG
+
+
+async def test_push_stream_fans_out_latest_jpegs_and_stops_after_last_viewer(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+    hass_client,
+) -> None:
+    """The real camera MJPEG endpoint shares one producer across viewers."""
+    await client.entity("cam", "camera", "Cam", features=["push_stream"])
+    entity_id = entity_id_for(hass, "camera", "cam")
+    flags = hass.states.get(entity_id).attributes["supported_features"]
+    assert not flags & CameraEntityFeature.STREAM
+
+    session = await client.ok("media_open", unique_id="cam")
+    http = await hass_client()
+    first_task = asyncio.create_task(http.get(f"/api/camera_proxy_stream/{entity_id}"))
+    assert (await client.next_command())["action"] == "start_stream"
+    first = await asyncio.wait_for(first_task, timeout=5)
+    assert first.status == HTTPStatus.OK
+
+    # The producer commonly binds after HA has requested the first frame. Its
+    # initial media_connect must not terminate this pending viewer.
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+
+    second = await http.get(f"/api/camera_proxy_stream/{entity_id}")
+    assert second.status == HTTPStatus.OK
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await hass.async_block_till_done()
+    assert JPEG in await asyncio.wait_for(first.content.readany(), timeout=5)
+    assert JPEG in await asyncio.wait_for(second.content.readany(), timeout=5)
+
+    # Closing each HTTP consumer only releases the ESP producer after the last
+    # queue has gone away. A new frame wakes the server-side writer to observe
+    # each closed transport.
+    first.close()
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await hass.async_block_till_done()
+    second.close()
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    assert (await client.next_command())["action"] == "stop_stream"
+
+
+async def test_push_stream_url_mode_ends_waiting_viewers(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+    hass_client,
+) -> None:
+    """URL state revokes a negotiated stream before a first JPEG can arrive."""
+    await client.entity("cam", "camera", "Cam", features=["push_stream"])
+    entity_id = entity_id_for(hass, "camera", "cam")
+    http = await hass_client()
+    request = asyncio.create_task(http.get(f"/api/camera_proxy_stream/{entity_id}"))
+    assert (await client.next_command())["action"] == "start_stream"
+    response = await asyncio.wait_for(request, timeout=5)
+
+    await client.state("cam", {"still_image_url": STILL})
+    assert (await client.next_command())["action"] == "stop_stream"
+    assert await asyncio.wait_for(response.content.read(), timeout=5) == b""
+
+    # A fresh authenticated producer supersedes the historical URL selection.
+    # The ended response was detached, so it cannot suppress this new start.
+    session = await client.ok("media_open", unique_id="cam")
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+    replacement_task = asyncio.create_task(
+        http.get(f"/api/camera_proxy_stream/{entity_id}")
+    )
+    assert (await client.next_command())["action"] == "start_stream"
+    replacement = await asyncio.wait_for(replacement_task, timeout=5)
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    assert JPEG in await asyncio.wait_for(replacement.content.readany(), timeout=5)
+
+
+async def test_push_stream_start_error_and_control_disconnect_cleanup(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    hass_client,
+) -> None:
+    """No producer gives 502; a disconnected producer releases a live viewer."""
+    await client.entity("cam", "camera", "Cam", features=["push_stream"])
+    entity_id = entity_id_for(hass, "camera", "cam")
+    bridge = get_bridge(hass, client.entry)
+    entity = bridge._entities["gw1__cam"]
+    http = await hass_client()
+
+    gateway = bridge._clients.pop("gw1")
+    unavailable = await http.get(f"/api/camera_proxy_stream/{entity_id}")
+    assert unavailable.status == HTTPStatus.BAD_GATEWAY
+
+    # Restore the real control client, then prove connection teardown wakes the
+    # pending first-frame queue without relying on an uploaded frame.
+    bridge._clients["gw1"] = gateway
+    request = asyncio.create_task(http.get(f"/api/camera_proxy_stream/{entity_id}"))
+    assert (await client.next_command())["action"] == "start_stream"
+    response = await asyncio.wait_for(request, timeout=5)
+    await client.close()
+    assert await asyncio.wait_for(response.content.read(), timeout=5) == b""
+    assert not entity._push_stream_started

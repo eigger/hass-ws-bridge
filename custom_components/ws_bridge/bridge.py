@@ -392,11 +392,16 @@ class WsBridge:
             # subscription owns cleanup; all prior callbacks are no-ops.
             if self._conn_generation.get(connection) != generation:
                 return
+            is_current_owner = self._gateway_owner.get(gateway_id) is connection
             self._revoke_control_media(connection)
+            if is_current_owner:
+                # This also wakes push-MJPEG viewers that are waiting for the
+                # first frame and therefore have no cached media to clear yet.
+                self._revoke_gateway_media(gateway_id)
             self._connections.discard(connection)
             self._conn_client.pop(connection, None)
             self._conn_generation.pop(connection, None)
-            if self._gateway_owner.get(gateway_id) is connection:
+            if is_current_owner:
                 self._gateway_owner.pop(gateway_id, None)
             if (
                 gateway_id not in self._conn_client.values()
@@ -523,7 +528,10 @@ class WsBridge:
         # A producer owns its declared entity exclusively. This also releases
         # the prior binary handler before allocating another one (HA caps these
         # handlers at 255 per socket).
-        self._revoke_media_entity(session.unique_id)
+        # Binding an initial producer is not a media invalidation. In
+        # particular, do not wake a push-MJPEG viewer waiting for this first
+        # producer with a terminal "cleared" notification.
+        self._revoke_media_entity(session.unique_id, notify_empty=False)
 
         try:
             handler_id, unsub_binary = connection.async_register_binary_handler(
@@ -628,9 +636,11 @@ class WsBridge:
                 self._media_sessions.pop(session_id, None)
 
     @callback
-    def _clear_media_frame(self, ns_uid: str) -> None:
+    def _clear_media_frame(self, ns_uid: str, *, notify: bool = False) -> None:
         if (frame := self._media_frames.pop(ns_uid, None)) is not None:
             self._media_cache_bytes -= len(frame)
+            notify = True
+        if notify:
             async_dispatcher_send(self.hass, signal_media(self.entry_id, ns_uid))
 
     @callback
@@ -639,7 +649,7 @@ class WsBridge:
         if media is None:
             return
         media.unsubscribe_binary()
-        self._clear_media_frame(media.unique_id)
+        self._clear_media_frame(media.unique_id, notify=True)
         if close:
             self._close_connection(connection)
 
@@ -653,14 +663,21 @@ class WsBridge:
                 self._revoke_media_connection(connection, close=True)
 
     @callback
-    def _revoke_media_entity(self, ns_uid: str) -> None:
+    def _revoke_media_entity(self, ns_uid: str, *, notify_empty: bool = True) -> None:
         for session_id, session in list(self._media_sessions.items()):
             if session.unique_id == ns_uid:
                 self._media_sessions.pop(session_id, None)
         for connection, media in list(self._media_connections.items()):
             if media.unique_id == ns_uid:
                 self._revoke_media_connection(connection, close=True)
-        self._clear_media_frame(ns_uid)
+        # Notify even with no cached frame: a push-stream viewer may be blocked
+        # waiting for its first JPEG while its producer disappears.
+        self._clear_media_frame(ns_uid, notify=notify_empty)
+
+    @callback
+    def has_media_connection(self, unique_id: str) -> bool:
+        """Whether a live producer is bound to this declared entity."""
+        return any(media.unique_id == unique_id for media in self._media_connections.values())
 
     @callback
     def _revoke_gateway_media(self, gateway_id: str | None) -> None:
@@ -674,6 +691,13 @@ class WsBridge:
         for ns_uid in list(self._media_frames):
             if gateway_id is None or ns_uid.startswith(prefix):
                 self._clear_media_frame(ns_uid)
+        # There might be no cached frame yet while a native MJPEG request is
+        # awaiting the first upload. Notify those cameras as well.
+        for ns_uid, owner in self._entity_client.items():
+            if (gateway_id is None or owner == gateway_id) and self._entity_platform(
+                ns_uid
+            ) in (PLATFORM_IMAGE, PLATFORM_CAMERA):
+                self._clear_media_frame(ns_uid, notify=True)
 
     @property
     def connected_client_count(self) -> int:

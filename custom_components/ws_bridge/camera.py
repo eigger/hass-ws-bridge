@@ -1,11 +1,14 @@
-"""camera 플랫폼: still/stream URL 기반 (바이트·base64 전송 없음)."""
+"""Camera entities backed by URL stills or uploaded JPEG frames."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 import aiohttp
+from aiohttp import web
+from homeassistant.components import camera
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -25,6 +28,7 @@ _FEATURE_MAP = {
 }
 
 _STILL_TIMEOUT = aiohttp.ClientTimeout(total=10)
+_PUSH_FRAME_TIMEOUT = 15
 
 
 async def async_setup_entry(
@@ -50,6 +54,10 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         Camera.__init__(self)
         WsBridgeCompositeEntity.__init__(self, bridge, defn)
+        self._push_stream_queues: dict[asyncio.Queue[bytes | None], int] = {}
+        self._push_stream_enabled = False
+        self._push_stream_started = False
+        self._push_stream_generation = 0
         self._configure_from_defn(defn)
         self._apply_state()
 
@@ -62,9 +70,13 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
             has_stream=bool(self._state.get("stream_source")),
         )
         self._declared_features = defn.get("features")
+        self._push_stream_enabled = "push_stream" in (self._declared_features or ())
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
+        was_enabled = self._push_stream_enabled
         self._configure_from_defn(defn)
+        if was_enabled and not self._push_stream_enabled:
+            self._end_push_streams()
 
     @callback
     def _apply_state(self) -> None:
@@ -75,6 +87,10 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
             _LOGGER.warning(
                 "Ignoring unsafe still_image_url for %s", self._attr_unique_id
             )
+        # A state carrying a still URL explicitly selects URL transport. It
+        # must not leave viewers subscribed to an earlier pushed-frame stream.
+        if self._still_url and not self._has_live_push_media() and self._push_stream_queues:
+            self._end_push_streams()
         stream = self._state.get("stream_source")
         raw_stream = str(stream) if stream is not None else None
         # rtsp(s) for ffmpeg; http(s) for HLS-style sources
@@ -138,8 +154,119 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
 
     @callback
     def _on_media(self) -> None:
-        """Publish a new frame so camera proxy consumers refresh immediately."""
-        safe_write_ha_state(self)
+        """Fan out one uploaded frame without retaining per-viewer history."""
+        frame = self._bridge.latest_media_frame(self._attr_unique_id)
+        if frame is None:
+            # A cleared frame means the producer, entity, or gateway was
+            # revoked. Wake every waiting HTTP response so it can clean up.
+            self._end_push_streams()
+        elif self._push_stream_queues:
+            for queue in self._push_stream_queues:
+                self._replace_queued_frame(queue, frame)
+
+        # Snapshot cameras still refresh their proxy state. While viewers are
+        # consuming live frames, avoid one HA state/store write per video frame.
+        if not self._push_stream_queues:
+            safe_write_ha_state(self)
+
+    @staticmethod
+    @callback
+    def _replace_queued_frame(
+        queue: asyncio.Queue[bytes | None], frame: bytes | None
+    ) -> None:
+        """Keep only the newest frame (or terminal marker) for one viewer."""
+        if queue.full():
+            queue.get_nowait()
+        queue.put_nowait(frame)
+
+    @callback
+    def _end_push_streams(self) -> None:
+        """End native MJPEG viewers and release the producer once."""
+        ended = tuple(self._push_stream_queues)
+        # Detach terminal queues before scheduling their wake-up. A new viewer
+        # can then start a fresh producer generation, and an old handler's
+        # finally block can never stop that newer generation.
+        self._push_stream_queues.clear()
+        self._push_stream_generation += 1
+        for queue in ended:
+            self._replace_queued_frame(queue, None)
+        if self._push_stream_started:
+            self._bridge.send_command(
+                self._attr_unique_id, "stop_stream", params={"format": "mjpeg"}
+            )
+            self._push_stream_started = False
+
+    async def _async_next_push_frame(
+        self, queue: asyncio.Queue[bytes | None]
+    ) -> bytes | None:
+        """Wait for one latest frame, ending a stalled MJPEG response."""
+        try:
+            async with asyncio.timeout(_PUSH_FRAME_TIMEOUT):
+                return await queue.get()
+        except TimeoutError:
+            _LOGGER.debug("Timed out waiting for pushed frame from %s", self.entity_id)
+            return None
+
+    @callback
+    def _has_live_push_media(self) -> bool:
+        """A fresh producer/frame takes precedence over historical URL state."""
+        return (
+            self._bridge.latest_media_frame(self._attr_unique_id) is not None
+            or self._bridge.has_media_connection(self._attr_unique_id)
+        )
+
+    async def handle_async_mjpeg_stream(
+        self, request: web.Request
+    ) -> web.StreamResponse | None:
+        """Serve negotiated pushed JPEG frames as a bounded native MJPEG stream."""
+        # URL mode and clients that did not explicitly negotiate push-stream
+        # keep Home Assistant's normal camera behavior.
+        if not self._push_stream_enabled or (
+            self._still_url and not self._has_live_push_media()
+        ):
+            return await super().handle_async_mjpeg_stream(request)
+
+        queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=1)
+        first_viewer = not self._push_stream_queues
+        generation = self._push_stream_generation
+        self._push_stream_queues[queue] = generation
+        if first_viewer:
+            if not self._bridge.send_command(
+                self._attr_unique_id, "start_stream", params={"format": "mjpeg"}
+            ):
+                self._push_stream_queues.pop(queue, None)
+                return None
+            self._push_stream_started = True
+
+        # A frame arriving just before subscription remains useful as the first
+        # MJPEG part without requiring another ESP request.
+        if frame := self._bridge.latest_media_frame(self._attr_unique_id):
+            self._replace_queued_frame(queue, frame)
+
+        try:
+            return await camera.async_get_still_stream(
+                request,
+                lambda: self._async_next_push_frame(queue),
+                camera.DEFAULT_CONTENT_TYPE,
+                0.0,
+            )
+        finally:
+            # _end_push_streams() has already detached terminal queues. Do not
+            # let their delayed HTTP cleanup affect a newer viewer generation.
+            if self._push_stream_queues.get(queue) == generation:
+                self._push_stream_queues.pop(queue, None)
+                if not self._push_stream_queues and self._push_stream_started:
+                    self._bridge.send_command(
+                        self._attr_unique_id,
+                        "stop_stream",
+                        params={"format": "mjpeg"},
+                    )
+                    self._push_stream_started = False
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Release a producer when the camera entity is removed or unloaded."""
+        self._end_push_streams()
+        await super().async_will_remove_from_hass()
 
     async def stream_source(self) -> str | None:
         return self._stream_url
