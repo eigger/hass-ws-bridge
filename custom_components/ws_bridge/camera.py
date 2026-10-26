@@ -89,7 +89,11 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
             )
         # A state carrying a still URL explicitly selects URL transport. It
         # must not leave viewers subscribed to an earlier pushed-frame stream.
-        if self._still_url and not self._has_live_push_media() and self._push_stream_queues:
+        if (
+            self._still_url
+            and not self._has_live_push_media()
+            and self._push_stream_queues
+        ):
             self._end_push_streams()
         stream = self._state.get("stream_source")
         raw_stream = str(stream) if stream is not None else None
@@ -210,10 +214,9 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
     @callback
     def _has_live_push_media(self) -> bool:
         """A fresh producer/frame takes precedence over historical URL state."""
-        return (
-            self._bridge.latest_media_frame(self._attr_unique_id) is not None
-            or self._bridge.has_media_connection(self._attr_unique_id)
-        )
+        return self._bridge.latest_media_frame(
+            self._attr_unique_id
+        ) is not None or self._bridge.has_media_connection(self._attr_unique_id)
 
     async def handle_async_mjpeg_stream(
         self, request: web.Request

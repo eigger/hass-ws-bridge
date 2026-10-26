@@ -677,7 +677,9 @@ class WsBridge:
     @callback
     def has_media_connection(self, unique_id: str) -> bool:
         """Whether a live producer is bound to this declared entity."""
-        return any(media.unique_id == unique_id for media in self._media_connections.values())
+        return any(
+            media.unique_id == unique_id for media in self._media_connections.values()
+        )
 
     @callback
     def _revoke_gateway_media(self, gateway_id: str | None) -> None:
