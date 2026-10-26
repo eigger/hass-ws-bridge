@@ -119,7 +119,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
     - **`alarm_control_panel` 플랫폼**: `code_arm_required`(bool, 기본 `true`), `code_format`(`"number"`/`"text"`/생략 — lock과 달리 **정규식 아님**), `features`(`arm_home`/`arm_away`/`arm_night`/`arm_vacation`/`arm_custom_bypass`/`trigger`).
     - **`media_player` 플랫폼** (1차: 재생/볼륨/소스): `source_list`, `features`(`play`/`pause`/`stop`/`next_track`/`previous_track`/`volume_set`/`volume_mute`/`volume_step`/`turn_on`/`turn_off`/`select_source`; `source_list`가 있으면 `select_source` 자동 활성).
     - **`image` 플랫폼**: 선언 전용 필드 없음 — 상태에 `image_url`을 둘 수 있고, §3.2.1의 인증된 미디어 업로드로 JPEG를 받을 수도 있습니다.
-    - **`camera` 플랫폼**: `brand` / `model`, `features`(`on_off`/`stream`; 상태에 `stream_source`가 있으면 `stream` 자동 활성). still 이미지는 URL 또는 §3.2.1 JPEG 업로드를 쓰며, `stream_source`는 계속 URL입니다.
+    - **`camera` 플랫폼**: `brand` / `model`, `features`(`on_off`/`stream`/`push_stream`; 유효한 `stream_source` URL이 있을 때만 `stream` 자동 활성). `push_stream`은 §3.2.2의 업로드 JPEG 네이티브 MJPEG 전송을 명시적으로 선택하며 HLS/RTSP `stream`과 별개이고 이를 활성화하지 않습니다. still 이미지는 URL 또는 §3.2.1 JPEG 업로드를 씁니다.
 
 * **응답**
   ```json
@@ -160,7 +160,7 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 | `alarm_control_panel` | 제어 | 문자열 | `alarm_disarm` / `alarm_arm_*` / `alarm_trigger` |
 | `media_player` | 제어 | 객체 (`state`/볼륨/미디어/…, §3.2 참고) | `media_play` / `media_pause` / `media_stop` / `media_next_track` / `media_previous_track` / `volume_set` / `volume_mute` / `volume_up` / `volume_down` / `select_source` / `turn_on` / `turn_off` |
 | `image` | 읽기 | URL 문자열 또는 객체 | — |
-| `camera` | 제어 | 객체 (`still_image_url`/`stream_source`/…) | `turn_on` / `turn_off` |
+| `camera` | 제어 | 객체 (`still_image_url`/`stream_source`/…) | `turn_on` / `turn_off`; 협상된 `push_stream`: `start_stream` / `stop_stream` |
 
 ---
 
@@ -374,6 +374,16 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 - `image`의 `image_last_updated`(ISO datetime)는 옵션. 생략 시 **`image_url`이 바뀔 때만** 타임스탬프를 갱신합니다(주기적 전체 상태 재전송으로 재다운로드하지 않음). 타임스탬프가 바뀌면 같은 URL의 캐시 바이트도 무효화합니다.
 - fetch 가능한 URL은 `http`/`https`(스트림은 `rtsp`/`rtsps`도 허용). 루프백·링크로컬·비네트워크 스킴은 거절합니다. LAN 카메라 호스트는 허용됩니다.
 
+* **응답**
+  ```json
+  {
+    "id": 3,
+    "type": "result",
+    "success": true,
+    "result": null
+  }
+  ```
+
 #### 3.2.1 인증된 JPEG 업로드 (`ws_bridge/media_open` / `ws_bridge/media_connect`)
 
 이 선택 스냅샷 전송은 ESPHome 게이트웨이가 HA로 향하는 **두 연결을 모두 시작**하게 합니다. HA가 게이트웨이에 연결하지 않습니다. HA 표준 `/api/websocket` 엔드포인트를 두 번 사용하므로 기존 Home Assistant 인증과 원격 접근 경로가 그대로 적용되고, 새 포트나 익명 엔드포인트를 만들지 않습니다.
@@ -386,13 +396,23 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
    ```
 
    HA가 한 번만 쓸 수 있는 `session_id`와 `expires_in`(30초)을 돌려줍니다.
+
+   ```json
+   {"id":8,"type":"result","success":true,"result":{"session_id":"<opaque>","expires_in":30}}
+   ```
 3. **두 번째** `/api/websocket` 연결을 열어 같은 HA 토큰/사용자로 인증하고(HA가 제공하면 같은 refresh token도 사용), 다음을 보냅니다.
 
    ```json
    {"id": 1, "type": "ws_bridge/media_connect", "session_id": "<session_id>"}
    ```
 
-   응답의 `handler_id`를 사용해 JPEG마다 WebSocket binary 메시지 하나를 보냅니다. 첫 바이트는 handler, 나머지는 JPEG입니다.
+   HA가 binary `handler_id`를 할당합니다.
+
+   ```json
+   {"id":1,"type":"result","success":true,"result":{"handler_id":7}}
+   ```
+
+   이 `handler_id`를 사용해 JPEG마다 WebSocket binary 메시지 하나를 보냅니다. 첫 바이트는 handler, 나머지는 JPEG입니다.
 
    ```text
    +------------+---------------------------------+
@@ -404,15 +424,23 @@ HA에 동적으로 엔티티를 등록하거나 메타데이터를 업데이트�
 
 `session_id`는 불투명한 일회용 연결 식별자일 뿐 **인증 자격 증명은 아닙니다**. 원래 제어 소켓이 해당 게이트웨이와 선언된 엔티티를 계속 소유하고, 별도 소켓이 같은 사용자/토큰 identity로 인증된 동안에만 업로드가 허용됩니다. 대기 세션 수는 제한되고 만료되며, 제어 소유자가 끊기거나 교체되거나 엔티티/게이트웨이가 제거되면 활성 업로드 handler·프레임·세션이 무효화됩니다. JPEG가 아니거나 너무 큰 프레임은 버립니다. 프레임은 상태로 저장하지 않는 메모리 전용 데이터이며, 브리지당 최대 8 MiB cache에서 엔티티별 최신 1개만 유지합니다. 새 업로드는 무효화될 때까지 URL 모드보다 우선합니다. state 갱신에 `image_url`, `url`, `still_image_url`을 보내면 해당 엔티티를 URL 모드로 명시 전환하고 업로드 session/frame을 무효화합니다.
 
-* **응답**
-  ```json
-  {
-    "id": 3,
-    "type": "result",
-    "success": true,
-    "result": null
-  }
-  ```
+#### 3.2.2 협상된 pushed-JPEG MJPEG (`camera` `push_stream`)
+
+`push_stream`은 §3.2.1의 인증된 media 소켓으로 실시간 JPEG를 보낼 수 있는 카메라 클라이언트의 명시적 capability입니다. 선택 사항이므로 스냅샷 전용 클라이언트는 이를 생략하고 기존 동작을 유지해야 합니다. 이 기능은 Home Assistant의 `STREAM`/HLS를 광고하지 않고 `stream_source`도 사용하지 않습니다.
+
+인증된 첫 뷰어가 HA의 표준 네이티브 camera MJPEG endpoint를 열면 HA는 기존 게이트웨이 제어 소켓으로 이벤트 하나를 보냅니다. 마지막 뷰어가 나가거나, 프레임 소스가 revoke되거나, 엔티티가 제거/언로드되거나, 클라이언트가 카메라를 URL 모드로 명시 전환할 때에만 `stop_stream`을 보냅니다. HA는 ESP로 HTTP 또는 WebSocket 연결을 열지 않습니다.
+
+```json
+{"id":2,"type":"event","event":{"kind":"command","unique_id":"front_cam","action":"start_stream","params":{"format":"mjpeg"}}}
+```
+
+```json
+{"id":2,"type":"event","event":{"kind":"command","unique_id":"front_cam","action":"stop_stream","params":{"format":"mjpeg"}}}
+```
+
+`unique_id`는 선언에서 쓴 클라이언트 쪽 ID입니다. 이번 revision에서 `params.format`은 항상 리터럴 `"mjpeg"`이고 stream ID·URL·credential·요청 FPS·요청 bandwidth는 없습니다. 이후 video capability revision에서 stream 제어가 확장될 수 있으므로, 클라이언트는 알 수 없는 command 필드를 무시하고 중복 `start_stream`/`stop_stream`을 멱등하게 처리해야 합니다. 시작된 동안 클라이언트는 bound `handler_id`로 완전한 JPEG를 보내고, `stop_stream` 뒤에는 캡처를 즉시 중지합니다.
+
+HA는 뷰어마다 대기 중인 최신 JPEG 하나만 fan-out합니다. 느린 뷰어는 메모리를 늘리지 않고 오래된 프레임을 건너뛰며, 프레임 소스가 멈추면 timeout 후 뷰어를 해제합니다. 업로드 프레임은 메모리 전용이고 매 비디오 프레임마다 HA state/persistence를 갱신하지 않으며, 기존 `image` timestamp와 snapshot 동작은 그대로입니다.
 
 ---
 
@@ -647,12 +675,13 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 
 ```json
 {"unique_id": "speaker", "platform": "media_player", "name": "Speaker", "source_list": ["HDMI", "Bluetooth"]}
-{"unique_id": "front_cam", "platform": "camera", "name": "Front", "features": ["on_off", "stream"]}
+{"unique_id": "front_cam", "platform": "camera", "name": "Front", "features": ["on_off", "push_stream"]}
 ```
 
 ```json
 {"kind": "command", "unique_id": "speaker", "action": "volume_set", "params": {"volume_level": 0.5}}
 {"kind": "command", "unique_id": "front_cam", "action": "turn_off"}
+{"kind": "command", "unique_id": "front_cam", "action": "start_stream", "params": {"format": "mjpeg"}}
 ```
 
 ### `update` 명령
@@ -677,4 +706,4 @@ ws_bridge/connect → ws_bridge/entity × N → ws_bridge/sync → ws_bridge/sta
 |:---:|:---|:---|
 | 1 | `vacuum` / `lawn_mower` / `remote` / `todo` | 보류(Phase 5) — 수요 확인 전 착수 금지. |
 
-Phase 0–4 추가됨. `media_player` 1차는 재생/볼륨/소스, `image`/`camera`는 URL만(base64 없음).
+Phase 0–4가 추가되었습니다. `media_player` 1차는 재생/볼륨/소스입니다. `image`/`camera`는 URL still과 인증 JPEG 업로드를 지원하며, `camera`는 `push_stream`으로 네이티브 pushed-JPEG MJPEG를 협상할 수 있습니다.

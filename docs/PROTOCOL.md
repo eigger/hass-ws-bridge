@@ -119,7 +119,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
     - **`alarm_control_panel` platform**: `code_arm_required` (Boolean, Optional, default `true`), `code_format` (`"number"`/`"text"`/omit — unlike lock, this is **not** a regex), `features` (`arm_home`/`arm_away`/`arm_night`/`arm_vacation`/`arm_custom_bypass`/`trigger`).
     - **`media_player` platform** (v1: playback / volume / source): `source_list`, `features` (`play`/`pause`/`stop`/`next_track`/`previous_track`/`volume_set`/`volume_mute`/`volume_step`/`turn_on`/`turn_off`/`select_source`; `select_source` auto-enabled when `source_list` is set).
     - **`image` platform**: no extra declare fields — state can carry `image_url`; it can also receive a JPEG through the authenticated media-upload protocol in §3.2.1.
-    - **`camera` platform**: `brand` / `model`, `features` (`on_off`/`stream`; `stream` auto-enabled when state has `stream_source`). Still images can use a URL or §3.2.1 JPEG upload; `stream_source` remains a URL.
+    - **`camera` platform**: `brand` / `model`, `features` (`on_off`/`stream`/`push_stream`; `stream` is auto-enabled only when state has a valid `stream_source` URL). `push_stream` opts in to §3.2.2's uploaded-JPEG native MJPEG transport; it is distinct from HLS/RTSP `stream` and does not enable it. Still images can use a URL or §3.2.1 JPEG upload.
 
 * **Response**
   ```json
@@ -160,7 +160,7 @@ Declares a new entity or updates its metadata. This command is idempotent; calli
 | `alarm_control_panel` | Control | String | `alarm_disarm` / `alarm_arm_*` / `alarm_trigger` |
 | `media_player` | Control | Object (`state`/volume/media/…, see §3.2) | `media_play` / `media_pause` / `media_stop` / `media_next_track` / `media_previous_track` / `volume_set` / `volume_mute` / `volume_up` / `volume_down` / `select_source` / `turn_on` / `turn_off` |
 | `image` | Read | URL string or object | — |
-| `camera` | Control | Object (`still_image_url`/`stream_source`/…) | `turn_on` / `turn_off` |
+| `camera` | Control | Object (`still_image_url`/`stream_source`/…) | `turn_on` / `turn_off`; negotiated `push_stream`: `start_stream` / `stop_stream` |
 
 ---
 
@@ -374,6 +374,16 @@ Sending the string `"unknown"` (or a non-object) clears the version fields entir
 - Optional `image_last_updated` (ISO datetime) for `image`. If omitted, the integration bumps the timestamp **only when `image_url` changes** (so periodic full-state sync does not re-download). Sending a changed timestamp invalidates cached URL bytes.
 - Fetchable URLs must be `http`/`https` (streams may also use `rtsp`/`rtsps`). Loopback / link-local / non-network schemes are rejected — HA will not SSRF to `localhost` on the user's behalf. LAN camera hosts remain allowed.
 
+* **Response**
+  ```json
+  {
+    "id": 3,
+    "type": "result",
+    "success": true,
+    "result": null
+  }
+  ```
+
 #### 3.2.1 Authenticated JPEG upload (`ws_bridge/media_open` / `ws_bridge/media_connect`)
 
 This optional snapshot transport lets an ESPHome gateway **initiate both connections** to HA. HA never opens a connection to the gateway. It uses HA's ordinary `/api/websocket` endpoint twice, so normal Home Assistant authentication and remote-access routing apply; it does not open a port or add an unauthenticated endpoint.
@@ -385,14 +395,24 @@ This optional snapshot transport lets an ESPHome gateway **initiate both connect
    {"id": 8, "type": "ws_bridge/media_open", "unique_id": "front_snap"}
    ```
 
-   HA returns a one-use `session_id` and `expires_in` (30 seconds).
+   HA returns a one-use `session_id` and `expires_in` (30 seconds):
+
+   ```json
+   {"id":8,"type":"result","success":true,"result":{"session_id":"<opaque>","expires_in":30}}
+   ```
 3. Open a **second** `/api/websocket` connection, authenticate it with the same HA token/user (and, where HA exposes it, the same refresh token), then send:
 
    ```json
    {"id": 1, "type": "ws_bridge/media_connect", "session_id": "<session_id>"}
    ```
 
-   The response contains `handler_id`. Send each JPEG as one WebSocket binary message: one leading handler byte followed by JPEG bytes.
+   HA assigns a binary `handler_id`:
+
+   ```json
+   {"id":1,"type":"result","success":true,"result":{"handler_id":7}}
+   ```
+
+   Send each JPEG as one WebSocket binary message: one leading handler byte followed by JPEG bytes.
 
    ```text
    +------------+---------------------------------+
@@ -404,15 +424,23 @@ This optional snapshot transport lets an ESPHome gateway **initiate both connect
 
 `session_id` is an opaque, one-use correlation value, **not** an authentication credential. HA accepts upload only while the originating control socket still owns that gateway and declared entity, and only from a separately authenticated socket of the same user/token identity. Pending sessions are capped and expire; active upload handlers, frames, and sessions are invalidated if the control owner disconnects or is replaced, or if the entity/gateway is removed. Invalid/non-JPEG/oversized frames are discarded. Frames are memory-only, never persisted as entity state; HA retains only the latest frame per entity in a bounded 8 MiB per-bridge cache. A fresh upload takes precedence over URL mode until it is invalidated. Sending `image_url`, `url`, or `still_image_url` in a state update explicitly switches that entity back to URL mode and invalidates its upload session/frame.
 
-* **Response**
-  ```json
-  {
-    "id": 3,
-    "type": "result",
-    "success": true,
-    "result": null
-  }
-  ```
+#### 3.2.2 Negotiated pushed-JPEG MJPEG (`camera` `push_stream`)
+
+`push_stream` is an explicit camera capability for a client that can produce live JPEGs over the authenticated media socket from §3.2.1. It is optional: snapshot-only clients must omit it and keep their existing behavior. It does **not** advertise Home Assistant `STREAM`/HLS support and does not use `stream_source`.
+
+When the first authenticated viewer opens HA's normal native camera MJPEG endpoint, HA sends one event on the existing gateway control socket. It sends `stop_stream` only after the last viewer leaves, when the frame source is revoked, the entity is removed/unloaded, or the client explicitly switches the camera to URL mode. HA never opens an HTTP or WebSocket connection to the ESP.
+
+```json
+{"id":2,"type":"event","event":{"kind":"command","unique_id":"front_cam","action":"start_stream","params":{"format":"mjpeg"}}}
+```
+
+```json
+{"id":2,"type":"event","event":{"kind":"command","unique_id":"front_cam","action":"stop_stream","params":{"format":"mjpeg"}}}
+```
+
+`unique_id` is the client-side ID from the declaration. `params.format` is always the literal `"mjpeg"` in this revision; there is no stream ID, URL, credential, requested FPS, or requested bandwidth. A later video-capability revision may extend stream controls, so clients must ignore unknown command fields and treat repeated `start_stream`/`stop_stream` idempotently. A client sends complete JPEGs using its bound `handler_id` while started, then stops capture promptly after `stop_stream`.
+
+HA fans out only each viewer's latest queued JPEG. A slow viewer skips old frames rather than growing memory, and a stalled frame source times out and releases the viewer. Uploaded frames remain memory-only and do not generate an HA state/persistence update for every video frame; the regular `image` timestamp and snapshot behavior remain unchanged.
 
 ---
 
@@ -647,12 +675,13 @@ Command events:
 
 ```json
 {"unique_id": "speaker", "platform": "media_player", "name": "Speaker", "source_list": ["HDMI", "Bluetooth"]}
-{"unique_id": "front_cam", "platform": "camera", "name": "Front", "features": ["on_off", "stream"]}
+{"unique_id": "front_cam", "platform": "camera", "name": "Front", "features": ["on_off", "push_stream"]}
 ```
 
 ```json
 {"kind": "command", "unique_id": "speaker", "action": "volume_set", "params": {"volume_level": 0.5}}
 {"kind": "command", "unique_id": "front_cam", "action": "turn_off"}
+{"kind": "command", "unique_id": "front_cam", "action": "start_stream", "params": {"format": "mjpeg"}}
 ```
 
 ### `update` commands
@@ -677,4 +706,4 @@ These `platform` values are **not** accepted today — `ws_bridge/entity` reject
 |:---:|:---|:---|
 | 1 | `vacuum` / `lawn_mower` / `remote` / `todo` | Deferred (Phase 5) — do not start without demand. |
 
-Phases 0–4 have shipped. `media_player` v1 is playback/volume/source only; `image`/`camera` are URL-only (no base64).
+Phases 0–4 have shipped. `media_player` v1 is playback/volume/source only. `image` and `camera` support URL stills plus authenticated JPEG upload; `camera` can additionally negotiate native pushed-JPEG MJPEG with `push_stream`.

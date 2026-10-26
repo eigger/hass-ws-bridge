@@ -24,6 +24,7 @@ Downloads 배지는 모든 GitHub 릴리스의 첨부 asset 다운로드 합계�
 
 - **추가 브로커/포트 불필요**: Home Assistant 표준 WebSocket API(`/api/websocket`)와 장기 액세스 토큰만 사용합니다. MQTT 브로커를 따로 띄우거나 TCP 포트를 추가로 열 필요가 없습니다.
 - **인증된 JPEG 스냅샷**: `image`/`camera` 엔티티는 ESP가 시작하는 별도 인증 WebSocket 업로드 연결로 제한된 최신 JPEG 프레임을 받을 수 있습니다. URL 모드도 계속 지원하며 HA가 게이트웨이에 역연결하지 않습니다.
+- **협상형 카메라 MJPEG**: `push_stream`을 선언한 카메라는 업로드 JPEG를 HA의 네이티브 MJPEG endpoint로 fan-out합니다. 첫/마지막 뷰어에서만 기존 클라이언트 제어 소켓으로 `start_stream`/`stop_stream`을 보냅니다.
 - **동적 엔티티 생성**: 클라이언트가 WebSocket으로 JSON 메시지로 엔티티를 선언하면 Home Assistant에 즉시 생성됩니다.
 - **클라이언트 기반 장치 그룹화**: 각 클라이언트(`gateway_id`)는 HA에 게이트웨이(부모) 디바이스로 등록되고, 해당 클라이언트가 선언한 장치·엔티티는 `via_device`로 하위에 묶입니다.
 - **양방향 제어 라우팅**: `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`, `media_player`, `camera` 제어 이벤트(`command`)를 HA UI·자동화에서 발생시키면, 해당 엔티티를 등록한 클라이언트에만 전달합니다.
