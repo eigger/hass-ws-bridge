@@ -398,7 +398,7 @@ This optional snapshot transport lets an ESPHome gateway **initiate both connect
    +------------+---------------------------------+
    | 1 byte     | JPEG (FF D8 ... FF D9)          |
    +------------+---------------------------------+
-   | handler_id | at most 1,048,576 bytes total   |
+   | handler_id | JPEG ≤1,048,576 bytes; message ≤1,048,577 bytes |
    +------------+---------------------------------+
    ```
 

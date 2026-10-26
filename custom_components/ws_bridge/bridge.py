@@ -122,6 +122,7 @@ class WsBridge:
         ] = {}  # gateway_id → keep_last_state_on_disconnect
         self._clients: dict[str, _Client] = {}  # gateway_id → ctx
         self._conn_client: dict[Any, str] = {}  # connection → gateway_id
+        self._gateway_owner: dict[str, Any] = {}  # gateway_id → control connection
         self._entity_client: dict[str, str] = {}  # ns unique_id → gateway_id
         self._entity_device: dict[str, str] = {}  # ns unique_id → ns device id
         self._entities: dict[str, Entity] = {}  # ns unique_id → live entity
@@ -285,10 +286,9 @@ class WsBridge:
         # A second control socket claiming a gateway replaces its command owner.
         # Do not disrupt a harmless repeated connect on the same socket, because
         # gateways commonly reannounce their entities periodically.
-        if client is not None and any(
-            conn is not connection and gid == gateway_id
-            for conn, gid in self._conn_client.items()
-        ):
+        if (
+            owner := self._gateway_owner.get(gateway_id)
+        ) is not None and owner is not connection:
             self._revoke_gateway_media(gateway_id)
         if client is None:
             client = self._clients[gateway_id] = _Client(
@@ -328,6 +328,7 @@ class WsBridge:
         is_first_connection = gateway_id not in self._conn_client.values()
         self._connections.add(connection)
         self._conn_client[connection] = gateway_id
+        self._gateway_owner[gateway_id] = connection
         self._notify_clients_changed()
 
         # 게이트웨이를 독립 디바이스로 등록 — WebSocket Bridge 서비스 디바이스와 병렬
@@ -379,6 +380,8 @@ class WsBridge:
             self._revoke_control_media(connection)
             self._connections.discard(connection)
             self._conn_client.pop(connection, None)
+            if self._gateway_owner.get(gateway_id) is connection:
+                self._gateway_owner.pop(gateway_id, None)
             if (
                 gateway_id not in self._conn_client.values()
                 and not client.keep_last_state_on_disconnect
@@ -446,7 +449,7 @@ class WsBridge:
         self._prune_media_sessions()
         ns_uid = self._ns_uid(gateway_id, unique_id)
         if (
-            self._conn_client.get(connection) != gateway_id
+            self._gateway_owner.get(gateway_id) is not connection
             or self._entity_client.get(ns_uid) != gateway_id
             or self._entity_platform(ns_uid) not in (PLATFORM_IMAGE, PLATFORM_CAMERA)
         ):
@@ -476,6 +479,8 @@ class WsBridge:
     ) -> tuple[int, str] | None:
         """Bind an authenticated, dedicated upload socket to a reserved session."""
         self._prune_media_sessions()
+        if connection in self._media_connections or connection in self._conn_client:
+            return None
         session = self._media_sessions.pop(session_id, None)
         if (
             session is None
@@ -484,7 +489,8 @@ class WsBridge:
                 session.refresh_token_id is not None
                 and session.refresh_token_id != connection.refresh_token_id
             )
-            or self._conn_client.get(session.control_connection) != session.gateway_id
+            or self._gateway_owner.get(session.gateway_id)
+            is not session.control_connection
             or self._entity_client.get(session.unique_id) != session.gateway_id
             or self._entity_platform(session.unique_id)
             not in (PLATFORM_IMAGE, PLATFORM_CAMERA)
@@ -534,7 +540,7 @@ class WsBridge:
         if not user_allowed(self.hass, connection.user):
             self._revoke_media_connection(connection, close=True)
             return
-        if self._conn_client.get(media.control_connection) != media.gateway_id:
+        if self._gateway_owner.get(media.gateway_id) is not media.control_connection:
             self._revoke_media_connection(connection, close=True)
             return
         if not self._store_media_frame(media.gateway_id, media.unique_id, payload):
@@ -990,6 +996,7 @@ class WsBridge:
         self._revoke_gateway_media(gateway_id)
         prefix = f"{gateway_id}__"
         self._clients.pop(gateway_id, None)
+        self._gateway_owner.pop(gateway_id, None)
         for uid in list(self._created):
             if uid.startswith(prefix):
                 self._created.discard(uid)
