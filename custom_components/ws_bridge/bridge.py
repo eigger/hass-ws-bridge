@@ -122,6 +122,7 @@ class WsBridge:
         ] = {}  # gateway_id → keep_last_state_on_disconnect
         self._clients: dict[str, _Client] = {}  # gateway_id → ctx
         self._conn_client: dict[Any, str] = {}  # connection → gateway_id
+        self._conn_generation: dict[Any, int] = {}  # connection → latest connect
         self._gateway_owner: dict[str, Any] = {}  # gateway_id → control connection
         self._entity_client: dict[str, str] = {}  # ns unique_id → gateway_id
         self._entity_device: dict[str, str] = {}  # ns unique_id → ns device id
@@ -336,6 +337,8 @@ class WsBridge:
         is_first_connection = gateway_id not in self._conn_client.values()
         self._connections.add(connection)
         self._conn_client[connection] = gateway_id
+        generation = self._conn_generation.get(connection, 0) + 1
+        self._conn_generation[connection] = generation
         self._gateway_owner[gateway_id] = connection
         self._notify_clients_changed()
 
@@ -385,14 +388,16 @@ class WsBridge:
 
         @callback
         def _disconnect() -> None:
+            # A control socket may send connect repeatedly. Only its newest
+            # subscription owns cleanup; all prior callbacks are no-ops.
+            if self._conn_generation.get(connection) != generation:
+                return
             self._revoke_control_media(connection)
-            # This socket may have reconnected under another gateway id. Its
-            # older connect subscription must not remove the newer mapping.
-            if self._conn_client.get(connection) == gateway_id:
-                self._connections.discard(connection)
-                self._conn_client.pop(connection, None)
-                if self._gateway_owner.get(gateway_id) is connection:
-                    self._gateway_owner.pop(gateway_id, None)
+            self._connections.discard(connection)
+            self._conn_client.pop(connection, None)
+            self._conn_generation.pop(connection, None)
+            if self._gateway_owner.get(gateway_id) is connection:
+                self._gateway_owner.pop(gateway_id, None)
             if (
                 gateway_id not in self._conn_client.values()
                 and not client.keep_last_state_on_disconnect

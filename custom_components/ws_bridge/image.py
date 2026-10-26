@@ -48,8 +48,16 @@ class WsBridgeImage(WsBridgeEntity, ImageEntity):
     async def async_image(self) -> bytes | None:
         """Prefer the latest gateway-uploaded JPEG, retaining URL mode as fallback."""
         if frame := self._bridge.latest_media_frame(self._attr_unique_id):
+            self._attr_content_type = "image/jpeg"
             return frame
-        return await super().async_image()
+        image = await super().async_image()
+        # A URL fetch can finish after a new JPEG arrived. Do not let its
+        # content type/cache win over the newest upload.
+        if frame := self._bridge.latest_media_frame(self._attr_unique_id):
+            self._cached_image = None
+            self._attr_content_type = "image/jpeg"
+            return frame
+        return image
 
     @callback
     def _on_value(self, value: Any) -> None:

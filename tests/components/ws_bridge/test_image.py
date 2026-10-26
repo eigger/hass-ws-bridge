@@ -17,11 +17,11 @@ JPEG = b"\xff\xd8\xff\xe0ws-bridge\xff\xd9"
 
 
 async def _wait_for_frame(
-    hass: HomeAssistant, client: BridgeClient, unique_id: str
+    hass: HomeAssistant, client: BridgeClient, unique_id: str, gateway_id: str = "gw1"
 ) -> None:
     """Wait for the real aiohttp WebSocket reader to deliver one binary frame."""
     bridge = get_bridge(hass, client.entry)
-    ns_uid = f"gw1__{unique_id}"
+    ns_uid = f"{gateway_id}__{unique_id}"
     for _ in range(50):
         if bridge.latest_media_frame(ns_uid) == JPEG:
             return
@@ -253,3 +253,58 @@ async def test_control_gateway_switch_revokes_old_media_handler(
     await asyncio.sleep(0.01)
     await hass.async_block_till_done()
     assert bridge.latest_media_frame("gw1__snap") is None
+
+
+@pytest.mark.parametrize("new_gateway", ["gw1", "other"])
+async def test_obsolete_control_subscription_preserves_new_media(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+    new_gateway: str,
+) -> None:
+    """Closing an older connect subscription must not revoke the latest owner."""
+    await client.entity("snap", "image", "Snap")
+    old_connect_id = client.connect_id
+    assert old_connect_id is not None
+    await client.connect(new_gateway, "New Gateway")
+    if new_gateway != "gw1":
+        await client.entity("snap", "image", "Snap")
+
+    session = await client.ok("media_open", unique_id="snap")
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await _wait_for_frame(hass, client, "snap", new_gateway)
+
+    bridge = get_bridge(hass, client.entry)
+    control_connection = next(iter(bridge._conn_client))
+    control_connection.subscriptions[old_connect_id]()
+    assert bridge.latest_media_frame(f"{new_gateway}__snap") == JPEG
+    assert media.ws.closed is False
+
+
+async def test_url_fetch_finishing_after_upload_preserves_jpeg_mime(
+    hass: HomeAssistant, client: BridgeClient
+) -> None:
+    await client.entity("snap", "image", "Snap")
+    await client.state("snap", {"image_url": "http://camera.local/image.png"})
+    bridge = get_bridge(hass, client.entry)
+    entity = bridge._entities["gw1__snap"]
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _delayed_url(_url: str) -> image.Image:
+        started.set()
+        await release.wait()
+        return image.Image("image/png", b"png")
+
+    with patch.object(entity, "_async_load_image_from_url", _delayed_url):
+        pending = asyncio.create_task(
+            image.async_get_image(hass, entity_id_for(hass, "image", "snap"))
+        )
+        await started.wait()
+        bridge._store_media_frame("gw1", "gw1__snap", JPEG)
+        release.set()
+        fetched = await pending
+    assert fetched.content == JPEG
+    assert fetched.content_type == "image/jpeg"
