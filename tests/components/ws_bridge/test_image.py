@@ -308,3 +308,32 @@ async def test_url_fetch_finishing_after_upload_preserves_jpeg_mime(
         fetched = await pending
     assert fetched.content == JPEG
     assert fetched.content_type == "image/jpeg"
+
+
+async def test_reconnect_does_not_reuse_obsolete_subscription_generation(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+) -> None:
+    """A later reconnect must not make an old cleanup callback current again."""
+    await client.entity("snap", "image", "Snap")
+    first_connect_id = client.connect_id
+    assert first_connect_id is not None
+    await client.connect()
+    second_connect_id = client.connect_id
+    assert second_connect_id is not None
+
+    bridge = get_bridge(hass, client.entry)
+    control_connection = next(iter(bridge._conn_client))
+    # Simulate the newest subscription ending, then a reconnect on the same
+    # physical WebSocket. The first callback must remain obsolete.
+    control_connection.subscriptions[second_connect_id]()
+    await client.connect()
+    session = await client.ok("media_open", unique_id="snap")
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await _wait_for_frame(hass, client, "snap")
+
+    control_connection.subscriptions[first_connect_id]()
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
