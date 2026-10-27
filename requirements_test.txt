@@ -1,5 +1,4 @@
 # Current real-HA test environment (CI job `current`, Python 3.14).
 # Pair verified from PyPI metadata: plugin 0.13.373 pins homeassistant==2026.10.2.
 # pytest / pytest-asyncio come from the plugin's own pins.
-homeassistant==2026.10.2
 pytest-homeassistant-custom-component==0.13.373
