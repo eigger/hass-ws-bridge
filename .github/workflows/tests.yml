@@ -23,7 +23,6 @@ jobs:
       domain: ws_bridge
       python-versions: '["3.14"]'
       requirements: requirements_test.txt
-      expected-ha-version: '2026.10.2'
       test-profile: ha
       ha-components: >-
         websocket_api sensor binary_sensor device_tracker switch number select
