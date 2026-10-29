@@ -52,14 +52,14 @@ def _parse_sensor_value(device_class: str | None, value: Any) -> Any:
             return None
         if isinstance(value, str):
             text = value.strip()
+            # ISO forms first ("20261029" is a date, not an epoch); only a
+            # string that is not a datetime falls back to a numeric epoch.
+            if dt := dt_util.parse_datetime(text):
+                return dt_util.as_local(dt) if dt.tzinfo is None else dt
             try:
-                value = (
-                    float(text)
-                    if text.lstrip("-").replace(".", "", 1).isdigit()
-                    else text
-                )
+                value = float(text)
             except ValueError:
-                value = text
+                return None
         if isinstance(value, (int, float)):
             try:
                 # Epoch seconds, or milliseconds for clearly larger values.
@@ -67,8 +67,6 @@ def _parse_sensor_value(device_class: str | None, value: Any) -> Any:
                 return dt_util.utc_from_timestamp(seconds)
             except (OverflowError, OSError, ValueError):
                 return None
-        if isinstance(value, str) and (dt := dt_util.parse_datetime(value)):
-            return dt_util.as_local(dt) if dt.tzinfo is None else dt
         return None
     if device_class == "date":
         if isinstance(value, str) and (d := dt_util.parse_date(value)) is not None:
