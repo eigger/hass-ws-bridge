@@ -184,6 +184,7 @@ async def test_uploaded_frame_is_persisted_restored_and_deleted(
     for _ in range(200):
         if await hass.async_add_executor_job(path.exists):
             break
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
         await asyncio.sleep(0.01)
         await hass.async_block_till_done()
     assert await hass.async_add_executor_job(path.read_bytes) == JPEG
