@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -9,6 +10,8 @@ from aiohttp import ClientConnectionResetError
 from homeassistant.components import image
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from .conftest import BridgeClient, entity_id_for, get_bridge
 
@@ -157,6 +160,36 @@ async def test_media_socket_close_keeps_last_frame_and_rebind_keeps_it(
     assert bridge.latest_media_frame("gw1__snap") == JPEG
     await media2.ws.send_bytes(bytes([bound2["handler_id"]]) + JPEG)
     assert bridge.latest_media_frame("gw1__snap") == JPEG
+
+
+async def test_uploaded_frame_is_persisted_restored_and_deleted(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+) -> None:
+    """The last JPEG survives a restart and is dropped with its entity."""
+    await client.entity("snap", "image", "Snap")
+    session = await client.ok("media_open", unique_id="snap")
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await _wait_for_frame(hass, client, "snap")
+    bridge = get_bridge(hass, client.entry)
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
+    await hass.async_block_till_done()
+    path = bridge._media_file("gw1__snap")
+    assert await hass.async_add_executor_job(path.read_bytes) == JPEG
+
+    # Simulate a restart: no live frame, only the persisted copy is loaded.
+    bridge._clear_media_frame("gw1__snap")
+    assert bridge.latest_media_frame("gw1__snap") is None
+    await hass.async_add_executor_job(bridge._load_media_files)
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
+
+    await client.ok("remove", unique_id="snap")
+    await hass.async_block_till_done()
+    assert not await hass.async_add_executor_job(path.exists)
 
 
 async def test_media_requires_declared_entity_and_expires_before_connect(
