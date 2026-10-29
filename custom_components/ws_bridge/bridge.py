@@ -534,8 +534,10 @@ class WsBridge:
     @callback
     def unload(self) -> None:
         """Close all client connections when integration unloads."""
-        self.close_connections()
+        # Revoke media first (keeping frames) so close_connections() cannot
+        # clear frames that flush_media_saves() is about to persist.
         self._revoke_gateway_media(None, keep_frames=True)
+        self.close_connections()
         self.flush_media_saves()
 
     @callback
@@ -802,6 +804,12 @@ class WsBridge:
                 self._revoke_media_connection(
                     connection, close=True, keep_frame=keep_frame
                 )
+                if keep_frame:
+                    # The frame stays, but consumers (push-MJPEG viewers) must
+                    # still learn the producer is gone.
+                    async_dispatcher_send(
+                        self.hass, signal_media(self.entry_id, media.unique_id)
+                    )
 
     @callback
     def _revoke_media_entity(

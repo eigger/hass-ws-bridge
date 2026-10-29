@@ -334,10 +334,13 @@ async def test_control_gateway_switch_revokes_old_media_handler(
     session = await client.ok("media_open", unique_id="snap")
     media = await bridge_client_factory()
     bound = await media.ok("media_connect", session_id=session["session_id"])
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await _wait_for_frame(hass, client, "snap")
     await client.connect("other", "Other")
     bridge = get_bridge(hass, client.entry)
     assert not bridge._media_connections
-    assert bridge.latest_media_frame("gw1__snap") is None
+    # The producer is revoked but the last image is kept.
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
 
     # Handler revocation closes the old upload socket; either aiohttp rejects
     # the write or it is ignored while the close is being processed.
@@ -347,7 +350,7 @@ async def test_control_gateway_switch_revokes_old_media_handler(
         pass
     await asyncio.sleep(0.01)
     await hass.async_block_till_done()
-    assert bridge.latest_media_frame("gw1__snap") is None
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
 
 
 @pytest.mark.parametrize("new_gateway", ["gw1", "other"])
