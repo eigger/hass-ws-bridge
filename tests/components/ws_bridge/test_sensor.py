@@ -9,6 +9,7 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ws_bridge.const import DOMAIN
+from custom_components.ws_bridge.sensor import _parse_sensor_value
 
 from .conftest import BridgeClient, entity_id_for, get_bridge
 
@@ -143,11 +144,10 @@ async def test_uptime_and_text_sensor_timestamp_and_stored_epoch(
     await client.entity("plain", "sensor", "Plain", device_class="timestamp")
     plain = hass.states.get(entity_id_for(hass, "sensor", "plain"))
     assert plain.state == expected
-    # An absurd integer must not raise out of the parser.
-    await client.state("plain", 10**400)
-    assert (
-        hass.states.get(entity_id_for(hass, "sensor", "plain")).state == STATE_UNKNOWN
-    )
+    # An absurd integer must not raise out of the parser (not sendable over
+    # HA's JSON websocket, so exercised directly).
+    assert _parse_sensor_value("timestamp", 10**400) is None
+    assert _parse_sensor_value("uptime", True) is None
 
 
 async def test_redeclare_before_entity_is_added_does_not_raise(
