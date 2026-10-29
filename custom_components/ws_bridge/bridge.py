@@ -981,14 +981,16 @@ class WsBridge:
         uid = defn["unique_id"]
         if uid in self._created:
             return
-        self._created.add(uid)
         reg = self._platforms[defn["platform"]]
 
         kwargs = {}
         if subentry_id := defn.get("_subentry_id"):
             kwargs["config_subentry_id"] = subentry_id
 
+        # Only mark as created once the factory succeeded: a defn that makes it
+        # raise must not leave the uid poisoned until the next restart.
         entity = reg.factory(self, defn)
+        self._created.add(uid)
         self._entities[uid] = entity
         reg.add_entities([entity], **kwargs)
 

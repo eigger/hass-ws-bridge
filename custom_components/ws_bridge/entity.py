@@ -111,7 +111,10 @@ class WsBridgeEntity(Entity):
         if hasattr(self, "_update_platform_defn"):
             self._update_platform_defn(defn)
 
-        self.async_write_ha_state()
+        # The entity can be registered with the bridge but not (yet, or ever —
+        # e.g. add failed) attached to hass; writing state would raise.
+        if self.hass is not None:
+            self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(
