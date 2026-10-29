@@ -531,7 +531,11 @@ class WsBridge:
         # Binding an initial producer is not a media invalidation. In
         # particular, do not wake a push-MJPEG viewer waiting for this first
         # producer with a terminal "cleared" notification.
-        self._revoke_media_entity(session.unique_id, notify_empty=False)
+        # Keep the previous frame: a rebinding producer (next snapshot cycle or
+        # a reconnect) must not blank the entity or end waiting viewers.
+        self._revoke_media_entity(
+            session.unique_id, notify_empty=False, keep_frame=True
+        )
 
         try:
             handler_id, unsub_binary = connection.async_register_binary_handler(
@@ -557,7 +561,14 @@ class WsBridge:
             # A snapshot producer normally uploads one frame and closes its
             # socket. Keep that last frame so the image/camera proxy can still
             # serve it; ownership changes and removals clear it explicitly.
+            if connection not in self._media_connections:
+                return  # already revoked; a stale close must not wake viewers
             self._revoke_media_connection(connection, keep_frame=True)
+            # Frame stays cached, but wake consumers (e.g. push-MJPEG viewers)
+            # so they can notice the producer is gone.
+            async_dispatcher_send(
+                self.hass, signal_media(self.entry_id, media.unique_id)
+            )
 
         connection.subscriptions[subscription_key] = _disconnect_media
         return handler_id, self._strip(session.gateway_id, session.unique_id)
@@ -669,13 +680,19 @@ class WsBridge:
                 self._revoke_media_connection(connection, close=True)
 
     @callback
-    def _revoke_media_entity(self, ns_uid: str, *, notify_empty: bool = True) -> None:
+    def _revoke_media_entity(
+        self, ns_uid: str, *, notify_empty: bool = True, keep_frame: bool = False
+    ) -> None:
         for session_id, session in list(self._media_sessions.items()):
             if session.unique_id == ns_uid:
                 self._media_sessions.pop(session_id, None)
         for connection, media in list(self._media_connections.items()):
             if media.unique_id == ns_uid:
-                self._revoke_media_connection(connection, close=True)
+                self._revoke_media_connection(
+                    connection, close=True, keep_frame=keep_frame
+                )
+        if keep_frame:
+            return
         # Notify even with no cached frame: a push-stream viewer may be blocked
         # waiting for its first JPEG while its producer disappears.
         self._clear_media_frame(ns_uid, notify=notify_empty)

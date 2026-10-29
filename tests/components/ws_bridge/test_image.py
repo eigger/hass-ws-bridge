@@ -124,6 +124,33 @@ async def test_media_owner_replacement_clears_frame_and_upload_socket(
     assert get_bridge(hass, client.entry).latest_media_frame("gw1__snap") is None
 
 
+async def test_media_socket_close_keeps_last_frame_and_rebind_keeps_it(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+) -> None:
+    """A snapshot producer closing its upload socket must not blank the image."""
+    await client.entity("snap", "image", "Snap")
+    entity_id = entity_id_for(hass, "image", "snap")
+    session = await client.ok("media_open", unique_id="snap")
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await _wait_for_frame(hass, client, "snap")
+    bridge = get_bridge(hass, client.entry)
+
+    await media.ws.close()
+    await hass.async_block_till_done()
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
+    assert (await image.async_get_image(hass, entity_id)).content == JPEG
+
+    # The next snapshot cycle binds a new socket without dropping the frame.
+    session = await client.ok("media_open", unique_id="snap")
+    media2 = await bridge_client_factory()
+    await media2.ok("media_connect", session_id=session["session_id"])
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
+
+
 async def test_media_requires_declared_entity_and_expires_before_connect(
     hass: HomeAssistant,
     client: BridgeClient,
