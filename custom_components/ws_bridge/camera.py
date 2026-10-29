@@ -160,9 +160,7 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
     def _on_media(self) -> None:
         """Fan out one uploaded frame without retaining per-viewer history."""
         frame = self._bridge.latest_media_frame(self._attr_unique_id)
-        if frame is None or not self._bridge.has_media_connection(
-            self._attr_unique_id
-        ):
+        if frame is None or not self._bridge.has_media_connection(self._attr_unique_id):
             # A cleared frame or a closed upload socket means the producer,
             # entity, or gateway went away. Wake every waiting HTTP response
             # so it can clean up.
