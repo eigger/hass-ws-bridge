@@ -140,14 +140,22 @@ async def test_media_socket_close_keeps_last_frame_and_rebind_keeps_it(
     bridge = get_bridge(hass, client.entry)
 
     await media.ws.close()
-    await hass.async_block_till_done()
+    for _ in range(100):
+        await hass.async_block_till_done()
+        if not bridge.has_media_connection("gw1__snap"):
+            break
+        await asyncio.sleep(0.01)
+    assert not bridge.has_media_connection("gw1__snap")
     assert bridge.latest_media_frame("gw1__snap") == JPEG
     assert (await image.async_get_image(hass, entity_id)).content == JPEG
 
     # The next snapshot cycle binds a new socket without dropping the frame.
     session = await client.ok("media_open", unique_id="snap")
     media2 = await bridge_client_factory()
-    await media2.ok("media_connect", session_id=session["session_id"])
+    bound2 = await media2.ok("media_connect", session_id=session["session_id"])
+    assert bridge.has_media_connection("gw1__snap")
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
+    await media2.ws.send_bytes(bytes([bound2["handler_id"]]) + JPEG)
     assert bridge.latest_media_frame("gw1__snap") == JPEG
 
 
