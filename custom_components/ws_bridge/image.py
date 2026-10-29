@@ -70,7 +70,9 @@ class WsBridgeImage(WsBridgeEntity, ImageEntity):
         # timestamp even when a URL state is unchanged so ImageEntity's proxy
         # and stream consumers fetch the new bytes.
         self._cached_image = None
-        if self._bridge.latest_media_frame(self._attr_unique_id) is not None:
+        if self._bridge.latest_media_frame(
+            self._attr_unique_id
+        ) is not None and self._bridge.has_media_connection(self._attr_unique_id):
             self._attr_content_type = "image/jpeg"
             self._attr_image_last_updated = dt_util.utcnow()
         safe_write_ha_state(self)
