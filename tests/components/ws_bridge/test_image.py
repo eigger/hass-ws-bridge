@@ -191,6 +191,7 @@ async def test_uploaded_frame_is_persisted_restored_and_deleted(
     await client.ok("remove", unique_id="snap")
     await hass.async_block_till_done()
     assert not await hass.async_add_executor_job(path.exists)
+    assert bridge.latest_media_frame("gw1__snap") is None
 
 
 async def test_media_requires_declared_entity_and_expires_before_connect(

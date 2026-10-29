@@ -13,6 +13,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
+import shutil
+import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable
@@ -139,6 +141,10 @@ class WsBridge:
         self._restored_frames: dict[str, bytes] = {}
         self._media_wanted: dict[str, str] = {}  # file name → ns unique_id
         self._frame_save_unsub: dict[str, Callable[[], None]] = {}
+        # uids that may have a persisted file; generation fences stale writes
+        self._media_files: set[str] = set()
+        self._media_gen: dict[str, int] = {}
+        self._media_io_lock = threading.Lock()
         self._media_dir = Path(
             hass.config.path(".storage", f"{DOMAIN}_media_{entry_id}")
         )
@@ -172,6 +178,8 @@ class WsBridge:
         """Restore persisted JPEGs for known image/camera entities (executor)."""
         if not self._media_dir.is_dir():
             return
+        for tmp in self._media_dir.glob("*.tmp"):
+            tmp.unlink(missing_ok=True)  # crash leftovers
         wanted = self._media_wanted
         total = 0
         for path in self._media_dir.glob("*.jpg"):
@@ -193,36 +201,63 @@ class WsBridge:
                 continue
             total += len(data)
             self._restored_frames[uid] = data
+            self._media_files.add(uid)
 
-    def _write_media_file(self, ns_uid: str, frame: bytes) -> None:
-        try:
-            self._media_dir.mkdir(parents=True, exist_ok=True)
-            path = self._media_file(ns_uid)
-            tmp = path.with_suffix(".tmp")
-            tmp.write_bytes(frame)
-            tmp.replace(path)
-        except OSError as err:
-            _LOGGER.warning("Unable to persist media frame for %s: %s", ns_uid, err)
+    def _write_media_file(self, ns_uid: str, frame: bytes, gen: int) -> None:
+        with self._media_io_lock:
+            if self._media_gen.get(ns_uid, 0) != gen:
+                return  # invalidated while queued; do not resurrect the file
+            try:
+                self._media_dir.mkdir(parents=True, exist_ok=True)
+                path = self._media_file(ns_uid)
+                tmp = path.with_suffix(".tmp")
+                tmp.write_bytes(frame)
+                tmp.replace(path)
+            except OSError as err:
+                _LOGGER.warning("Unable to persist media frame for %s: %s", ns_uid, err)
 
     def _delete_media_file(self, ns_uid: str) -> None:
-        try:
-            self._media_file(ns_uid).unlink(missing_ok=True)
-        except OSError:
-            pass
+        with self._media_io_lock:
+            try:
+                self._media_file(ns_uid).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _remove_media_dir(self) -> None:
+        shutil.rmtree(self._media_dir, ignore_errors=True)
+
+    async def async_remove_media(self) -> None:
+        """Delete all persisted frames (config entry removal)."""
+        await self.hass.async_add_executor_job(self._remove_media_dir)
 
     @callback
     def _schedule_frame_save(self, ns_uid: str) -> None:
         """Debounce persistence so push-stream frames don't thrash the disk."""
         if ns_uid in self._frame_save_unsub:
             return
+        self._media_files.add(ns_uid)
 
         @callback
         def _save(_now: Any) -> None:
             self._frame_save_unsub.pop(ns_uid, None)
-            if (frame := self._media_frames.get(ns_uid)) is not None:
-                self.hass.async_add_executor_job(self._write_media_file, ns_uid, frame)
+            self._flush_frame(ns_uid)
 
         self._frame_save_unsub[ns_uid] = async_call_later(self.hass, 5, _save)
+
+    @callback
+    def _flush_frame(self, ns_uid: str) -> None:
+        if (frame := self._media_frames.get(ns_uid)) is not None:
+            self.hass.async_add_executor_job(
+                self._write_media_file, ns_uid, frame, self._media_gen.get(ns_uid, 0)
+            )
+
+    @callback
+    def flush_media_saves(self) -> None:
+        """Write frames whose debounce timer has not fired yet (unload)."""
+        for ns_uid, unsub in list(self._frame_save_unsub.items()):
+            unsub()
+            self._flush_frame(ns_uid)
+        self._frame_save_unsub.clear()
 
     async def async_save(self) -> None:
         await self._store.async_save(
@@ -501,9 +536,7 @@ class WsBridge:
         """Close all client connections when integration unloads."""
         self.close_connections()
         self._revoke_gateway_media(None)
-        for unsub in self._frame_save_unsub.values():
-            unsub()
-        self._frame_save_unsub.clear()
+        self.flush_media_saves()
 
     @callback
     def close_connections(
@@ -784,10 +817,18 @@ class WsBridge:
         # copy too, otherwise it would be restored on the next restart.
         if unsub := self._frame_save_unsub.pop(ns_uid, None):
             unsub()
-        self.hass.async_add_executor_job(self._delete_media_file, ns_uid)
+        if ns_uid in self._media_files:
+            self._media_files.discard(ns_uid)
+            self._media_gen[ns_uid] = self._media_gen.get(ns_uid, 0) + 1
+            self.hass.async_add_executor_job(self._delete_media_file, ns_uid)
         # Notify even with no cached frame: a push-stream viewer may be blocked
         # waiting for its first JPEG while its producer disappears.
         self._clear_media_frame(ns_uid, notify=notify_empty)
+
+    @callback
+    def has_live_media_frame(self, unique_id: str) -> bool:
+        """A frame uploaded this run (not the restart-restored fallback)."""
+        return unique_id in self._media_frames
 
     @callback
     def has_media_connection(self, unique_id: str) -> bool:
