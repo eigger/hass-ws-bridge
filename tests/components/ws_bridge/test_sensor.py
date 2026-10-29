@@ -9,8 +9,9 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ws_bridge.const import DOMAIN
+from custom_components.ws_bridge.sensor import _parse_sensor_value
 
-from .conftest import BridgeClient, entity_id_for
+from .conftest import BridgeClient, entity_id_for, get_bridge
 
 
 async def test_sensor_declared_and_updated(
@@ -104,6 +105,65 @@ async def test_sensor_timestamp_and_date_parsing(
     ).isoformat(timespec="seconds")
     await client.state("day", "2026-08-13")
     assert hass.states.get(day).state == "2026-08-13"
+
+
+async def test_timestamp_sensor_accepts_epoch_and_survives_bad_value(
+    hass: HomeAssistant, client: BridgeClient
+) -> None:
+    """A float epoch (ESPHome uptime-style) must not break adding the entity."""
+    await client.entity("boot", "sensor", "Boot", device_class="timestamp")
+    boot = entity_id_for(hass, "sensor", "boot")
+    await client.state("boot", 1793242000.0)
+    assert hass.states.get(boot).state == datetime.fromtimestamp(
+        1793242000, tz=UTC
+    ).isoformat(timespec="seconds")
+    # Epoch milliseconds are accepted too; garbage becomes unknown, not an error.
+    await client.state("boot", 1793242000000)
+    assert hass.states.get(boot).state == datetime.fromtimestamp(
+        1793242000, tz=UTC
+    ).isoformat(timespec="seconds")
+    await client.state("boot", "not-a-time")
+    assert hass.states.get(boot).state == STATE_UNKNOWN
+
+
+async def test_uptime_and_text_sensor_timestamp_and_stored_epoch(
+    hass: HomeAssistant, client: BridgeClient
+) -> None:
+    """uptime/text_sensor classes parse epochs; a redeclared class re-parses."""
+    expected = datetime.fromtimestamp(1793242000, tz=UTC).isoformat(timespec="seconds")
+    await client.entity("up", "sensor", "Up", device_class="uptime")
+    await client.entity("ts", "text_sensor", "Ts", device_class="timestamp")
+    await client.state("up", "1793242000")
+    await client.state("ts", 1793242000.0)
+    assert hass.states.get(entity_id_for(hass, "sensor", "up")).state == expected
+    assert hass.states.get(entity_id_for(hass, "sensor", "ts")).state == expected
+
+    # Plain sensor holding an epoch, later redeclared as a timestamp.
+    await client.entity("plain", "sensor", "Plain")
+    await client.state("plain", 1793242000.0)
+    await client.entity("plain", "sensor", "Plain", device_class="timestamp")
+    plain = hass.states.get(entity_id_for(hass, "sensor", "plain"))
+    assert plain.state == expected
+    # An absurd integer must not raise out of the parser (not sendable over
+    # HA's JSON websocket, so exercised directly).
+    assert _parse_sensor_value("timestamp", 10**400) is None
+    assert _parse_sensor_value("uptime", True) is None
+
+
+async def test_redeclare_before_entity_is_added_does_not_raise(
+    hass: HomeAssistant, client: BridgeClient
+) -> None:
+    """Re-announcing a defn for an entity without hass must be a no-op write."""
+    await client.entity("plain", "sensor", "Plain")
+    bridge = get_bridge(hass, client.entry)
+    entity = bridge._entities["gw1__plain"]
+    original_hass = entity.hass
+    entity.hass = None
+    try:
+        entity.async_update_defn({**entity._defn, "name": "Renamed"})
+    finally:
+        entity.hass = original_hass
+    assert entity._attr_name == "Renamed"
 
 
 async def test_text_sensor_is_a_sensor_entity(

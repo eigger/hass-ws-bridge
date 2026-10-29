@@ -38,6 +38,43 @@ async def async_setup_entry(
     async_add_entities([WsBridgeConnectedClientsSensor(bridge, entry)])
 
 
+_DATETIME_CLASSES = ("timestamp", "uptime")
+
+
+def _parse_sensor_value(device_class: str | None, value: Any) -> Any:
+    """Coerce a client value into what HA requires for this device class."""
+    if value is None or (isinstance(value, str) and value.lower() == "unknown"):
+        return None
+    if device_class in _DATETIME_CLASSES:
+        # HA raises (and the entity fails to add/write) for anything but an
+        # aware datetime, so never pass through an unparsed value.
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, str):
+            text = value.strip()
+            # ISO forms first ("20261029" is a date, not an epoch); only a
+            # string that is not a datetime falls back to a numeric epoch.
+            if dt := dt_util.parse_datetime(text):
+                return dt_util.as_local(dt) if dt.tzinfo is None else dt
+            try:
+                value = float(text)
+            except ValueError:
+                return None
+        if isinstance(value, (int, float)):
+            try:
+                # Epoch seconds, or milliseconds for clearly larger values.
+                seconds = value / 1000 if abs(value) > 1e11 else value
+                return dt_util.utc_from_timestamp(seconds)
+            except (OverflowError, OSError, ValueError):
+                return None
+        return None
+    if device_class == "date":
+        if isinstance(value, str) and (d := dt_util.parse_date(value)) is not None:
+            return d
+        return None
+    return value
+
+
 class WsBridgeSensor(WsBridgeEntity, SensorEntity):
     def __init__(self, bridge: WsBridge, defn: dict[str, Any]) -> None:
         super().__init__(bridge, defn)
@@ -53,6 +90,13 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
         self._attr_device_class = defn.get("device_class")
         self._attr_state_class = defn.get("state_class")
         self._attr_suggested_display_precision = defn.get("suggested_display_precision")
+        # A new device class changes what the stored value must look like.
+        self._attr_native_value = self._parse_value(
+            self._bridge.last_state(self._attr_unique_id)
+        )
+
+    def _parse_value(self, value: Any) -> Any:
+        return _parse_sensor_value(self._attr_device_class, value)
 
     async def async_added_to_hass(self) -> None:
 
@@ -63,23 +107,6 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
     def _on_value(self, value: Any) -> None:
         self._attr_native_value = self._parse_value(value)
         safe_write_ha_state(self)
-
-    def _parse_value(self, value: Any) -> Any:
-        if value is None or (isinstance(value, str) and value.lower() == "unknown"):
-            return None
-        if (
-            self._attr_device_class == "timestamp"
-            and isinstance(value, str)
-            and (dt := dt_util.parse_datetime(value)) is not None
-        ):
-            return dt_util.as_local(dt) if dt.tzinfo is None else dt
-        if (
-            self._attr_device_class == "date"
-            and isinstance(value, str)
-            and (d := dt_util.parse_date(value)) is not None
-        ):
-            return d
-        return value
 
 
 class WsBridgeTextSensor(WsBridgeEntity, SensorEntity):
@@ -91,6 +118,12 @@ class WsBridgeTextSensor(WsBridgeEntity, SensorEntity):
 
     def _update_platform_defn(self, defn: dict[str, Any]) -> None:
         self._attr_device_class = defn.get("device_class")
+        self._attr_native_value = self._parse_value(
+            self._bridge.last_state(self._attr_unique_id)
+        )
+
+    def _parse_value(self, value: Any) -> Any:
+        return _parse_sensor_value(self._attr_device_class, value)
 
     async def async_added_to_hass(self) -> None:
 
@@ -101,11 +134,6 @@ class WsBridgeTextSensor(WsBridgeEntity, SensorEntity):
     def _on_value(self, value: Any) -> None:
         self._attr_native_value = self._parse_value(value)
         safe_write_ha_state(self)
-
-    def _parse_value(self, value: Any) -> Any:
-        if value is None or (isinstance(value, str) and value.lower() == "unknown"):
-            return None
-        return value
 
 
 class WsBridgeConnectedClientsSensor(SensorEntity):
