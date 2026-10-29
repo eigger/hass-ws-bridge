@@ -554,7 +554,10 @@ class WsBridge:
 
         @callback
         def _disconnect_media() -> None:
-            self._revoke_media_connection(connection)
+            # A snapshot producer normally uploads one frame and closes its
+            # socket. Keep that last frame so the image/camera proxy can still
+            # serve it; ownership changes and removals clear it explicitly.
+            self._revoke_media_connection(connection, keep_frame=True)
 
         connection.subscriptions[subscription_key] = _disconnect_media
         return handler_id, self._strip(session.gateway_id, session.unique_id)
@@ -644,12 +647,15 @@ class WsBridge:
             async_dispatcher_send(self.hass, signal_media(self.entry_id, ns_uid))
 
     @callback
-    def _revoke_media_connection(self, connection: Any, *, close: bool = False) -> None:
+    def _revoke_media_connection(
+        self, connection: Any, *, close: bool = False, keep_frame: bool = False
+    ) -> None:
         media = self._media_connections.pop(connection, None)
         if media is None:
             return
         media.unsubscribe_binary()
-        self._clear_media_frame(media.unique_id, notify=True)
+        if not keep_frame:
+            self._clear_media_frame(media.unique_id, notify=True)
         if close:
             self._close_connection(connection)
 
