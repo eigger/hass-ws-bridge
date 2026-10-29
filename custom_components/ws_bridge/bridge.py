@@ -137,6 +137,7 @@ class WsBridge:
         # Frames persisted across HA restarts; read-only fallback until the
         # producer uploads (or the entity is invalidated) again.
         self._restored_frames: dict[str, bytes] = {}
+        self._media_wanted: dict[str, str] = {}  # file name → ns unique_id
         self._frame_save_unsub: dict[str, Callable[[], None]] = {}
         self._media_dir = Path(
             hass.config.path(".storage", f"{DOMAIN}_media_{entry_id}")
@@ -153,6 +154,14 @@ class WsBridge:
         if self._prune_orphan_states():
             await self.async_save()
         self._seed_restorable_entities()
+        # Entity-registry (not _defns) is the source of truth: defns are only
+        # stored for keep_last_state_on_disconnect gateways.
+        entity_reg = er.async_get(self.hass)
+        self._media_wanted = {
+            self._media_file(entry.unique_id).name: entry.unique_id
+            for entry in er.async_entries_for_config_entry(entity_reg, self.entry_id)
+            if entry.unique_id and entry.domain in (PLATFORM_IMAGE, PLATFORM_CAMERA)
+        }
         await self.hass.async_add_executor_job(self._load_media_files)
 
     def _media_file(self, ns_uid: str) -> Path:
@@ -163,11 +172,7 @@ class WsBridge:
         """Restore persisted JPEGs for known image/camera entities (executor)."""
         if not self._media_dir.is_dir():
             return
-        wanted = {
-            self._media_file(uid).name: uid
-            for uid, defn in self._defns.items()
-            if defn.get("platform") in (PLATFORM_IMAGE, PLATFORM_CAMERA)
-        }
+        wanted = self._media_wanted
         total = 0
         for path in self._media_dir.glob("*.jpg"):
             uid = wanted.get(path.name)

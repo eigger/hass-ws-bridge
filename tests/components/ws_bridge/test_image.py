@@ -184,6 +184,7 @@ async def test_uploaded_frame_is_persisted_restored_and_deleted(
     # Simulate a restart: no live frame, only the persisted copy is loaded.
     bridge._clear_media_frame("gw1__snap")
     assert bridge.latest_media_frame("gw1__snap") is None
+    bridge._media_wanted = {path.name: "gw1__snap"}
     await hass.async_add_executor_job(bridge._load_media_files)
     assert bridge.latest_media_frame("gw1__snap") == JPEG
 
