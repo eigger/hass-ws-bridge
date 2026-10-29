@@ -104,7 +104,7 @@ async def test_image_uploaded_jpeg_uses_dedicated_authenticated_socket(
     assert denied["error"]["code"] == "invalid_media_session"
 
 
-async def test_media_owner_replacement_clears_frame_and_upload_socket(
+async def test_media_owner_replacement_keeps_frame_and_closes_upload_socket(
     hass: HomeAssistant,
     client: BridgeClient,
     bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
@@ -124,7 +124,10 @@ async def test_media_owner_replacement_clears_frame_and_upload_socket(
     replacement = await bridge_client_factory()
     await replacement.connect()
     await hass.async_block_till_done()
-    assert get_bridge(hass, client.entry).latest_media_frame("gw1__snap") is None
+    bridge = get_bridge(hass, client.entry)
+    assert not bridge._media_connections
+    # The last image stays served; only the producer socket is revoked.
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
 
 
 async def test_media_socket_close_keeps_last_frame_and_rebind_keeps_it(
@@ -200,6 +203,52 @@ async def test_uploaded_frame_is_persisted_restored_and_deleted(
     await hass.async_block_till_done()
     assert not await hass.async_add_executor_job(path.exists)
     assert bridge.latest_media_frame("gw1__snap") is None
+
+
+async def test_gateway_disconnect_keeps_last_frame(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+) -> None:
+    """A rebooting/reconnecting gateway must not blank its last snapshot."""
+    await client.entity("snap", "image", "Snap")
+    entity_id = entity_id_for(hass, "image", "snap")
+    session = await client.ok("media_open", unique_id="snap")
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await _wait_for_frame(hass, client, "snap")
+    bridge = get_bridge(hass, client.entry)
+
+    await client.close()
+    await hass.async_block_till_done()
+    assert not bridge._media_connections
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
+    assert (await image.async_get_image(hass, entity_id)).content == JPEG
+
+
+async def test_unload_flushes_pending_frame_save(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+) -> None:
+    """A frame uploaded within the debounce window is persisted on unload."""
+    await client.entity("snap", "image", "Snap")
+    session = await client.ok("media_open", unique_id="snap")
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await _wait_for_frame(hass, client, "snap")
+    path = get_bridge(hass, client.entry)._media_file("gw1__snap")
+    assert not await hass.async_add_executor_job(path.exists)
+
+    await hass.config_entries.async_unload(client.entry.entry_id)
+    for _ in range(200):
+        if await hass.async_add_executor_job(path.exists):
+            break
+        await asyncio.sleep(0.01)
+        await hass.async_block_till_done()
+    assert await hass.async_add_executor_job(path.read_bytes) == JPEG
 
 
 async def test_media_requires_declared_entity_and_expires_before_connect(
@@ -317,10 +366,13 @@ async def test_control_gateway_switch_revokes_old_media_handler(
     session = await client.ok("media_open", unique_id="snap")
     media = await bridge_client_factory()
     bound = await media.ok("media_connect", session_id=session["session_id"])
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await _wait_for_frame(hass, client, "snap")
     await client.connect("other", "Other")
     bridge = get_bridge(hass, client.entry)
     assert not bridge._media_connections
-    assert bridge.latest_media_frame("gw1__snap") is None
+    # The producer is revoked but the last image is kept.
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
 
     # Handler revocation closes the old upload socket; either aiohttp rejects
     # the write or it is ignored while the close is being processed.
@@ -330,7 +382,7 @@ async def test_control_gateway_switch_revokes_old_media_handler(
         pass
     await asyncio.sleep(0.01)
     await hass.async_block_till_done()
-    assert bridge.latest_media_frame("gw1__snap") is None
+    assert bridge.latest_media_frame("gw1__snap") == JPEG
 
 
 @pytest.mark.parametrize("new_gateway", ["gw1", "other"])
