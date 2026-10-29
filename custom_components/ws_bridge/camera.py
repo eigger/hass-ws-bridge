@@ -215,9 +215,9 @@ class WsBridgeCamera(WsBridgeCompositeEntity, Camera):
     @callback
     def _has_live_push_media(self) -> bool:
         """A fresh producer/frame takes precedence over historical URL state."""
-        return self._bridge.latest_media_frame(
+        return self._bridge.has_live_media_frame(
             self._attr_unique_id
-        ) is not None or self._bridge.has_media_connection(self._attr_unique_id)
+        ) or self._bridge.has_media_connection(self._attr_unique_id)
 
     async def handle_async_mjpeg_stream(
         self, request: web.Request

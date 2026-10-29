@@ -10,12 +10,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
+import shutil
+import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigSubentry
@@ -132,6 +136,18 @@ class WsBridge:
         self._media_connections: dict[Any, _MediaConnection] = {}
         self._media_frames: OrderedDict[str, bytes] = OrderedDict()
         self._media_cache_bytes = 0
+        # Frames persisted across HA restarts; read-only fallback until the
+        # producer uploads (or the entity is invalidated) again.
+        self._restored_frames: dict[str, bytes] = {}
+        self._media_wanted: dict[str, str] = {}  # file name → ns unique_id
+        self._frame_save_unsub: dict[str, Callable[[], None]] = {}
+        # uids that may have a persisted file; generation fences stale writes
+        self._media_files: set[str] = set()
+        self._media_gen: dict[str, int] = {}
+        self._media_io_lock = threading.Lock()
+        self._media_dir = Path(
+            hass.config.path(".storage", f"{DOMAIN}_media_{entry_id}")
+        )
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}.states")
         self._save_unsub: Callable[[], None] | None = None
 
@@ -144,6 +160,104 @@ class WsBridge:
         if self._prune_orphan_states():
             await self.async_save()
         self._seed_restorable_entities()
+        # Entity-registry (not _defns) is the source of truth: defns are only
+        # stored for keep_last_state_on_disconnect gateways.
+        entity_reg = er.async_get(self.hass)
+        self._media_wanted = {
+            self._media_file(entry.unique_id).name: entry.unique_id
+            for entry in er.async_entries_for_config_entry(entity_reg, self.entry_id)
+            if entry.unique_id and entry.domain in (PLATFORM_IMAGE, PLATFORM_CAMERA)
+        }
+        await self.hass.async_add_executor_job(self._load_media_files)
+
+    def _media_file(self, ns_uid: str) -> Path:
+        digest = hashlib.sha256(ns_uid.encode()).hexdigest()[:32]
+        return self._media_dir / f"{digest}.jpg"
+
+    def _load_media_files(self) -> None:
+        """Restore persisted JPEGs for known image/camera entities (executor)."""
+        if not self._media_dir.is_dir():
+            return
+        for tmp in self._media_dir.glob("*.tmp"):
+            tmp.unlink(missing_ok=True)  # crash leftovers
+        wanted = self._media_wanted
+        total = 0
+        for path in self._media_dir.glob("*.jpg"):
+            uid = wanted.get(path.name)
+            try:
+                if uid is None:
+                    path.unlink(missing_ok=True)
+                    continue
+                data = path.read_bytes()
+            except OSError:
+                continue
+            if (
+                len(data) < 4
+                or len(data) > MEDIA_FRAME_MAX_BYTES
+                or not data.startswith(b"\xff\xd8")
+                or not data.endswith(b"\xff\xd9")
+                or total + len(data) > MEDIA_CACHE_MAX_BYTES
+            ):
+                continue
+            total += len(data)
+            self._restored_frames[uid] = data
+            self._media_files.add(uid)
+
+    def _write_media_file(self, ns_uid: str, frame: bytes, gen: int) -> None:
+        with self._media_io_lock:
+            if self._media_gen.get(ns_uid, 0) != gen:
+                return  # invalidated while queued; do not resurrect the file
+            try:
+                self._media_dir.mkdir(parents=True, exist_ok=True)
+                path = self._media_file(ns_uid)
+                tmp = path.with_suffix(".tmp")
+                tmp.write_bytes(frame)
+                tmp.replace(path)
+            except OSError as err:
+                _LOGGER.warning("Unable to persist media frame for %s: %s", ns_uid, err)
+
+    def _delete_media_file(self, ns_uid: str) -> None:
+        with self._media_io_lock:
+            try:
+                self._media_file(ns_uid).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _remove_media_dir(self) -> None:
+        shutil.rmtree(self._media_dir, ignore_errors=True)
+
+    async def async_remove_media(self) -> None:
+        """Delete all persisted frames (config entry removal)."""
+        await self.hass.async_add_executor_job(self._remove_media_dir)
+
+    @callback
+    def _schedule_frame_save(self, ns_uid: str) -> None:
+        """Debounce persistence so push-stream frames don't thrash the disk."""
+        if ns_uid in self._frame_save_unsub:
+            return
+        self._media_files.add(ns_uid)
+
+        @callback
+        def _save(_now: Any) -> None:
+            self._frame_save_unsub.pop(ns_uid, None)
+            self._flush_frame(ns_uid)
+
+        self._frame_save_unsub[ns_uid] = async_call_later(self.hass, 5, _save)
+
+    @callback
+    def _flush_frame(self, ns_uid: str) -> None:
+        if (frame := self._media_frames.get(ns_uid)) is not None:
+            self.hass.async_add_executor_job(
+                self._write_media_file, ns_uid, frame, self._media_gen.get(ns_uid, 0)
+            )
+
+    @callback
+    def flush_media_saves(self) -> None:
+        """Write frames whose debounce timer has not fired yet (unload)."""
+        for ns_uid, unsub in list(self._frame_save_unsub.items()):
+            unsub()
+            self._flush_frame(ns_uid)
+        self._frame_save_unsub.clear()
 
     async def async_save(self) -> None:
         await self._store.async_save(
@@ -422,6 +536,7 @@ class WsBridge:
         """Close all client connections when integration unloads."""
         self.close_connections()
         self._revoke_gateway_media(None)
+        self.flush_media_saves()
 
     @callback
     def close_connections(
@@ -632,6 +747,8 @@ class WsBridge:
             evicted_uid, evicted = self._media_frames.popitem(last=False)
             self._media_cache_bytes -= len(evicted)
             async_dispatcher_send(self.hass, signal_media(self.entry_id, evicted_uid))
+        self._restored_frames.pop(ns_uid, None)
+        self._schedule_frame_save(ns_uid)
         async_dispatcher_send(self.hass, signal_media(self.entry_id, ns_uid))
         return True
 
@@ -640,7 +757,8 @@ class WsBridge:
         frame = self._media_frames.get(unique_id)
         if frame is not None:
             self._media_frames.move_to_end(unique_id)
-        return frame
+            return frame
+        return self._restored_frames.get(unique_id)
 
     @callback
     def _prune_media_sessions(self) -> None:
@@ -651,6 +769,8 @@ class WsBridge:
 
     @callback
     def _clear_media_frame(self, ns_uid: str, *, notify: bool = False) -> None:
+        if self._restored_frames.pop(ns_uid, None) is not None:
+            notify = True
         if (frame := self._media_frames.pop(ns_uid, None)) is not None:
             self._media_cache_bytes -= len(frame)
             notify = True
@@ -693,9 +813,22 @@ class WsBridge:
                 )
         if keep_frame:
             return
+        # Explicit invalidation (entity removed / URL mode): drop the persisted
+        # copy too, otherwise it would be restored on the next restart.
+        if unsub := self._frame_save_unsub.pop(ns_uid, None):
+            unsub()
+        if ns_uid in self._media_files:
+            self._media_files.discard(ns_uid)
+            self._media_gen[ns_uid] = self._media_gen.get(ns_uid, 0) + 1
+            self.hass.async_add_executor_job(self._delete_media_file, ns_uid)
         # Notify even with no cached frame: a push-stream viewer may be blocked
         # waiting for its first JPEG while its producer disappears.
         self._clear_media_frame(ns_uid, notify=notify_empty)
+
+    @callback
+    def has_live_media_frame(self, unique_id: str) -> bool:
+        """A frame uploaded this run (not the restart-restored fallback)."""
+        return unique_id in self._media_frames
 
     @callback
     def has_media_connection(self, unique_id: str) -> bool:

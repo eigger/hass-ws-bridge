@@ -109,3 +109,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await bridge.async_flush_save()
             bridge.unload()
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Delete persisted media frames when the config entry is removed."""
+    bridge = WsBridge(hass, entry.entry_id)
+    await bridge.async_remove_media()
