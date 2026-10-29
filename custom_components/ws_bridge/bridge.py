@@ -401,7 +401,7 @@ class WsBridge:
         if previous_gateway is not None and previous_gateway != gateway_id:
             # One physical WebSocket may not retain media ownership after it
             # announces a different gateway.
-            self._revoke_control_media(connection)
+            self._revoke_control_media(connection, keep_frame=True)
             if self._gateway_owner.get(previous_gateway) is connection:
                 self._gateway_owner.pop(previous_gateway, None)
 
@@ -412,7 +412,7 @@ class WsBridge:
         if (
             owner := self._gateway_owner.get(gateway_id)
         ) is not None and owner is not connection:
-            self._revoke_gateway_media(gateway_id)
+            self._revoke_gateway_media(gateway_id, keep_frames=True)
         if client is None:
             client = self._clients[gateway_id] = _Client(
                 gateway_id,
@@ -507,11 +507,11 @@ class WsBridge:
             if self._conn_generation.get(connection) != generation:
                 return
             is_current_owner = self._gateway_owner.get(gateway_id) is connection
-            self._revoke_control_media(connection)
+            self._revoke_control_media(connection, keep_frame=True)
             if is_current_owner:
                 # This also wakes push-MJPEG viewers that are waiting for the
                 # first frame and therefore have no cached media to clear yet.
-                self._revoke_gateway_media(gateway_id)
+                self._revoke_gateway_media(gateway_id, keep_frames=True)
             self._connections.discard(connection)
             self._conn_client.pop(connection, None)
             self._conn_generation.pop(connection, None)
@@ -535,7 +535,7 @@ class WsBridge:
     def unload(self) -> None:
         """Close all client connections when integration unloads."""
         self.close_connections()
-        self._revoke_gateway_media(None)
+        self._revoke_gateway_media(None, keep_frames=True)
         self.flush_media_saves()
 
     @callback
@@ -791,13 +791,17 @@ class WsBridge:
             self._close_connection(connection)
 
     @callback
-    def _revoke_control_media(self, control_connection: Any) -> None:
+    def _revoke_control_media(
+        self, control_connection: Any, *, keep_frame: bool = False
+    ) -> None:
         for session_id, session in list(self._media_sessions.items()):
             if session.control_connection is control_connection:
                 self._media_sessions.pop(session_id, None)
         for connection, media in list(self._media_connections.items()):
             if media.control_connection is control_connection:
-                self._revoke_media_connection(connection, close=True)
+                self._revoke_media_connection(
+                    connection, close=True, keep_frame=keep_frame
+                )
 
     @callback
     def _revoke_media_entity(
@@ -838,24 +842,40 @@ class WsBridge:
         )
 
     @callback
-    def _revoke_gateway_media(self, gateway_id: str | None) -> None:
+    def _revoke_gateway_media(
+        self, gateway_id: str | None, *, keep_frames: bool = False
+    ) -> None:
+        """Drop a gateway's media sessions/producers.
+
+        ``keep_frames`` keeps the last uploaded JPEG served (disconnect,
+        reconnect, unload) — availability already shows the gateway is offline.
+        Removing the gateway/entity passes False and clears everything.
+        """
         for session_id, session in list(self._media_sessions.items()):
             if gateway_id is None or session.gateway_id == gateway_id:
                 self._media_sessions.pop(session_id, None)
         for connection, media in list(self._media_connections.items()):
             if gateway_id is None or media.gateway_id == gateway_id:
-                self._revoke_media_connection(connection, close=True)
+                self._revoke_media_connection(
+                    connection, close=True, keep_frame=keep_frames
+                )
         prefix = f"{gateway_id}__" if gateway_id is not None else ""
-        for ns_uid in list(self._media_frames):
-            if gateway_id is None or ns_uid.startswith(prefix):
-                self._clear_media_frame(ns_uid)
+        if not keep_frames:
+            for ns_uid in list(self._media_frames):
+                if gateway_id is None or ns_uid.startswith(prefix):
+                    self._clear_media_frame(ns_uid)
         # There might be no cached frame yet while a native MJPEG request is
         # awaiting the first upload. Notify those cameras as well.
         for ns_uid, owner in self._entity_client.items():
             if (gateway_id is None or owner == gateway_id) and self._entity_platform(
                 ns_uid
             ) in (PLATFORM_IMAGE, PLATFORM_CAMERA):
-                self._clear_media_frame(ns_uid, notify=True)
+                if keep_frames:
+                    async_dispatcher_send(
+                        self.hass, signal_media(self.entry_id, ns_uid)
+                    )
+                else:
+                    self._clear_media_frame(ns_uid, notify=True)
 
     @property
     def connected_client_count(self) -> int:
