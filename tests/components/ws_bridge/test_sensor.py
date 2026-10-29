@@ -125,6 +125,31 @@ async def test_timestamp_sensor_accepts_epoch_and_survives_bad_value(
     assert hass.states.get(boot).state == STATE_UNKNOWN
 
 
+async def test_uptime_and_text_sensor_timestamp_and_stored_epoch(
+    hass: HomeAssistant, client: BridgeClient
+) -> None:
+    """uptime/text_sensor classes parse epochs; a redeclared class re-parses."""
+    expected = datetime.fromtimestamp(1793242000, tz=UTC).isoformat(timespec="seconds")
+    await client.entity("up", "sensor", "Up", device_class="uptime")
+    await client.entity("ts", "text_sensor", "Ts", device_class="timestamp")
+    await client.state("up", "1793242000")
+    await client.state("ts", 1793242000.0)
+    assert hass.states.get(entity_id_for(hass, "sensor", "up")).state == expected
+    assert hass.states.get(entity_id_for(hass, "sensor", "ts")).state == expected
+
+    # Plain sensor holding an epoch, later redeclared as a timestamp.
+    await client.entity("plain", "sensor", "Plain")
+    await client.state("plain", 1793242000.0)
+    await client.entity("plain", "sensor", "Plain", device_class="timestamp")
+    plain = hass.states.get(entity_id_for(hass, "sensor", "plain"))
+    assert plain.state == expected
+    # An absurd integer must not raise out of the parser.
+    await client.state("plain", 10**400)
+    assert (
+        hass.states.get(entity_id_for(hass, "sensor", "plain")).state == STATE_UNKNOWN
+    )
+
+
 async def test_redeclare_before_entity_is_added_does_not_raise(
     hass: HomeAssistant, client: BridgeClient
 ) -> None:
