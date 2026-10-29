@@ -219,6 +219,30 @@ async def test_gateway_disconnect_keeps_last_frame(
     assert (await image.async_get_image(hass, entity_id)).content == JPEG
 
 
+async def test_unload_flushes_pending_frame_save(
+    hass: HomeAssistant,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+) -> None:
+    """A frame uploaded within the debounce window is persisted on unload."""
+    await client.entity("snap", "image", "Snap")
+    session = await client.ok("media_open", unique_id="snap")
+    media = await bridge_client_factory()
+    bound = await media.ok("media_connect", session_id=session["session_id"])
+    await media.ws.send_bytes(bytes([bound["handler_id"]]) + JPEG)
+    await _wait_for_frame(hass, client, "snap")
+    path = get_bridge(hass, client.entry)._media_file("gw1__snap")
+    assert not await hass.async_add_executor_job(path.exists)
+
+    await hass.config_entries.async_unload(client.entry.entry_id)
+    for _ in range(200):
+        if await hass.async_add_executor_job(path.exists):
+            break
+        await asyncio.sleep(0.01)
+        await hass.async_block_till_done()
+    assert await hass.async_add_executor_job(path.read_bytes) == JPEG
+
+
 async def test_media_requires_declared_entity_and_expires_before_connect(
     hass: HomeAssistant,
     client: BridgeClient,

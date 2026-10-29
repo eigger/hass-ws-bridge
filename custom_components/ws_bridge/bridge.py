@@ -404,6 +404,8 @@ class WsBridge:
             self._revoke_control_media(connection, keep_frame=True)
             if self._gateway_owner.get(previous_gateway) is connection:
                 self._gateway_owner.pop(previous_gateway, None)
+                # Also release viewers still waiting for a first frame.
+                self._revoke_gateway_media(previous_gateway, keep_frames=True)
 
         client = self._clients.get(gateway_id)
         # A second control socket claiming a gateway replaces its command owner.
