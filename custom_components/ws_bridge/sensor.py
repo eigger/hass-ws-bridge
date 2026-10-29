@@ -67,18 +67,23 @@ class WsBridgeSensor(WsBridgeEntity, SensorEntity):
     def _parse_value(self, value: Any) -> Any:
         if value is None or (isinstance(value, str) and value.lower() == "unknown"):
             return None
-        if (
-            self._attr_device_class == "timestamp"
-            and isinstance(value, str)
-            and (dt := dt_util.parse_datetime(value)) is not None
-        ):
-            return dt_util.as_local(dt) if dt.tzinfo is None else dt
-        if (
-            self._attr_device_class == "date"
-            and isinstance(value, str)
-            and (d := dt_util.parse_date(value)) is not None
-        ):
-            return d
+        if self._attr_device_class == "timestamp":
+            # HA raises (and the entity fails to add) for anything but an aware
+            # datetime, so never pass through an unparsed value.
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                # Epoch seconds, or milliseconds for clearly larger values.
+                seconds = value / 1000 if abs(value) > 1e11 else value
+                try:
+                    return dt_util.utc_from_timestamp(seconds)
+                except (OverflowError, OSError, ValueError):
+                    return None
+            if isinstance(value, str) and (dt := dt_util.parse_datetime(value)):
+                return dt_util.as_local(dt) if dt.tzinfo is None else dt
+            return None
+        if self._attr_device_class == "date":
+            if isinstance(value, str) and (d := dt_util.parse_date(value)) is not None:
+                return d
+            return None
         return value
 
 
