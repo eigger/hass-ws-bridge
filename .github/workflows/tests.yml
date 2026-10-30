@@ -18,7 +18,7 @@ concurrency:
 # (e.g. camera → PyTurboJPEG) from the installed HA's own manifests.
 jobs:
   current:
-    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@v1.1.4
+    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@v1.1.5
     with:
       domain: ws_bridge
       python-versions: '["3.14"]'
@@ -31,7 +31,7 @@ jobs:
         image camera
       pytest-args: tests/components/ws_bridge/ -v
   minimum-ha:
-    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@v1.1.4
+    uses: eigger/hass-repo-standards/.github/workflows/python-tests.yml@v1.1.5
     with:
       domain: ws_bridge
       python-versions: '["3.14"]'

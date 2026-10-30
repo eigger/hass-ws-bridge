@@ -12,11 +12,11 @@ Generic WebSocket Bridge for Home Assistant that dynamically registers devices a
 [![Tests](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/tests.yml?branch=main&style=flat&label=Tests)](https://github.com/eigger/hass-ws-bridge/actions/workflows/tests.yml)
 [![Validate](https://img.shields.io/github/actions/workflow/status/eigger/hass-ws-bridge/validate.yml?branch=main&style=flat&label=Validate)](https://github.com/eigger/hass-ws-bridge/actions/workflows/validate.yml)
 [![License](https://img.shields.io/github/license/eigger/hass-ws-bridge?style=flat)](LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/eigger/hass-ws-bridge/total?style=flat&color=41BDF5&label=Downloads)](https://github.com/eigger/hass-ws-bridge/releases)
+[![Downloads](https://img.shields.io/github/downloads/eigger/hass-ws-bridge/latest/total?style=flat&color=41BDF5&label=Downloads)](https://github.com/eigger/hass-ws-bridge/releases)
 <!-- hass-standards:badges:end -->
 <!-- hass-standards:header:end -->
 
-The Downloads badge counts GitHub release asset downloads across all releases, not active installations.
+The Downloads badge counts GitHub release asset downloads of the current release, not active installations.
 
 A generic Home Assistant integration that enables **any authenticated WebSocket client** to dynamically create and update entities. It is fully decoupled from specific hardware or protocols (e.g., BLE, Zigbee); as long as the client conforms to the defined communication protocol, it works out of the box.
 
