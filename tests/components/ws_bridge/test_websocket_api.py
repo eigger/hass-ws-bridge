@@ -717,3 +717,38 @@ async def test_connection_closed_after_command_rejected_for_lost_admin(
         if not bridge._conn_client:
             break
     assert not bridge._conn_client
+
+
+async def test_connect_closed_while_ensuring_subentry_is_not_registered(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    bridge_client_factory,
+) -> None:
+    """A socket that closes during ws_connect's await must not become a ghost."""
+    bridge = hass.data[DOMAIN][init_integration.entry_id]
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    original = bridge.async_ensure_gateway_subentry
+
+    async def _slow_ensure(*args, **kwargs):
+        entered.set()
+        await release.wait()
+        return await original(*args, **kwargs)
+
+    bridge.async_ensure_gateway_subentry = _slow_ensure
+    gw = await bridge_client_factory()
+    await gw.ws.send_json(
+        {"id": 1, "type": f"{DOMAIN}/connect", "gateway_id": "gw1", "name": "GW1"}
+    )
+    await asyncio.wait_for(entered.wait(), 5)
+
+    await gw.ws.close()
+    for _ in range(50):
+        await asyncio.sleep(0.01)
+        await hass.async_block_till_done()
+    release.set()
+    await hass.async_block_till_done()
+
+    assert not bridge._connections
+    assert not bridge._conn_client
+    assert "gw1" not in bridge._gateway_owner

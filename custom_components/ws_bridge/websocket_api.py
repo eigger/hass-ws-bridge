@@ -21,7 +21,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 
-from .bridge import WsBridge
+from .bridge import WsBridge, connection_closed
 from .const import (
     ALL_PLATFORMS,
     CONF_ALLOWED_USER_IDS,
@@ -159,6 +159,13 @@ async def ws_connect(
     unsubs = []
     for b in _bridges(hass):
         subentry_id = await b.async_ensure_gateway_subentry(gateway_id, name)
+        if connection_closed(connection):
+            # The socket closed while we awaited: HA already ran and cleared
+            # its subscriptions, so registering now would leave a ghost
+            # connection that is never disconnected.
+            for unsub in unsubs:
+                unsub()
+            return
         unsubs.append(
             b.connect_client(
                 connection,

@@ -68,6 +68,16 @@ def signal_media(entry_id: str, unique_id: str) -> str:
     return f"{DOMAIN}_{entry_id}_media_{unique_id}"
 
 
+def connection_closed(connection: Any) -> bool:
+    """Whether HA already tore this ActiveConnection down.
+
+    On close HA rebinds send_message to the ActiveConnection's own bound
+    method (instead of WebSocketHandler._send_message), and runs - then clears -
+    its subscriptions, so anything registered afterwards is never cleaned up.
+    """
+    return getattr(connection.send_message, "__self__", None) is connection
+
+
 def _nonempty(value: Any) -> str | None:
     """프로토콜 선택 문자열. 비어 있으면 미전송으로 본다."""
     if isinstance(value, str) and value.strip():
@@ -587,7 +597,7 @@ class WsBridge:
         # uses on shutdown; cleanup then runs subscriptions.
         handler = getattr(connection.send_message, "__self__", None)
         cancel = getattr(handler, "_cancel", None)
-        if handler is connection:
+        if connection_closed(connection):
             # Once the socket is closed HA rebinds send_message to the
             # ActiveConnection itself, so there is nothing left to cancel.
             _LOGGER.debug(
