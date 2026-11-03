@@ -587,7 +587,7 @@ class WsBridge:
         # uses on shutdown; cleanup then runs subscriptions.
         handler = getattr(connection.send_message, "__self__", None)
         cancel = getattr(handler, "_cancel", None)
-        if cancel is None:
+        if handler is connection:
             # Once the socket is closed HA rebinds send_message to the
             # ActiveConnection itself, so there is nothing left to cancel.
             _LOGGER.debug(
@@ -597,6 +597,8 @@ class WsBridge:
             )
             return
         try:
+            if cancel is None:
+                raise RuntimeError("websocket handler not found")
             cancel()
         except Exception:
             _LOGGER.warning(
