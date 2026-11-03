@@ -30,6 +30,7 @@ Downloads 배지는 현재 GitHub 릴리스의 첨부 asset 다운로드 합계�
 - **양방향 제어 라우팅**: `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`, `media_player`, `camera` 제어 이벤트(`command`)를 HA UI·자동화에서 발생시키면, 해당 엔티티를 등록한 클라이언트에만 전달합니다.
 - **연결 상태 추적(LWT)**: 클라이언트 WebSocket 연결이 끊기면, 그 클라이언트가 등록한 하위 장치·엔티티가 자동으로 `unavailable`이 됩니다.
 - **연결 클라이언트 수 진단 센서**: 현재 WebSocket으로 연결된 클라이언트(`gateway_id`) 수를 실시간으로 표시하는 진단 센서를 제공합니다.
+- **게이트웨이별 진단 엔티티**: 각 게이트웨이 디바이스에 `연결됨`(연결 여부, `binary_sensor`)과 `컨트롤 연결 수`(`sensor`, 정상이면 1) 진단 엔티티가 생깁니다. 게이트웨이가 끊겨도 `unavailable`이 되지 않고 계속 상태를 보고하며, HA 재시작 직후에도 알려진 게이트웨이는 `연결 끊김`으로 표시됩니다. 디바이스 정보의 일련번호에는 `gateway_id`가 표시됩니다.
 
 ---
 

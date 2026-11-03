@@ -518,7 +518,8 @@ When a **gateway subentry** is deleted in **Settings → WebSocket Bridge**, or 
   - `mode` (String, Optional): Removal scope when `unique_id` or `device_id` is set. Default: `"exact"`.
     - `"exact"`: Only the target whose client id **equals** `device_id` / `unique_id` (legacy behaviour).
     - `"prefix"`: The target **and** any client id that equals `target` or starts with `target_` (e.g. profile `jaalee_jht` plus MAC instances `jaalee_jht_AABBCCDDEEFF`). Use for advertisement sensors with per-MAC `device.id`.
-  - Omit `unique_id` and `device_id`: Removes **all** entities, sub-devices, and the gateway device for the currently connected client.
+  - Omit `unique_id` and `device_id`: Removes **all** entities, sub-devices, and the gateway device for the currently connected client. The gateway's diagnostic entities return on the next `ws_bridge/connect`.
+  - Matching (both modes) is limited to the **calling gateway's** own entities: another gateway's entities and bridge-owned diagnostic entities are never matched.
 
 * **Response**
   ```json
@@ -561,7 +562,7 @@ Once declared, an entity stays in HA until explicitly removed (see §5), so drop
 #### Behaviour
 
 - **Surviving entities are left untouched.** Unlike wipe-then-redeclare, entity_id, history, and long-term statistics are preserved. Safe to call on every reconnect.
-- Scope is limited to the **calling gateway**. Other gateways' entities and the integration diagnostic sensor (`connected_clients`) are never affected.
+- Scope is limited to the **calling gateway**. Other gateways' entities and the integration diagnostic sensor (`connected_clients`) and the per-gateway diagnostic entities (`Connected`, `Control connections`) are never affected.
 - Entities that are `unavailable`, still queued before their platform is ready, or restored via `keep_last_state_on_disconnect` are all included in the comparison.
 - Sub-devices left with no entities are removed from the device registry as well. The gateway device itself is kept.
 - An empty array (`[]`) is **rejected by the schema**, so a client that failed to load its config or booted partially cannot wipe everything by accident. For a full wipe, use `ws_bridge/remove` with no target.

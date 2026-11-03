@@ -17,12 +17,14 @@ from homeassistant.util import dt as dt_util
 from .bridge import WsBridge, signal_clients
 from .const import (
     CONNECTED_CLIENTS_UNIQUE_ID,
+    CONTROL_CONNECTIONS_KEY,
     DOMAIN,
     ICON_CONNECTED_CLIENTS,
+    ICON_CONTROL_CONNECTIONS,
     PLATFORM_SENSOR,
     PLATFORM_TEXT_SENSOR,
 )
-from .entity import WsBridgeEntity, safe_write_ha_state
+from .entity import WsBridgeEntity, WsBridgeGatewayEntity, safe_write_ha_state
 
 
 async def async_setup_entry(
@@ -34,6 +36,9 @@ async def async_setup_entry(
     # sensor entities too, so route them through the same sensor platform setup.
     bridge.register_platform(
         PLATFORM_TEXT_SENSOR, async_add_entities, WsBridgeTextSensor
+    )
+    bridge.register_gateway_platform(
+        PLATFORM_SENSOR, async_add_entities, WsBridgeGatewayConnectionsSensor
     )
     async_add_entities([WsBridgeConnectedClientsSensor(bridge, entry)])
 
@@ -171,3 +176,17 @@ class WsBridgeConnectedClientsSensor(SensorEntity):
     def _on_count_changed(self, count: int) -> None:
         self._attr_native_value = count
         safe_write_ha_state(self)
+
+
+class WsBridgeGatewayConnectionsSensor(WsBridgeGatewayEntity, SensorEntity):
+    """How many control sockets currently serve this gateway (normally 1)."""
+
+    _attr_icon = ICON_CONTROL_CONNECTIONS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, bridge: WsBridge, gateway_id: str, name: str) -> None:
+        super().__init__(bridge, gateway_id, name, CONTROL_CONNECTIONS_KEY)
+
+    @property
+    def native_value(self) -> int:
+        return self._connections

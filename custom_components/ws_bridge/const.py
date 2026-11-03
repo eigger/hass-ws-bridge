@@ -10,11 +10,15 @@ SUBENTRY_TYPE_GATEWAY = "gateway"
 
 # 통합 진단 센서 unique_id 접미사
 CONNECTED_CLIENTS_UNIQUE_ID = "connected_clients"
+# 게이트웨이별 진단 엔티티 키 (unique_id 접미사 겸 translation_key)
+GATEWAY_CONNECTED_KEY = "gateway_connected"
+CONTROL_CONNECTIONS_KEY = "control_connections"
 
 # 아이콘 (MDI)
 ICON_BRIDGE = "mdi:swap-horizontal"
 ICON_CONNECTED_CLIENTS = "mdi:account-multiple"
 ICON_GATEWAY = "mdi:router-wireless"
+ICON_CONTROL_CONNECTIONS = "mdi:lan-connect"
 
 # WebSocket 명령 타입 (PROTOCOL.md). 도메인 접두어를 따른다.
 WS_CONNECT = f"{DOMAIN}/connect"

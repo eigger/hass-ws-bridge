@@ -13,7 +13,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo, Entity
 
-from .bridge import WsBridge, signal_avail, signal_media, signal_value
+from .bridge import WsBridge, signal_avail, signal_gateway, signal_media, signal_value
 from .const import DEFAULT_PLATFORM_ICONS, DOMAIN
 from .helpers import as_dict
 
@@ -204,3 +204,43 @@ class WsBridgeCompositeEntity(WsBridgeEntity):
     def _apply_state(self) -> None:
         """서브클래스에서 self._state → self._attr_* 로 반영."""
         raise NotImplementedError
+
+
+class WsBridgeGatewayEntity(Entity):
+    """Bridge-owned diagnostic entity on a gateway's device.
+
+    Unlike client-declared entities it is never tied to the gateway's
+    availability: it exists to tell whether the gateway is connected.
+    """
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, bridge: WsBridge, gateway_id: str, name: str, key: str) -> None:
+        self._bridge = bridge
+        self._gateway_id = gateway_id
+        self._attr_unique_id = f"{bridge.entry_id}_gateway_{gateway_id}_{key}"
+        self._attr_translation_key = key
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, gateway_id)},
+            name=name,
+            serial_number=gateway_id,
+        )
+        self._connections = bridge.gateway_control_connections(gateway_id)
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_gateway(self._bridge.entry_id, self._gateway_id),
+                self._on_connections_changed,
+            )
+        )
+        # Signals sent between creation and this subscription were missed.
+        self._connections = self._bridge.gateway_control_connections(self._gateway_id)
+
+    @callback
+    def _on_connections_changed(self, connections: int) -> None:
+        self._connections = connections
+        safe_write_ha_state(self)

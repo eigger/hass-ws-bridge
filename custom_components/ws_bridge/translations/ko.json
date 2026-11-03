@@ -25,6 +25,14 @@
     "sensor": {
       "connected_clients": {
         "name": "연결된 클라이언트"
+      },
+      "control_connections": {
+        "name": "컨트롤 연결 수"
+      }
+    },
+    "binary_sensor": {
+      "gateway_connected": {
+        "name": "연결됨"
       }
     }
   }

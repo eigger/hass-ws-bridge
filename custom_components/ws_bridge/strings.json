@@ -25,6 +25,14 @@
     "sensor": {
       "connected_clients": {
         "name": "Connected clients"
+      },
+      "control_connections": {
+        "name": "Control connections"
+      }
+    },
+    "binary_sensor": {
+      "gateway_connected": {
+        "name": "Connected"
       }
     }
   }
