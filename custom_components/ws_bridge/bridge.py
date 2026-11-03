@@ -539,36 +539,74 @@ class WsBridge:
         # Revoke media first (keeping frames) so close_connections() cannot
         # clear frames that flush_media_saves() is about to persist.
         self._revoke_gateway_media(None, keep_frames=True)
-        self.close_connections()
+        self.close_connections(reason="integration unload")
         self.flush_media_saves()
 
     @callback
     def close_connections(
-        self, should_close: Callable[[Any], bool] | None = None
+        self,
+        should_close: Callable[[Any], bool] | None = None,
+        *,
+        reason: str = "close_connections",
     ) -> None:
         """Close client connections (all, or those `should_close` accepts)."""
         for conn in list(self._connections):
             if should_close is not None and not should_close(conn):
                 continue
-            self._close_connection(conn)
+            self._close_connection(conn, reason)
         for conn in list(self._media_connections):
             if should_close is None or should_close(conn):
-                self._revoke_media_connection(conn, close=True)
+                self._revoke_media_connection(conn, close=True, reason=reason)
 
     @callback
-    def _close_connection(self, connection: Any) -> None:
+    def _describe_connection(
+        self, connection: Any, media: _MediaConnection | None = None
+    ) -> str:
+        """Identify a connection for logs (ids only, never tokens)."""
+        user = getattr(connection, "user", None)
+        parts = [f"user={getattr(user, 'id', None)}"]
+        media = media or self._media_connections.get(connection)
+        if media is not None:
+            parts.append(
+                f"kind=media gateway={media.gateway_id} entity={media.unique_id}"
+            )
+        else:
+            parts.append(f"kind=control gateway={self._conn_client.get(connection)}")
+        return " ".join(parts)
+
+    @callback
+    def _close_connection(
+        self,
+        connection: Any,
+        reason: str = "unspecified",
+        media: _MediaConnection | None = None,
+    ) -> None:
         """Close an HA ActiveConnection using HA's own handler cancellation path."""
+        # ActiveConnection has no public close(). Its send_message is the bound
+        # WebSocketHandler._send_message, and _cancel() is the path HA itself
+        # uses on shutdown; cleanup then runs subscriptions.
+        handler = getattr(connection.send_message, "__self__", None)
+        cancel = getattr(handler, "_cancel", None)
+        if handler is connection:
+            # Once the socket is closed HA rebinds send_message to the
+            # ActiveConnection itself, so there is nothing left to cancel.
+            _LOGGER.debug(
+                "Connection already closed (%s): %s",
+                reason,
+                self._describe_connection(connection, media),
+            )
+            return
         try:
-            # ActiveConnection has no public close(). Its send_message is the
-            # bound WebSocketHandler._send_message, and _cancel() is the path HA
-            # itself uses on shutdown; cleanup then runs subscriptions.
-            handler = getattr(connection.send_message, "__self__", None)
-            cancel = getattr(handler, "_cancel", None)
             if cancel is None:
                 raise RuntimeError("websocket handler not found")
             cancel()
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.warning("Error closing client connection: %s", err)
+        except Exception:
+            _LOGGER.warning(
+                "Error closing client connection (%s): %s",
+                reason,
+                self._describe_connection(connection, media),
+                exc_info=True,
+            )
 
     @callback
     def client_for(self, connection: Any) -> str | None:
@@ -702,13 +740,17 @@ class WsBridge:
         from .websocket_api import user_allowed
 
         if not user_allowed(self.hass, connection.user):
-            self._revoke_media_connection(connection, close=True)
+            self._revoke_media_connection(
+                connection, close=True, reason="media user not allowed"
+            )
             return
         if (
             self._gateway_owner.get(media.gateway_id) is not media.control_connection
             or self._conn_client.get(media.control_connection) != media.gateway_id
         ):
-            self._revoke_media_connection(connection, close=True)
+            self._revoke_media_connection(
+                connection, close=True, reason="media control socket gone"
+            )
             return
         if not self._store_media_frame(media.gateway_id, media.unique_id, payload):
             _LOGGER.warning(
@@ -724,7 +766,9 @@ class WsBridge:
             self._handle_media_binary(connection, payload)
         except Exception:  # never retain an orphaned binary handler
             _LOGGER.exception("Unexpected error handling media frame")
-            self._revoke_media_connection(connection, close=True)
+            self._revoke_media_connection(
+                connection, close=True, reason="media frame handler error"
+            )
 
     @callback
     def _store_media_frame(self, gateway_id: str, ns_uid: str, frame: bytes) -> bool:
@@ -783,7 +827,12 @@ class WsBridge:
 
     @callback
     def _revoke_media_connection(
-        self, connection: Any, *, close: bool = False, keep_frame: bool = False
+        self,
+        connection: Any,
+        *,
+        close: bool = False,
+        keep_frame: bool = False,
+        reason: str = "media revoked",
     ) -> None:
         media = self._media_connections.pop(connection, None)
         if media is None:
@@ -792,7 +841,7 @@ class WsBridge:
         if not keep_frame:
             self._clear_media_frame(media.unique_id, notify=True)
         if close:
-            self._close_connection(connection)
+            self._close_connection(connection, reason, media)
 
     @callback
     def _revoke_control_media(
@@ -804,7 +853,10 @@ class WsBridge:
         for connection, media in list(self._media_connections.items()):
             if media.control_connection is control_connection:
                 self._revoke_media_connection(
-                    connection, close=True, keep_frame=keep_frame
+                    connection,
+                    close=True,
+                    keep_frame=keep_frame,
+                    reason="control socket closed or replaced",
                 )
                 if keep_frame:
                     # The frame stays, but consumers (push-MJPEG viewers) must
@@ -823,7 +875,10 @@ class WsBridge:
         for connection, media in list(self._media_connections.items()):
             if media.unique_id == ns_uid:
                 self._revoke_media_connection(
-                    connection, close=True, keep_frame=keep_frame
+                    connection,
+                    close=True,
+                    keep_frame=keep_frame,
+                    reason="entity revoked",
                 )
         if keep_frame:
             return
@@ -867,7 +922,10 @@ class WsBridge:
         for connection, media in list(self._media_connections.items()):
             if gateway_id is None or media.gateway_id == gateway_id:
                 self._revoke_media_connection(
-                    connection, close=True, keep_frame=keep_frames
+                    connection,
+                    close=True,
+                    keep_frame=keep_frames,
+                    reason="gateway revoked",
                 )
         prefix = f"{gateway_id}__" if gateway_id is not None else ""
         if not keep_frames:
