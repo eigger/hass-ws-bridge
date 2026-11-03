@@ -4,6 +4,7 @@ import asyncio
 from datetime import timedelta
 
 import pytest
+from homeassistant.components.websocket_api.const import DATA_CONNECTIONS
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -15,6 +16,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
+from custom_components.ws_bridge import websocket_api as ws_api
 from custom_components.ws_bridge.const import CONF_ALLOWED_USER_IDS, DOMAIN
 
 from .conftest import BridgeClient, entity_id_for, entity_is_live, get_device
@@ -717,3 +719,124 @@ async def test_connection_closed_after_command_rejected_for_lost_admin(
         if not bridge._conn_client:
             break
     assert not bridge._conn_client
+
+
+async def _close_and_wait(hass: HomeAssistant, gw: BridgeClient, baseline: int) -> None:
+    """Close the socket and wait until HA has fully torn the connection down."""
+    await gw.ws.close()
+    for _ in range(500):
+        await asyncio.sleep(0.01)
+        await hass.async_block_till_done()
+        if hass.data.get(DATA_CONNECTIONS, 0) <= baseline:
+            return
+    raise AssertionError("HA did not process the WebSocket disconnect")
+
+
+class _FakeBridge:
+    """Second bridge whose subentry step blocks, then optionally fails."""
+
+    def __init__(self, fail: bool = False) -> None:
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+        self.fail = fail
+
+    async def async_ensure_gateway_subentry(self, *_args):
+        self.entered.set()
+        await self.release.wait()
+        if self.fail:
+            raise RuntimeError("boom")
+
+    def is_media_connection(self, _connection) -> bool:
+        return False
+
+    def client_for(self, _connection):
+        return None
+
+    def connect_client(self, *_args, **_kwargs):
+        raise AssertionError("closed connection must not be registered")
+
+
+async def _send_connect(gw: BridgeClient) -> None:
+    await gw.ws.send_json(
+        {"id": 1, "type": f"{DOMAIN}/connect", "gateway_id": "gw1", "name": "GW1"}
+    )
+
+
+def _assert_no_ghost(bridge) -> None:
+    assert not bridge._connections
+    assert not bridge._conn_client
+    assert "gw1" not in bridge._gateway_owner
+
+
+async def test_connect_closed_while_ensuring_subentry_is_not_registered(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    bridge_client_factory,
+) -> None:
+    """A socket that closes during ws_connect's await must not become a ghost."""
+    bridge = hass.data[DOMAIN][init_integration.entry_id]
+    baseline = hass.data.get(DATA_CONNECTIONS, 0)
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    original = bridge.async_ensure_gateway_subentry
+
+    async def _slow_ensure(*args, **kwargs):
+        entered.set()
+        await release.wait()
+        return await original(*args, **kwargs)
+
+    bridge.async_ensure_gateway_subentry = _slow_ensure
+    gw = await bridge_client_factory()
+    await _send_connect(gw)
+    await asyncio.wait_for(entered.wait(), 5)
+
+    await _close_and_wait(hass, gw, baseline)
+    release.set()
+    await hass.async_block_till_done()
+
+    _assert_no_ghost(bridge)
+
+
+async def test_connect_closed_during_later_bridge_unregisters_earlier_bridge(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    bridge_client_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Closing while a later bridge awaits undoes the earlier bridge's connect."""
+    bridge = hass.data[DOMAIN][init_integration.entry_id]
+    baseline = hass.data.get(DATA_CONNECTIONS, 0)
+    fake = _FakeBridge()
+    monkeypatch.setattr(ws_api, "_bridges", lambda _hass: [bridge, fake])
+    gw = await bridge_client_factory()
+    await _send_connect(gw)
+    await asyncio.wait_for(fake.entered.wait(), 5)
+    assert bridge._conn_client  # earlier bridge registered, later one pending
+
+    await _close_and_wait(hass, gw, baseline)
+    fake.release.set()
+    await hass.async_block_till_done()
+
+    _assert_no_ghost(bridge)
+
+
+async def test_connect_failure_in_later_bridge_unregisters_earlier_bridge(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    bridge_client_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An error from a later bridge must not leave the earlier one registered."""
+    bridge = hass.data[DOMAIN][init_integration.entry_id]
+    baseline = hass.data.get(DATA_CONNECTIONS, 0)
+    fake = _FakeBridge(fail=True)
+    monkeypatch.setattr(ws_api, "_bridges", lambda _hass: [bridge, fake])
+    gw = await bridge_client_factory()
+    await _send_connect(gw)
+    await asyncio.wait_for(fake.entered.wait(), 5)
+
+    fake.release.set()
+    await hass.async_block_till_done()
+    await _close_and_wait(hass, gw, baseline)
+
+    _assert_no_ghost(bridge)

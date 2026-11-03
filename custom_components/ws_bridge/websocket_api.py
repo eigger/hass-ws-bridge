@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import voluptuous as vol
@@ -21,7 +22,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 
-from .bridge import WsBridge
+from .bridge import WsBridge, connection_closed
 from .const import (
     ALL_PLATFORMS,
     CONF_ALLOWED_USER_IDS,
@@ -52,6 +53,10 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_sync)
     websocket_api.async_register_command(hass, ws_media_open)
     websocket_api.async_register_command(hass, ws_media_connect)
+
+
+class _ConnectionClosed(Exception):
+    """The websocket closed while a handler was still awaiting."""
 
 
 def _bridges(hass: HomeAssistant) -> list[WsBridge]:
@@ -156,23 +161,39 @@ async def ws_connect(
 
     gateway_id = msg["gateway_id"]
     name = msg.get("name") or ""
-    unsubs = []
-    for b in _bridges(hass):
-        subentry_id = await b.async_ensure_gateway_subentry(gateway_id, name)
-        unsubs.append(
-            b.connect_client(
-                connection,
-                gateway_id,
-                name,
-                _send_event,
-                resolve_connect_sw_version(msg),
-                subentry_id,
-                keep_last_state_on_disconnect=msg[CONF_KEEP_LAST_STATE_ON_DISCONNECT],
-                manufacturer=msg.get("manufacturer"),
-                model=msg.get("model"),
-                hw_version=msg.get("hw_version"),
+    unsubs: list[Callable[[], None]] = []
+    try:
+        for b in _bridges(hass):
+            subentry_id = await b.async_ensure_gateway_subentry(gateway_id, name)
+            if connection_closed(connection):
+                # The socket closed while we awaited: HA already ran and cleared
+                # its subscriptions, so registering now would leave a ghost
+                # connection that is never disconnected.
+                raise _ConnectionClosed
+            unsubs.append(
+                b.connect_client(
+                    connection,
+                    gateway_id,
+                    name,
+                    _send_event,
+                    resolve_connect_sw_version(msg),
+                    subentry_id,
+                    keep_last_state_on_disconnect=msg[
+                        CONF_KEEP_LAST_STATE_ON_DISCONNECT
+                    ],
+                    manufacturer=msg.get("manufacturer"),
+                    model=msg.get("model"),
+                    hw_version=msg.get("hw_version"),
+                )
             )
-        )
+    except BaseException as err:
+        # Earlier bridges are already registered but not yet tracked by the
+        # connection's subscriptions, so nothing else would undo them.
+        for unsub in unsubs:
+            unsub()
+        if isinstance(err, _ConnectionClosed):
+            return
+        raise
     connection.subscriptions[msg["id"]] = lambda: [u() for u in unsubs]
     connection.send_result(msg["id"])
 
