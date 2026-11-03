@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry, MockUser
 from pytest_homeassistant_custom_component.components.diagnostics import (
     get_diagnostics_for_config_entry,
 )
@@ -44,10 +44,14 @@ async def test_diagnostics_media_session_omits_ids(
     init_integration: MockConfigEntry,
     client: BridgeClient,
     bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+    hass_admin_user: MockUser,
+    hass_access_token: str,
 ) -> None:
     """Media sessions list gateway/entity only: no session id, user or token id."""
     await client.entity("cam", "camera", "Cam")
     session = await client.ok("media_open", unique_id="cam")
+    refresh_token = hass.auth.async_validate_access_token(hass_access_token)
+    assert refresh_token is not None
 
     result = await get_diagnostics_for_config_entry(hass, hass_client, init_integration)
 
@@ -56,6 +60,8 @@ async def test_diagnostics_media_session_omits_ids(
     assert sessions[0]["unique_id"] == "gw1__cam"
     assert sessions[0]["expires_in"] >= 0
     assert session["session_id"] not in str(result)
+    assert hass_admin_user.id not in str(result)
+    assert refresh_token.id not in str(result)
 
     media = await bridge_client_factory()
     await media.ok("media_connect", session_id=session["session_id"])
@@ -66,8 +72,8 @@ async def test_diagnostics_media_session_omits_ids(
         {"gateway_id": "gw1", "unique_id": "gw1__cam"}
     ]
     assert session["session_id"] not in str(result)
-    assert "user_id" not in str(result)
-    assert "refresh_token" not in str(result)
+    assert hass_admin_user.id not in str(result)
+    assert refresh_token.id not in str(result)
 
 
 async def test_diagnostics_redacts_allowed_users(
