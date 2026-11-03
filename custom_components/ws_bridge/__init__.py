@@ -88,7 +88,8 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     if bridge:
         # 허용 목록에서 빠진 토큰 소유자의 기존 연결은 끊는다.
         bridge.close_connections(
-            lambda conn: not websocket_api.user_allowed(hass, conn.user)
+            lambda conn: not websocket_api.user_allowed(hass, conn.user),
+            reason="user removed from allow-list",
         )
     if bridge and removed:
         for gateway_id in removed:

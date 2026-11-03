@@ -101,7 +101,9 @@ def _reject_if_not_allowed(
 
             @callback
             def _close(_now: Any, b: WsBridge = bridge) -> None:
-                b.close_connections(lambda c: c is connection)
+                b.close_connections(
+                    lambda c: c is connection, reason="user not allowed"
+                )
 
             async_call_later(hass, 1, _close)
     return True
