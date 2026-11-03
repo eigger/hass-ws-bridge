@@ -609,6 +609,52 @@ class WsBridge:
             )
 
     @callback
+    def diagnostics(self) -> dict[str, Any]:
+        """Counts and ids describing live state, for the diagnostics download.
+
+        Never includes entity states/definitions, frame bytes, user ids, tokens
+        or media session ids; only sizes and gateway/entity identifiers.
+        """
+        now = time.monotonic()
+        gateways = {}
+        for gateway_id, client in self._clients.items():
+            gateways[gateway_id] = {
+                "name": client.name,
+                "manufacturer": client.manufacturer,
+                "model": client.model,
+                "hw_version": client.hw_version,
+                "sw_version": client.sw_version,
+                "keep_last_state_on_disconnect": client.keep_last_state_on_disconnect,
+                "device_count": len(client.device_ids),
+                "has_owner": gateway_id in self._gateway_owner,
+                "control_connections": list(self._conn_client.values()).count(
+                    gateway_id
+                ),
+            }
+        return {
+            "control_connection_count": len(self._connections),
+            "gateways": gateways,
+            "entity_count": len(self._entities),
+            "state_count": len(self._states),
+            "definition_count": len(self._defns),
+            "media_sessions": [
+                {
+                    "gateway_id": session.gateway_id,
+                    "unique_id": session.unique_id,
+                    "expires_in": round(session.expires_at - now, 1),
+                }
+                for session in self._media_sessions.values()
+            ],
+            "media_connections": [
+                {"gateway_id": media.gateway_id, "unique_id": media.unique_id}
+                for media in self._media_connections.values()
+            ],
+            "media_frame_count": len(self._media_frames),
+            "media_cache_bytes": self._media_cache_bytes,
+            "restored_frame_count": len(self._restored_frames),
+        }
+
+    @callback
     def client_for(self, connection: Any) -> str | None:
         return self._conn_client.get(connection)
 
