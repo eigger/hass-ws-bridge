@@ -30,6 +30,7 @@ A generic Home Assistant integration that enables **any authenticated WebSocket 
 - **Bi-directional Command Routing**: Supports control components including `switch`, `number`, `select`, `button`, `update`, `light`, `cover`, `fan`, `text`, `lock`, `date`, `time`, `datetime`, `valve`, `climate`, `humidifier`, `water_heater`, `siren`, `alarm_control_panel`, `media_player`, and `camera`. Control events (`command`) triggered by the HA UI or automations are routed back exclusively to the originating client.
 - **Connection State Tracking (LWT)**: If the client's WebSocket connection drops, all child devices and entities registered by that client are automatically set to `unavailable` to prevent stale states.
 - **Connected Clients Diagnostic Sensor**: Provides a diagnostic sensor that reports the number of currently connected WebSocket clients (`gateway_id`) in real time.
+- **Per-gateway Diagnostic Entities**: Each gateway device gets a `Connected` (`binary_sensor`) and a `Control connections` (`sensor`, normally 1) diagnostic entity. They keep reporting while the gateway is disconnected (they never go `unavailable`), and known gateways show as off right after an HA restart. The device's serial number shows the `gateway_id`.
 
 ---
 

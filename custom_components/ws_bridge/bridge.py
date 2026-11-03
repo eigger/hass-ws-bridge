@@ -55,6 +55,11 @@ def signal_value(entry_id: str, unique_id: str) -> str:
     return f"{DOMAIN}_{entry_id}_state_{unique_id}"
 
 
+def signal_gateway(entry_id: str, gateway_id: str) -> str:
+    """Control-connection count of one gateway changed (payload: the count)."""
+    return f"{DOMAIN}_{entry_id}_gateway_{gateway_id}"
+
+
 def signal_avail(entry_id: str, ns_device_id: str) -> str:
     return f"{DOMAIN}_{entry_id}_avail_{ns_device_id}"
 
@@ -127,6 +132,9 @@ class WsBridge:
         self.hass = hass
         self.entry_id = entry_id
         self._platforms: dict[str, _PlatformReg] = {}
+        # Bridge-owned diagnostic entities attached to each gateway device.
+        self._gateway_platforms: dict[str, _PlatformReg] = {}
+        self._gateway_entities: dict[tuple[str, str], Entity] = {}
         self._pending: dict[str, list[dict[str, Any]]] = {}
         self._created: set[str] = set()  # 네임스페이스된 unique_id
         self._states: dict[str, Any] = {}
@@ -344,6 +352,56 @@ class WsBridge:
         for defn in self._pending.pop(platform, []):
             self._create(defn)
 
+    @callback
+    def register_gateway_platform(
+        self, platform: str, add_entities: Callable, factory: Callable[..., Any]
+    ) -> None:
+        """Register a platform for per-gateway diagnostic entities.
+
+        Gateways already known from config subentries get theirs immediately,
+        so they show as disconnected after a restart before any client connects.
+        """
+        self._gateway_platforms[platform] = _PlatformReg(add_entities, factory)
+        config_entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        if config_entry is None:
+            return
+        for subentry in config_entry.subentries.values():
+            if gateway_id := subentry.data.get("gateway_id"):
+                self._ensure_gateway_entities(
+                    gateway_id, subentry.subentry_id, subentry.title
+                )
+
+    @callback
+    def _ensure_gateway_entities(
+        self, gateway_id: str, subentry_id: str | None, name: str
+    ) -> None:
+        """Create the gateway's diagnostic entities once (again if removed)."""
+        entity_reg = er.async_get(self.hass)
+        for platform, reg in self._gateway_platforms.items():
+            key = (platform, gateway_id)
+            existing = self._gateway_entities.get(key)
+            if existing is not None and (
+                existing.entity_id is None
+                or entity_reg.async_get(existing.entity_id) is not None
+            ):
+                continue
+            entity = reg.factory(self, gateway_id, name)
+            self._gateway_entities[key] = entity
+            kwargs = {"config_subentry_id": subentry_id} if subentry_id else {}
+            reg.add_entities([entity], **kwargs)
+
+    @callback
+    def gateway_control_connections(self, gateway_id: str) -> int:
+        return list(self._conn_client.values()).count(gateway_id)
+
+    @callback
+    def _notify_gateway_changed(self, gateway_id: str) -> None:
+        async_dispatcher_send(
+            self.hass,
+            signal_gateway(self.entry_id, gateway_id),
+            self.gateway_control_connections(gateway_id),
+        )
+
     def _subentry_id_for_gateway(self, gateway_id: str) -> str | None:
         config_entry = self.hass.config_entries.async_get_entry(self.entry_id)
         if config_entry is None:
@@ -467,6 +525,8 @@ class WsBridge:
         self._conn_generation[connection] = generation
         self._gateway_owner[gateway_id] = connection
         self._notify_clients_changed()
+        if previous_gateway is not None and previous_gateway != gateway_id:
+            self._notify_gateway_changed(previous_gateway)
 
         # 게이트웨이를 독립 디바이스로 등록 — WebSocket Bridge 서비스 디바이스와 병렬
         dev_reg = dr.async_get(self.hass)
@@ -485,10 +545,14 @@ class WsBridge:
             model=model,
             sw_version=client.sw_version,
             hw_version=client.hw_version,
+            serial_number=gateway_id,
         )
+        self._ensure_gateway_entities(gateway_id, subentry_id, client.name)
+        self._notify_gateway_changed(gateway_id)
         # via_device가 남아 있으면 제거, 디바이스 정보도 갱신
         if (
             gw_entry.via_device_id is not None
+            or gw_entry.serial_number != gateway_id
             or gw_entry.manufacturer != manufacturer
             or gw_entry.model != model
             or gw_entry.sw_version != client.sw_version
@@ -501,6 +565,7 @@ class WsBridge:
                 model=model,
                 sw_version=client.sw_version,
                 hw_version=client.hw_version,
+                serial_number=gateway_id,
             )
         if is_first_connection:
             # 재연결 → 게이트웨이 자신은 즉시 온라인. sub-device는 이번 세션에
@@ -540,6 +605,7 @@ class WsBridge:
                         self.hass, signal_avail(self.entry_id, ns_dev), False
                     )
             self._notify_clients_changed()
+            self._notify_gateway_changed(gateway_id)
 
         return _disconnect
 
@@ -1203,7 +1269,9 @@ class WsBridge:
             entity_reg, self.entry_id
         ):
             uid = entity_entry.unique_id
-            if not uid:
+            # Only this gateway's client entities: bridge-owned diagnostic
+            # entities must never match a client-supplied id prefix.
+            if not uid or not uid.startswith(f"{gateway_id}__"):
                 continue
             stripped = self._strip(gateway_id, uid)
             if self._client_id_matches(stripped, unique_id, prefix=True):
@@ -1279,6 +1347,8 @@ class WsBridge:
         self._revoke_gateway_media(gateway_id)
         prefix = f"{gateway_id}__"
         entity_reg = er.async_get(self.hass)
+        for key in [k for k in self._gateway_entities if k[1] == gateway_id]:
+            self._gateway_entities.pop(key, None)
 
         for entity_entry in list(
             er.async_entries_for_config_entry(entity_reg, self.entry_id)

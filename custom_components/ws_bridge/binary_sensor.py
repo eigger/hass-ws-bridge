@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .bridge import WsBridge
-from .const import DOMAIN, PLATFORM_BINARY_SENSOR
-from .entity import WsBridgeEntity, safe_write_ha_state
+from .const import DOMAIN, GATEWAY_CONNECTED_KEY, PLATFORM_BINARY_SENSOR
+from .entity import WsBridgeEntity, WsBridgeGatewayEntity, safe_write_ha_state
 from .helpers import parse_bool
 
 
@@ -21,6 +24,9 @@ async def async_setup_entry(
     bridge: WsBridge = hass.data[DOMAIN][entry.entry_id]
     bridge.register_platform(
         PLATFORM_BINARY_SENSOR, async_add_entities, WsBridgeBinarySensor
+    )
+    bridge.register_gateway_platform(
+        PLATFORM_BINARY_SENSOR, async_add_entities, WsBridgeGatewayConnectedSensor
     )
 
 
@@ -43,3 +49,16 @@ class WsBridgeBinarySensor(WsBridgeEntity, BinarySensorEntity):
     def _on_value(self, value: Any) -> None:
         self._attr_is_on = parse_bool(value)
         safe_write_ha_state(self)
+
+
+class WsBridgeGatewayConnectedSensor(WsBridgeGatewayEntity, BinarySensorEntity):
+    """Whether any control socket is currently connected for this gateway."""
+
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+
+    def __init__(self, bridge: WsBridge, gateway_id: str, name: str) -> None:
+        super().__init__(bridge, gateway_id, name, GATEWAY_CONNECTED_KEY)
+
+    @property
+    def is_on(self) -> bool:
+        return self._connections > 0
