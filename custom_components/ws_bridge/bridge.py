@@ -73,14 +73,35 @@ def signal_media(entry_id: str, unique_id: str) -> str:
     return f"{DOMAIN}_{entry_id}_media_{unique_id}"
 
 
+def _transport(connection: Any) -> Any:
+    """The callable HA uses to write to this connection's socket.
+
+    Up to HA 2026.10 that is the public ``send_message`` attribute itself; from
+    2026.11 ``send_message`` is a method of ActiveConnection wrapping the
+    private ``_send_message`` slot, so ``send_message.__self__`` is always the
+    connection and tells nothing about the socket.
+    """
+    return getattr(connection, "_send_message", None) or connection.send_message
+
+
 def connection_closed(connection: Any) -> bool:
     """Whether HA already tore this ActiveConnection down.
 
-    On close HA rebinds send_message to the ActiveConnection's own bound
-    method (instead of WebSocketHandler._send_message), and runs - then clears -
-    its subscriptions, so anything registered afterwards is never cleaned up.
+    On close HA rebinds the transport to ActiveConnection._connect_closed_error
+    (a bound method of the connection itself instead of the socket handler),
+    and runs - then clears - its subscriptions, so anything registered
+    afterwards is never cleaned up.
     """
-    return getattr(connection.send_message, "__self__", None) is connection
+    return getattr(_transport(connection), "__self__", None) is connection
+
+
+def _cancel_callable(connection: Any) -> Callable[[], None] | None:
+    """HA's own way to drop the socket: the handler's _cancel (what HA itself
+    uses on shutdown), exposed as ``_cancel_ws`` from HA 2026.11."""
+    if (cancel := getattr(connection, "_cancel_ws", None)) is not None:
+        return cancel
+    handler = getattr(_transport(connection), "__self__", None)
+    return getattr(handler, "_cancel", None)
 
 
 def _nonempty(value: Any) -> str | None:
@@ -661,20 +682,18 @@ class WsBridge:
         media: _MediaConnection | None = None,
     ) -> None:
         """Close an HA ActiveConnection using HA's own handler cancellation path."""
-        # ActiveConnection has no public close(). Its send_message is the bound
-        # WebSocketHandler._send_message, and _cancel() is the path HA itself
-        # uses on shutdown; cleanup then runs subscriptions.
-        handler = getattr(connection.send_message, "__self__", None)
-        cancel = getattr(handler, "_cancel", None)
+        # ActiveConnection has no public close(); cancelling the socket handler
+        # is the path HA itself uses on shutdown, and cleanup then runs the
+        # connection's subscriptions.
         if connection_closed(connection):
-            # Once the socket is closed HA rebinds send_message to the
-            # ActiveConnection itself, so there is nothing left to cancel.
+            # Nothing left to cancel.
             _LOGGER.debug(
                 "Connection already closed (%s): %s",
                 reason,
                 self._describe_connection(connection, media),
             )
             return
+        cancel = _cancel_callable(connection)
         try:
             if cancel is None:
                 raise RuntimeError("websocket handler not found")
