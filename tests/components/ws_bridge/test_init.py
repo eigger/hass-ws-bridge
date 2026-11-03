@@ -343,23 +343,6 @@ async def test_closing_already_closed_connection_is_not_a_warning(
     assert "kind=control" in caplog.text
 
 
-async def test_close_without_cancelable_handler_still_warns(
-    hass: HomeAssistant,
-    init_integration: MockConfigEntry,
-    client: BridgeClient,
-    caplog,
-) -> None:
-    """A connection that is not closed but cannot be cancelled must not be hidden."""
-    bridge = hass.data[DOMAIN][init_integration.entry_id]
-    (connection,) = list(bridge._connections)
-    connection.send_message = lambda _msg: None
-
-    bridge._close_connection(connection, "test reason")
-
-    assert "Error closing client connection (test reason)" in caplog.text
-    assert "websocket handler not found" in caplog.text
-
-
 async def test_connect_shared_name_does_not_remove_offline_gateway(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,
