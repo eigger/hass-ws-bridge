@@ -641,7 +641,7 @@ class WsBridge:
                 {
                     "gateway_id": session.gateway_id,
                     "unique_id": session.unique_id,
-                    "expires_in": round(session.expires_at - now, 1),
+                    "expires_in": max(0.0, round(session.expires_at - now, 1)),
                 }
                 for session in self._media_sessions.values()
             ],

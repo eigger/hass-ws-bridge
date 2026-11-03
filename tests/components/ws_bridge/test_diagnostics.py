@@ -1,16 +1,22 @@
-"""Diagnostics download: structure and redaction."""
+"""Diagnostics download through HA's real diagnostics view: structure and redaction."""
+
+from collections.abc import Awaitable, Callable
 
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.components.diagnostics import (
+    get_diagnostics_for_config_entry,
+)
+from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
 from custom_components.ws_bridge.const import CONF_ALLOWED_USER_IDS
-from custom_components.ws_bridge.diagnostics import async_get_config_entry_diagnostics
 
 from .conftest import BridgeClient
 
 
 async def test_diagnostics_describes_live_state(
     hass: HomeAssistant,
+    hass_client: ClientSessionGenerator,
     init_integration: MockConfigEntry,
     client: BridgeClient,
 ) -> None:
@@ -19,7 +25,7 @@ async def test_diagnostics_describes_live_state(
     await client.entity("temp", "sensor", "Temp")
     await client.state("temp", "secret-reading-42")
 
-    result = await async_get_config_entry_diagnostics(hass, init_integration)
+    result = await get_diagnostics_for_config_entry(hass, hass_client, init_integration)
 
     bridge = result["bridge"]
     assert bridge["control_connection_count"] == 1
@@ -32,8 +38,41 @@ async def test_diagnostics_describes_live_state(
     assert "secret-reading-42" not in str(result)
 
 
+async def test_diagnostics_media_session_omits_ids(
+    hass: HomeAssistant,
+    hass_client: ClientSessionGenerator,
+    init_integration: MockConfigEntry,
+    client: BridgeClient,
+    bridge_client_factory: Callable[[], Awaitable[BridgeClient]],
+) -> None:
+    """Media sessions list gateway/entity only: no session id, user or token id."""
+    await client.entity("cam", "camera", "Cam")
+    session = await client.ok("media_open", unique_id="cam")
+
+    result = await get_diagnostics_for_config_entry(hass, hass_client, init_integration)
+
+    sessions = result["bridge"]["media_sessions"]
+    assert len(sessions) == 1
+    assert sessions[0]["unique_id"] == "gw1__cam"
+    assert sessions[0]["expires_in"] >= 0
+    assert session["session_id"] not in str(result)
+
+    media = await bridge_client_factory()
+    await media.ok("media_connect", session_id=session["session_id"])
+
+    result = await get_diagnostics_for_config_entry(hass, hass_client, init_integration)
+
+    assert result["bridge"]["media_connections"] == [
+        {"gateway_id": "gw1", "unique_id": "gw1__cam"}
+    ]
+    assert session["session_id"] not in str(result)
+    assert "user_id" not in str(result)
+    assert "refresh_token" not in str(result)
+
+
 async def test_diagnostics_redacts_allowed_users(
     hass: HomeAssistant,
+    hass_client: ClientSessionGenerator,
     init_integration: MockConfigEntry,
 ) -> None:
     """User ids are redacted; only their count is reported."""
@@ -43,9 +82,23 @@ async def test_diagnostics_redacts_allowed_users(
     )
     await hass.async_block_till_done()
 
-    result = await async_get_config_entry_diagnostics(hass, init_integration)
+    result = await get_diagnostics_for_config_entry(hass, hass_client, init_integration)
 
     assert result["options"][CONF_ALLOWED_USER_IDS] == "**REDACTED**"
     assert result["allowed_user_count"] == 2
     assert "user-id-aaa" not in str(result)
     assert "user-id-bbb" not in str(result)
+
+
+async def test_diagnostics_after_unload(
+    hass: HomeAssistant,
+    hass_client: ClientSessionGenerator,
+    init_integration: MockConfigEntry,
+) -> None:
+    """An unloaded entry has no bridge, but the download must still work."""
+    assert await hass.config_entries.async_unload(init_integration.entry_id)
+    await hass.async_block_till_done()
+
+    result = await get_diagnostics_for_config_entry(hass, hass_client, init_integration)
+
+    assert result["bridge"] is None
