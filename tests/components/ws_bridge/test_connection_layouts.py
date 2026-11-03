@@ -6,7 +6,10 @@ slot and the handler's cancel is kept as ``_cancel_ws``. Both are modelled here
 so each layout stays covered whichever HA version CI runs.
 """
 
+import logging
+
 import pytest
+from homeassistant.components.websocket_api.connection import ActiveConnection
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -106,3 +109,56 @@ async def test_close_of_closed_connection_does_not_cancel_or_warn(
     assert handler.cancelled == 0
     assert "Connection already closed (test)" in caplog.text
     assert "Error closing client connection" not in caplog.text
+
+
+def _old_uncancelable() -> _OldLayout:
+    connection = _OldLayout(_Handler())
+    connection.send_message = lambda _msg: None
+    return connection
+
+
+def _new_uncancelable() -> _NewLayout:
+    connection = _NewLayout(_Handler(), cancel_ws=False)
+    connection._send_message = lambda _msg: None
+    return connection
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        pytest.param(_old_uncancelable, id="old"),
+        pytest.param(_new_uncancelable, id="new"),
+    ],
+)
+async def test_open_but_uncancelable_connection_still_warns(
+    hass: HomeAssistant, init_integration: MockConfigEntry, make, caplog
+) -> None:
+    """A failed forced disconnect must stay visible (e.g. allow-list removal)."""
+    bridge = hass.data[DOMAIN][init_integration.entry_id]
+    connection = make()
+    assert connection_closed(connection) is False
+
+    bridge._close_connection(connection, "test reason")
+
+    assert "Error closing client connection (test reason)" in caplog.text
+    assert "websocket handler not found" in caplog.text
+
+
+async def test_real_active_connection_closed_state_and_cancel(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """Built from the installed HA's real ActiveConnection, whatever its layout."""
+    bridge = hass.data[DOMAIN][init_integration.entry_id]
+    handler = _Handler()
+    connection = ActiveConnection(
+        logging.getLogger(__name__), hass, handler._send_message, None, None, None
+    )
+    assert connection_closed(connection) is False
+
+    bridge._close_connection(connection, "test")
+    assert handler.cancelled == 1
+
+    connection.async_handle_close()
+    assert connection_closed(connection) is True
+    bridge._close_connection(connection, "test")
+    assert handler.cancelled == 1
