@@ -137,3 +137,38 @@ async def test_client_prefix_remove_never_touches_diagnostics(
 
     assert _state(hass, init_integration) == (STATE_ON, "1")
     assert entity_id_for(hass, "sensor", "temp") is not None
+
+
+async def test_prefix_remove_is_limited_to_the_calling_gateway(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    client: BridgeClient,
+    bridge_client_factory: Factory,
+) -> None:
+    other = await bridge_client_factory()
+    await other.connect("gw2", "GW2")
+    await other.entity("temp", "sensor", "Temp")
+
+    # gw1 asks to remove a prefix that is gw2's gateway id.
+    await client.ok("remove", unique_id="gw2", mode="prefix")
+
+    assert entity_id_for(hass, "sensor", "temp", "gw2") is not None
+    assert _state(hass, init_integration, "gw2") == (STATE_ON, "1")
+
+
+async def test_diagnostics_are_recreated_when_removed_from_registry(
+    hass: HomeAssistant, init_integration: MockConfigEntry, client: BridgeClient
+) -> None:
+    """Liveness is judged from the registry, not only from remove_gateway."""
+    registry = er.async_get(hass)
+    for domain, key in (
+        ("binary_sensor", GATEWAY_CONNECTED_KEY),
+        ("sensor", CONTROL_CONNECTIONS_KEY),
+    ):
+        registry.async_remove(_diag_id(hass, init_integration, domain, key))
+    await hass.async_block_till_done()
+    assert _state(hass, init_integration) == (None, None)
+
+    await client.connect("gw1", "GW1")
+
+    assert _state(hass, init_integration) == (STATE_ON, "1")

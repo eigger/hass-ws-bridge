@@ -380,9 +380,12 @@ class WsBridge:
         for platform, reg in self._gateway_platforms.items():
             key = (platform, gateway_id)
             existing = self._gateway_entities.get(key)
+            # Judge by unique_id, not entity_id: renaming an entity_id briefly
+            # leaves the old one unresolvable while it is re-added.
             if existing is not None and (
                 existing.entity_id is None
-                or entity_reg.async_get(existing.entity_id) is not None
+                or entity_reg.async_get_entity_id(platform, DOMAIN, existing.unique_id)
+                is not None
             ):
                 continue
             entity = reg.factory(self, gateway_id, name)

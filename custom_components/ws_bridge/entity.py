@@ -237,6 +237,8 @@ class WsBridgeGatewayEntity(Entity):
                 self._on_connections_changed,
             )
         )
+        # Signals sent between creation and this subscription were missed.
+        self._connections = self._bridge.gateway_control_connections(self._gateway_id)
 
     @callback
     def _on_connections_changed(self, connections: int) -> None:
