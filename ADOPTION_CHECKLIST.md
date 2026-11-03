@@ -36,10 +36,10 @@
 | HA-02 | manifest 필드·정렬·동작 선언 확인, 공식 품질 등급 자가 표기 없음 | PASS | manifest 필드 확인: domain·name·codeowners·config_flow·dependencies·documentation·iot_class·issue_tracker·requirements·version, 품질 등급 자가 표기 없음 |
 | HA-03 (권장) | 공통 상수·설정·갱신·플랫폼 역할 및 프로토콜 경계에 맞게 모듈 구성 | PASS | const/entity/bridge/websocket_api/플랫폼 모듈 분리 구조 유지, 변경 없음 |
 | HA-04, HA-08 | UI 설정·중복·안정적 식별 및 기능별 options/reauth/reconfigure, entity 의미·registry 영향 확인 | PASS | config_flow: 단일 인스턴스 unique_id=DOMAIN, 중복 abort 테스트(test_config_flow). 저장 자격증명이 없어 options/reauth/reconfigure는 해당 없음 |
-| HA-01, HA-04, HA-08, REL-01, REL-03 | domain·unique ID·entry schema·상태/통계 계약 변경 시 migration 테스트와 사용자 조치 안내 | N/A | 이번 PR은 domain·unique ID·entry schema를 변경하지 않음(이 후속 PR은 테스트·문서·CI만 변경, custom_components 변경 없음) |
+| HA-01, HA-04, HA-08, REL-01, REL-03 | domain·unique ID·entry schema·상태/통계 계약 변경 시 migration 테스트와 사용자 조치 안내 | N/A | 이번 PR은 domain·unique ID·entry schema를 변경하지 않음(이 후속 PR #86은 diagnostics 플랫폼만 추가하고 domain·unique ID·entry schema는 변경하지 않음) |
 | HA-05, HA-06 | setup 실패 구분, unload/reload·부분 실패의 task/listener/연결 정리, async·timeout·취소 처리 | TODO | test_init: setup/unload/reload·플랫폼/저장 정리는 PASS. unload 시 클라이언트 소켓 종료는 `test_unload_closes_client_connections`로 검증(비공개 `WebSocketHandler._cancel` 사용, HA 2026.9.0/2026.10.2 모두 확인). 미충족: 부분 setup 실패 정리 미검증 |
 | HA-07 | 중복 polling·property I/O 방지, push 보존, unavailable/unknown·실패 후 복구 | PASS | should_poll=False push 구조, unavailable/disconnect 복구·keep_last 테스트 |
-| HA-11, HA-12 | 번역·action/schema 일치, 로그/diagnostics/fixture 비식별화와 제공 시 redaction 테스트 | PASS | strings/translations(en, ko) 존재. diagnostics는 제공하지 않아 redaction 해당 없음, 테스트 fixture에 실제 토큰 없음 |
+| HA-11, HA-12 | 번역·action/schema 일치, 로그/diagnostics/fixture 비식별화와 제공 시 redaction 테스트 | PASS | strings/translations(en, ko) 존재. diagnostics.py 제공: `allowed_user_ids`는 redact하고 개수만 노출, 사용자 id·토큰·session id·엔티티 값·프레임은 미포함. redaction은 실제 HA diagnostics view를 거치는 test_diagnostics.py로 검증, 테스트 fixture에 실제 토큰 없음 |
 
 ## 실제 HA 테스트·호환성·의존성
 
