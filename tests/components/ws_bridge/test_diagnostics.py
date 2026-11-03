@@ -2,7 +2,9 @@
 
 from collections.abc import Awaitable, Callable
 
+import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry, MockUser
 from pytest_homeassistant_custom_component.components.diagnostics import (
     get_diagnostics_for_config_entry,
@@ -12,6 +14,12 @@ from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 from custom_components.ws_bridge.const import CONF_ALLOWED_USER_IDS
 
 from .conftest import BridgeClient
+
+
+@pytest.fixture(autouse=True)
+async def setup_diagnostics(hass: HomeAssistant) -> None:
+    """Register the diagnostics views before the test client freezes the router."""
+    assert await async_setup_component(hass, "diagnostics", {})
 
 
 async def test_diagnostics_describes_live_state(
