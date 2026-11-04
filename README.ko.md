@@ -16,6 +16,8 @@
 <!-- hass-standards:badges:end -->
 <!-- hass-standards:header:end -->
 
+![WS Bridge](custom_components/ws_bridge/brand/logo.png)
+
 Downloads 배지는 현재 GitHub 릴리스의 첨부 asset 다운로드 합계이며 활성 설치 수가 아닙니다.
 
 인증된 **WebSocket 클라이언트**가 엔티티를 동적으로 생성·갱신할 수 있게 해 주는 범용 Home Assistant 통합구성요소입니다. BLE, Zigbee 등 특정 하드웨어나 프로토콜에 묶이지 않으며, 정의된 통신 규약만 따르면 바로 사용할 수 있습니다.
