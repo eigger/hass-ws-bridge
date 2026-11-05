@@ -1,7 +1,7 @@
 <!-- hass-standards:header:start -->
-# WebSocket Bridge (`ws_bridge`) for Home Assistant
+# WebSocket Bridge for Home Assistant
 
-Generic WebSocket Bridge for Home Assistant that dynamically registers devices and entities from external WebSocket clients.
+A Home Assistant custom integration that dynamically registers devices and entities from external WebSocket clients.
 
 **English** | [한국어](README.ko.md)
 
@@ -20,7 +20,9 @@ Generic WebSocket Bridge for Home Assistant that dynamically registers devices a
 
 A generic Home Assistant integration that enables **any authenticated WebSocket client** to dynamically create and update entities. It is fully decoupled from specific hardware or protocols (e.g., BLE, Zigbee); as long as the client conforms to the defined communication protocol, it works out of the box.
 
-## Key Features
+<a name="key-features"></a>
+
+## Features
 
 - **No Additional Brokers/Ports**: Communicates directly using Home Assistant's standard WebSocket API (`/api/websocket`) and a Long-Lived Access Token. No need to run an MQTT broker or expose extra TCP ports.
 - **Authenticated JPEG Snapshots**: `image` and `camera` entities can receive bounded latest JPEG frames through a separately authenticated, ESP-initiated WebSocket upload connection. URL mode remains supported; HA never connects back to the gateway.
@@ -36,10 +38,9 @@ A generic Home Assistant integration that enables **any authenticated WebSocket 
 
 ## Requirements
 
-- Home Assistant 2026.9.0 or newer (per `hacs.json`). This is a HACS custom integration, not an official Home Assistant Core integration.
-- An authenticated WebSocket client and a Long-Lived Access Token.
-
----
+- **Home Assistant:** 2026.9.0 or later.
+- **Client:** An authenticated WebSocket client.
+- **Access token:** A Long-Lived Access Token.
 
 ## Installation
 
@@ -47,20 +48,13 @@ A generic Home Assistant integration that enables **any authenticated WebSocket 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eigger&repository=hass-ws-bridge)
 <!-- hass-standards:installation:end -->
 
-### Method 1: Via HACS (Recommended)
-1. Open your Home Assistant instance and navigate to **HACS**.
-2. Search for **WebSocket Bridge** (`ws_bridge`) in the default integration store, or click the My Home Assistant button above.
-3. Click **Download**, then restart Home Assistant.
+1. Click the badge above to open the repository in Marketplace.
+2. If you need to add it yourself, go to **Settings → Marketplace → Add from link** and enter <https://github.com/eigger/hass-ws-bridge>. Connect GitHub if prompted.
+3. Select **Install**. Restart Home Assistant if prompted, then continue to [Configuration](#configuration).
 
-### Method 2: Manual Installation
-1. Download the `custom_components/ws_bridge` folder from this repository.
-2. Copy it into your Home Assistant configuration directory under `custom_components/`.
-   * Target path: `config/custom_components/ws_bridge/`
-3. **Restart Home Assistant**.
+<a name="configuration--setup"></a>
 
----
-
-## Configuration & Setup
+## Configuration
 
 1. **Add Integration in HA**:
    * Navigate to **Settings** -> **Devices & Services** -> **Add Integration**.
@@ -75,7 +69,9 @@ A generic Home Assistant integration that enables **any authenticated WebSocket 
 
 ---
 
-## Quick Example
+<a name="quick-example"></a>
+
+## Quick start
 
 ```json
 // after auth_ok, send ws_bridge/connect, then declare entities, then push state
@@ -86,7 +82,7 @@ See the documents below for entity declaration, commands and the full message se
 
 ---
 
-## Important Limitations
+## Important limitations
 
 - Planned but not yet accepted platforms: `vacuum` / `lawn_mower` / `remote` / `todo` (see [PROTOCOL.md §6](docs/PROTOCOL.md#6-planned-platforms)).
 - When a client disconnects, its entities become `unavailable` (unless `keep_last_state_on_disconnect` is enabled for that gateway).
