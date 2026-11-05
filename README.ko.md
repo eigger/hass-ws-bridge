@@ -1,7 +1,7 @@
 <!-- hass-standards:header:start -->
-# WebSocket Bridge (`ws_bridge`) for Home Assistant
+# WebSocket Bridge for Home Assistant
 
-외부 WebSocket 클라이언트에서 기기와 엔티티를 동적으로 등록하는 Home Assistant 통합구성요소입니다.
+외부 WebSocket 클라이언트에서 기기와 엔티티를 동적으로 등록하는 Home Assistant 커스텀 통합입니다.
 
 [English](README.md) | **한국어**
 
@@ -17,8 +17,6 @@
 <!-- hass-standards:header:end -->
 
 ![WS Bridge](custom_components/ws_bridge/brand/logo.png)
-
-Downloads 배지는 현재 GitHub 릴리스의 첨부 asset 다운로드 합계이며 활성 설치 수가 아닙니다.
 
 인증된 **WebSocket 클라이언트**가 엔티티를 동적으로 생성·갱신할 수 있게 해 주는 범용 Home Assistant 통합구성요소입니다. BLE, Zigbee 등 특정 하드웨어나 프로토콜에 묶이지 않으며, 정의된 통신 규약만 따르면 바로 사용할 수 있습니다.
 
@@ -36,12 +34,11 @@ Downloads 배지는 현재 GitHub 릴리스의 첨부 asset 다운로드 합계�
 
 ---
 
-## 요구 사항
+## 요구사항
 
-- Home Assistant 2026.9.0 이상 (`hacs.json` 기준). HACS 커스텀 통합이며 Home Assistant Core에 포함된 공식 통합이 아닙니다.
-- 인증된 WebSocket 클라이언트와 장기 액세스 토큰.
-
----
+- **Home Assistant:** 2026.9.0 이상.
+- **클라이언트:** 인증된 WebSocket 클라이언트.
+- **액세스 토큰:** 장기 액세스 토큰.
 
 ## 설치
 
@@ -49,18 +46,9 @@ Downloads 배지는 현재 GitHub 릴리스의 첨부 asset 다운로드 합계�
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eigger&repository=hass-ws-bridge)
 <!-- hass-standards:installation:end -->
 
-### 방법 1: HACS (권장)
-1. Home Assistant 사이드바에서 **HACS**로 이동합니다.
-2. 기본 통합 스토어에서 **WebSocket Bridge** (`ws_bridge`)를 검색하거나 위의 My Home Assistant 바로가기 버튼을 누릅니다.
-3. **다운로드**를 클릭한 후 **Home Assistant를 재시작**합니다.
-
-### 방법 2: 수동 설치
-1. 이 리포지토리에서 `custom_components/ws_bridge` 폴더를 받습니다.
-2. Home Assistant 설정 디렉터리의 `custom_components/` 아래에 복사합니다.
-   * 대상 경로: `config/custom_components/ws_bridge/`
-3. **Home Assistant를 재시작**합니다.
-
----
+1. 위 배지를 클릭해 마켓플레이스에서 저장소를 엽니다.
+2. 저장소를 직접 추가하려면 **설정 → 마켓플레이스 → 링크에서 추가**에서 <https://github.com/eigger/hass-ws-bridge>을 입력합니다. 안내가 표시되면 GitHub 계정을 연결합니다.
+3. **설치**를 선택합니다. 재시작 안내가 표시되면 Home Assistant를 재시작합니다. 설치가 끝나면 [설정](#설정)으로 이동합니다.
 
 ## 설정
 
@@ -77,7 +65,9 @@ Downloads 배지는 현재 GitHub 릴리스의 첨부 asset 다운로드 합계�
 
 ---
 
-## 대표 예제
+<a name="대표-예제"></a>
+
+## 빠른 시작
 
 ```json
 // auth_ok 이후 ws_bridge/connect → 엔티티 선언 → 상태 전송 순서
@@ -88,7 +78,9 @@ Downloads 배지는 현재 GitHub 릴리스의 첨부 asset 다운로드 합계�
 
 ---
 
-## 중요 제한
+<a name="중요-제한"></a>
+
+## 중요 제한사항
 
 - 아직 수신하지 않는 플랫폼: `vacuum` / `lawn_mower` / `remote` / `todo` (계획 중, [프로토콜 §6](docs/PROTOCOL_ko.md)).
 - 클라이언트 연결이 끊기면 기본적으로 해당 클라이언트의 엔티티가 `unavailable`이 됩니다(게이트웨이별 `keep_last_state_on_disconnect` 사용 시 제외).

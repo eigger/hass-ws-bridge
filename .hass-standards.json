@@ -16,10 +16,10 @@
     "README.ko.md": "#설치"
   },
   "readme": {
-    "title": "WebSocket Bridge (`ws_bridge`) for Home Assistant",
+    "title": "WebSocket Bridge for Home Assistant",
     "descriptions": {
-      "en": "Generic WebSocket Bridge for Home Assistant that dynamically registers devices and entities from external WebSocket clients.",
-      "ko": "외부 WebSocket 클라이언트에서 기기와 엔티티를 동적으로 등록하는 Home Assistant 통합구성요소입니다."
+      "en": "A Home Assistant custom integration that dynamically registers devices and entities from external WebSocket clients.",
+      "ko": "외부 WebSocket 클라이언트에서 기기와 엔티티를 동적으로 등록하는 Home Assistant 커스텀 통합입니다."
     },
     "issues": true,
     "discussions": true,
