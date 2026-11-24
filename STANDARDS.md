@@ -1,9 +1,9 @@
 # 적용한 공통 규칙
 
-- 표준: https://github.com/eigger/hass-repo-standards/tree/v1.3.1
-- 참조 커밋 SHA: 2f9d752d43b7f0bd3039ff804b4181ed2964cb16
-- Standards release: v1.3.1
-- Resolved standards SHA: 2f9d752d43b7f0bd3039ff804b4181ed2964cb16
+- 표준: https://github.com/eigger/hass-repo-standards/tree/v1.3.3
+- 참조 커밋 SHA: 39463345df66063305065891c32b184c41cfadc4
+- Standards release: v1.3.3
+- Resolved standards SHA: 39463345df66063305065891c32b184c41cfadc4
 - 재검토일: 2026-10-22 (로컬 작업 트리)
 - 이전 기준 SHA: `ba9f3fad8b635c163fb44a4e91b1833cc4ab47b4`
 - 채택일: 2026-10-18 (PR #52 표준/CI, 후속 PR #55 실제 HA 테스트 이관, PR #56 버그 수정)
